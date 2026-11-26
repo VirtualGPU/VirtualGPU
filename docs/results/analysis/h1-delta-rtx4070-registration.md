@@ -24,7 +24,7 @@ Fields from `profiles/rtx4070.json`: `L2l` = `measured.memory.l2_latency_ns` (93
 ## Rule
 
 - A point is excluded if its late steps exceed 1% of its follower steps in any process. If the warm baseline of a stage size is excluded, that stage size is excluded.
-- Error is the absolute error in ns, `|E_pred - E|`, over all remaining points of both stage sizes. Against each other form, a form is compared only on the points where the two predict different excesses (by more than 0.5 ns): there its median error must be below half of the other's and it must be closer on at least two thirds of them. A form that does this against every other form wins; otherwise no form wins. If every form's median error over all points exceeds 50 ns, all are reported wrong and no new form is fitted.
+- Error is the absolute error in ns, `|E_pred - E|`, over all remaining points of both stage sizes. Against each other form, a form is compared only on the points where the two predict different excesses (by more than 0.5 ns): there its median error must be below half of the other's and it must be closer on at least two thirds of them. A form that does this against every other form wins; otherwise no form wins. On the RTX 4070 grid H-model and H-step differ at only the two plateau delays, so the evidence between those two is limited. If every form's median error over all points exceeds 50 ns, all are reported wrong and no new form is fitted.
 - Each stage size is also reported on its own, without a verdict.
 - The verdict is what `python -m microbench.sync_loop_delta_eval profiles/rtx4070.json <three run files>` prints.
 - No change to the model's structure follows from this test alone.
