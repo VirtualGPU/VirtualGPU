@@ -6,6 +6,7 @@ reports must equal the geometry the predictions were made for.
 """
 
 import argparse
+import hashlib
 import json
 import statistics
 from pathlib import Path
@@ -52,6 +53,10 @@ def measurements(captures, frozen):
             {k: (max(v) - min(v)) / statistics.median(v) for k, v in repeats.items()})
 
 
+def rounded(x):
+    return None if x is None else round(x, 4)
+
+
 def summarize(errors):
     values = sorted(abs(e) for e in errors.values())
     return {"points": len(values), "mape": statistics.mean(values),
@@ -78,19 +83,33 @@ def main():
     parser.add_argument("output", type=Path)
     parser.add_argument("captures", type=Path, nargs="+")
     args = parser.parse_args()
-    frozen = json.loads(args.frozen.read_text())
-    captures = [json.loads(path.read_text()) for path in args.captures]
+    frozen_raw = args.frozen.read_bytes()
+    frozen = json.loads(frozen_raw)
+    raws = [path.read_bytes() for path in args.captures]
+    captures = [json.loads(raw) for raw in raws]
     measured, spread = measurements(captures, frozen)
     result = h5_candidates.evaluate(frozen, measured)
-    report = {"status": "post-hoc", "measured_points": len(measured),
-              "max_repeat_spread": max(spread.values()), "measured_ns": measured, "forms": {}}
+    report = {
+        "status": "post-hoc",
+        "frozen_sha256": hashlib.sha256(frozen_raw).hexdigest(),
+        "captures": {path.name: hashlib.sha256(raw).hexdigest()
+                     for path, raw in zip(args.captures, raws)},
+        "measured_points": len(measured),
+        "max_repeat_spread": max(spread.values()),
+        "forms": {},
+        "points": {key: {"measured_ns": round(measured[key], 1),
+                         "repeat_spread": round(spread[key], 4),
+                         "error": {form: rounded(r["errors"].get(key)) for form, r in result.items()}}
+                   for key in frozen["order"] if key in measured},
+    }
     for form, r in result.items():
-        report["forms"][form] = {"k": r["k"], "clamped": r["clamped"], **summarize(r["errors"]),
-                                 "by_factor": by_factor(r["errors"]), "errors": r["errors"]}
+        report["forms"][form] = {"k": r["k"], "clamped": r["clamped"],
+                                 "calibration": frozen["calibrations"].get(form),
+                                 **summarize(r["errors"]), "by_factor": by_factor(r["errors"])}
         s = report["forms"][form]
         print(f"{form:20s} k={s['k']} clamped={s['clamped']} n={s['points']} "
               f"MAPE {s['mape']:.1%} p90 {s['p90_abs_error']:.1%} median {s['median_error']:+.1%}")
-    args.output.write_text(json.dumps(report, indent=1) + "\n")
+    args.output.write_text(json.dumps(report, separators=(",", ":")) + "\n")
 
 
 if __name__ == "__main__":
