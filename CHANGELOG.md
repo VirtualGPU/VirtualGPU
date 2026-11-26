@@ -4,6 +4,7 @@
 
 ### Added
 
+- Post-hoc analysis of GB10's 2-byte register-staged GEMM loads (H5), narrow-load microbenchmarks and frozen predictions for their candidate model forms
 - Candidate v0.3 GEMM and attention holdouts for RTX 4070 and GB10, with a historical shape audit and CPU AOT resource checks
 - NVIDIA RTX PRO 5000 72GB Blackwell (`sm_120`) profile
 - Draft the v0.3 workload holdout protocol and audit the two reference profiles for MLP repeat coverage

@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 from virtualgpu.frontend.compiler import ARTIFACT_HASH_VERSION
 
-from validation import v02_score
+from validation import h5_candidates, v02_score
 from validation.baseline import gemm_work, latency_ns, predict
 from validation.experiment import core_records, development_gates, load_case, validate_core_builds
 from validation.holdout import read_verified_report, require_release, seal_report, sha256
@@ -657,6 +657,36 @@ class V02ScoreTest(unittest.TestCase):
             v02_score.check_receipt({"sha256": _V02_DIGEST, "timestamp_utc": _V02_UTC}, "new")
         with self.assertRaisesRegex(ValueError, "UTC timestamp"):
             v02_score.check_receipt({"sha256": _V02_DIGEST, "timestamp_utc": "2026-11-26T01:48:34"}, "legacy", legacy=True)
+
+
+class NarrowLoadCandidatesTest(unittest.TestCase):
+    def test_sectors_per_request(self):
+        self.assertEqual(h5_candidates.sectors_per_request(2, 32, 0), 2)
+        self.assertEqual(h5_candidates.sectors_per_request(2, 32, 2), 3)
+        self.assertEqual(h5_candidates.sectors_per_request(2, 24, 0), 2)
+        self.assertEqual(h5_candidates.sectors_per_request(16, 32, 16), 17)
+        self.assertEqual(h5_candidates.sectors_per_request(1, 32, 1), 2)
+
+    def test_points_match_the_benchmark(self):
+        points = h5_candidates.gmem_narrow_points() + h5_candidates.sync_loop_narrow_points()
+        keys = [h5_candidates.point_key(p) for p in points]
+        self.assertEqual((len(points), len(set(keys))), (1076, 1076))
+        self.assertIn(h5_candidates.point_key(h5_candidates.CALIBRATION), keys)
+
+    def test_geometry_fits_the_benchmark_buffer(self):
+        specs = json.loads(h5_candidates.PROFILE.read_text())["specs"]
+        for p in h5_candidates.gmem_narrow_points() + h5_candidates.sync_loop_narrow_points():
+            g = h5_candidates.geometry(p, specs)
+            rows = g["grid"] // p.get("share", 1) * g["rows_per_cta"]
+            self.assertLessEqual(rows * g["pitch"], 320 << 20)
+            self.assertEqual(g["pitch"] % 128, 0 if p["aligned"] else p["width_bytes"])
+
+    def test_calibration_inverts_the_grid(self):
+        xs, ys = [0.1, 0.2, 0.4], [400.0, 200.0, 100.0]
+        k, clamped = h5_candidates.solve(xs, ys, 150.0, True)
+        self.assertFalse(clamped)
+        self.assertAlmostEqual(h5_candidates.interpolate(xs, ys, k, True), 150.0)
+        self.assertEqual(h5_candidates.solve(xs, ys, 50.0, True), (0.4, True))
 
 
 if __name__ == "__main__":
