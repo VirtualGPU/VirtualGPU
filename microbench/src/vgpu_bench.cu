@@ -600,6 +600,9 @@ int main(int argc, char** argv) {
   if (mode == "sync-loop-free") {
     return run_sync_loop_free(device, samples, warmup);
   }
+  if (mode == "sync-loop-burst") {
+    return run_sync_loop_burst(device, samples, warmup);
+  }
   std::fprintf(stderr, "Unknown mode: %s\n", mode.c_str());
   return 2;
 }
