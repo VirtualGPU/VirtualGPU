@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 from virtualgpu.frontend.compiler import ARTIFACT_HASH_VERSION
 
-from validation import h5_candidates, v02_score
+from validation import h5_candidates, h5_dram_form, v02_score
 from validation.baseline import gemm_work, latency_ns, predict
 from validation.experiment import core_records, development_gates, load_case, validate_core_builds
 from validation.holdout import read_verified_report, require_release, seal_report, sha256
@@ -751,3 +751,39 @@ class V02ArchiveTest(unittest.TestCase):
                               "c": {"status": "ok"}, "d": {"status": "aot_compile_failed"}}}
         self.assertEqual(config_status_counts(report),
                          {"aot_compile_failed": 1, "artifact_mismatch": 1, "ok": 2})
+
+
+class DramNarrowFormTest(unittest.TestCase):
+    def frozen(self):
+        cal = h5_candidates.point_key(h5_dram_form.CALIBRATION)
+        dram = h5_candidates.point_key(h5_dram_form.gmem_point(2, 4, "dram", True, 1, 4, 128 << 20))
+        l2 = h5_candidates.point_key(h5_dram_form.gmem_point(2, 4, "l2", True, 1, 4))
+        point = lambda t, s, n: {"t_core_ns": t, "dram_sector_bytes": s, "dram_requests": n}
+        return {"calibration": h5_dram_form.CALIBRATION, "bw_strided_128_gbps": 200.0,
+                "points": {cal: point(100.0, 20000.0, 400.0), dram: point(50.0, 4000.0, 300.0),
+                           l2: point(80.0, 0.0, 0.0)}}, cal, dram, l2
+
+    def test_points_are_new_and_include_the_calibration(self):
+        points = h5_dram_form.gmem_points() + h5_dram_form.sync_points()
+        keys = [h5_candidates.point_key(p) for p in points]
+        self.assertEqual((len(keys), len(set(keys))), (325, 325))
+        self.assertEqual(keys[0], h5_candidates.point_key(h5_dram_form.CALIBRATION))
+        old = {h5_candidates.point_key(p) for p in h5_candidates.gmem_narrow_points()}
+        for p in points[1:]:
+            q = {k: v for k, v in p.items() if k != "dram_request_bytes"}
+            if p["level"] == "dram" and p["bench"] == "gmem-narrow":
+                self.assertNotIn(h5_candidates.point_key(q), old)
+
+    def test_rate_comes_from_the_calibration_point(self):
+        frozen, cal, dram, l2 = self.frozen()
+        result = h5_dram_form.score(frozen, {cal: 200.0, dram: 150.0, l2: 80.0})
+        self.assertTrue(result["identifiable"])
+        self.assertAlmostEqual(result["rate_warp_requests_per_ns"], 2.0)
+        self.assertAlmostEqual(result["groups"]["gmem_dram"]["form_errors"][dram], 0.0)
+        self.assertTrue(result["groups"]["gmem_l2_regression"]["prediction_unchanged"])
+
+    def test_calibration_below_the_floor_is_not_identifiable(self):
+        frozen, cal, dram, l2 = self.frozen()
+        result = h5_dram_form.score(frozen, {cal: 90.0, dram: 150.0, l2: 80.0})
+        self.assertFalse(result["identifiable"])
+        self.assertFalse(result["passed"])

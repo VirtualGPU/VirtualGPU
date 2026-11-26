@@ -144,7 +144,7 @@ template <int W, int N, bool CG, int MASK>
 void gmem_narrow_point(const cudaDeviceProp& prop, Timer& timer, const uint8_t* buf,
                        uint32_t* sink, const uint4* flush, uint4* flush_sink, size_t flush_vec4,
                        bool dram, bool offset, int cps, int warps, int share, int step_bytes,
-                       int samples, int warmup, bool& first) {
+                       int samples, int warmup, bool& first, size_t dram_bytes = kDramBytes) {
   auto kernel = gmem_narrow_kernel<W, N, CG, MASK>;
   const int smem = pad_bytes(prop, cps);
   set_smem(kernel, smem);
@@ -160,7 +160,7 @@ void gmem_narrow_point(const cudaDeviceProp& prop, Timer& timer, const uint8_t* 
   // full 128 B line, so that no two batches share an L1 line.
   const size_t step = static_cast<size_t>(step_bytes);
   if (dram) {
-    batches = static_cast<int>(std::max<size_t>(1, kDramBytes / (static_cast<size_t>(grid) * rows_per_cta * seg)));
+    batches = static_cast<int>(std::max<size_t>(1, dram_bytes / (static_cast<size_t>(grid) * rows_per_cta * seg)));
   } else {
     batches = static_cast<int>(std::max<size_t>(1, kL2Set / (rows * step)));
     sweeps = static_cast<int>(std::max<size_t>(1, kL2Bytes / (static_cast<size_t>(grid) * rows_per_cta * seg * batches)));
@@ -190,10 +190,11 @@ void gmem_narrow_point(const cudaDeviceProp& prop, Timer& timer, const uint8_t* 
   std::printf("%s\n    {\"width_bytes\": %d, \"mask\": \"%s\", \"aligned\": %s, \"cache\": \"%s\", "
               "\"level\": \"%s\", \"ctas_per_sm\": %d, \"ctas_per_sm_fit\": %d, \"num_warps\": %d, "
               "\"loads_in_flight\": %d, \"share\": %d, \"column_step_bytes\": %d, \"grid\": %d, \"rows_per_cta\": %d, "
-              "\"pitch_bytes\": %zu, \"batches\": %d, \"sweeps\": %d, \"smem_bytes\": %d, \"elapsed_ns\": [",
+              "\"pitch_bytes\": %zu, \"batches\": %d, \"sweeps\": %d, \"smem_bytes\": %d, "
+              "\"dram_request_bytes\": %zu, \"elapsed_ns\": [",
               first ? "" : ",", W, MASK == kMaskNone ? "none" : (MASK == kMaskTrue ? "true" : "tail"),
               offset ? "false" : "true", CG ? "cg" : "default", dram ? "dram" : "l2", cps, fit, warps, N,
-              share, step_bytes, grid, rows_per_cta, pitch, batches, sweeps, smem);
+              share, step_bytes, grid, rows_per_cta, pitch, batches, sweeps, smem, dram_bytes);
   for (size_t i = 0; i < ns.size(); ++i) std::printf("%s%.1f", i ? ", " : "", ns[i]);
   std::printf("]}");
   first = false;
@@ -316,7 +317,8 @@ __global__ void sync_loop_narrow_kernel(const uint8_t* __restrict__ src, float* 
 template <int W, int ROWS, int MMA_ITERS>
 void sync_loop_narrow_point(const cudaDeviceProp& prop, Timer& timer, const uint8_t* buf, float* sink,
                             const uint4* flush, uint4* flush_sink, size_t flush_vec4, bool dram,
-                            bool offset, int cps, int samples, int warmup, bool& first) {
+                            bool offset, int cps, int samples, int warmup, bool& first,
+                            size_t dram_bytes = kDramBytes) {
   constexpr int WARPS = 4;
   constexpr int STAGE_BYTES = ROWS * 128;
   auto kernel = sync_loop_narrow_kernel<W, ROWS, WARPS, MMA_ITERS>;
@@ -328,7 +330,7 @@ void sync_loop_narrow_point(const cudaDeviceProp& prop, Timer& timer, const uint
   const int grid = sms * cps;
   // Rows of one CTA hold all its stages side by side: stage s is bytes
   // [s * 128, s * 128 + 128) of each row, like K steps of a GEMM tile.
-  const size_t requested = dram ? kDramBytes : kL2Bytes;
+  const size_t requested = dram ? dram_bytes : kL2Bytes;
   int steps = static_cast<int>(std::max<size_t>(1, requested / (static_cast<size_t>(grid) * STAGE_BYTES)));
   int distinct = steps;
   if (!dram) {

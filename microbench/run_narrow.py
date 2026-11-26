@@ -31,7 +31,13 @@ from repeat_mlp import (  # noqa: E402
 MAX_FOREIGN_RSS_KIB = 8 << 20
 MIN_AVAILABLE_KIB = 16 << 20
 
-MODES = {"gmem-narrow": "gmem_load_narrow", "sync-loop-narrow": "sync_loop_narrow"}
+MODES = {
+    "gmem-narrow": "gmem_load_narrow",
+    "sync-loop-narrow": "sync_loop_narrow",
+    "gmem-narrow-validate": "gmem_load_narrow",
+    "sync-loop-narrow-validate": "sync_loop_narrow",
+    "stage-narrow": "stage_narrow",
+}
 SAMPLES = 15
 WARMUP = 3
 
