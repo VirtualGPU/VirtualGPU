@@ -6052,3 +6052,81 @@ static int run_sync_loop_share(int device, int samples, int warmup) {
   CUDA_CHECK(cudaFree(d_sink_u4)); CUDA_CHECK(cudaFree(d_sink_f)); CUDA_CHECK(cudaFree(d_cyc));
   return 0;
 }
+
+// Exposed round trip of the single-buffer loop against stage size: ovl_kernel (gemm_s2 shape, MI = 8)
+// free and noload on warm L2, one CTA per SM, grid 1 or one per SM.
+static int run_sync_loop_bytes(int device, int samples, int warmup) {
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  const int sm_count = prop.multiProcessorCount;
+  const size_t l2_bytes = 4ULL * 1024ULL * 1024ULL;
+  const size_t l2_mask = (l2_bytes / sizeof(uint4)) - 1ULL;
+  uint4* d_l2 = nullptr;
+  float* d_sink_f = nullptr;
+  double* d_cyc = nullptr;
+  CUDA_CHECK(cudaMalloc(&d_l2, l2_bytes));
+  CUDA_CHECK(cudaMalloc(&d_sink_f, static_cast<size_t>(sm_count) * 8 * 256 * sizeof(float)));
+  CUDA_CHECK(cudaMalloc(&d_cyc, 2 * sizeof(double)));
+  CUDA_CHECK(cudaMemset(d_l2, 0x3c, l2_bytes));
+  cudaEvent_t ev_start, ev_stop;
+  CUDA_CHECK(cudaEventCreate(&ev_start));
+  CUDA_CHECK(cudaEventCreate(&ev_stop));
+  const char* dep_names[3] = {"free", "dep", "noload"};
+
+  std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"sync_loop_bytes\": [", samples, sm_count);
+  bool first = true;
+  auto run_point = [&](auto dep_c, auto sb_c, auto w_c) {
+    constexpr int DEP = decltype(dep_c)::value, SB = decltype(sb_c)::value, W = decltype(w_c)::value;
+    auto kernel = ovl_kernel<0, DEP, SB, W, 8>;
+    CUDA_CHECK(cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, SB));
+    for (int grid : {1, sm_count}) {
+      auto launch = [&](int st) { kernel<<<grid, W * 32, SB>>>(d_l2, d_sink_f, l2_mask, st, d_cyc); };
+      auto time_ms = [&](int st) {
+        CUDA_CHECK(cudaEventRecord(ev_start));
+        launch(st);
+        CUDA_CHECK(cudaEventRecord(ev_stop));
+        CUDA_CHECK(cudaEventSynchronize(ev_stop));
+        float ms = 0.0f;
+        CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
+        return static_cast<double>(ms);
+      };
+      double probe = time_ms(64);
+      int steps = static_cast<int>(1.0 / std::max(probe / 64.0, 1e-5));
+      steps = std::min(65536, std::max(256, ((steps + 63) / 64) * 64));
+      for (int w = 0; w < warmup; ++w) time_ms(steps);
+      std::vector<double> turn, cyc;
+      for (int s = 0; s < samples; ++s) {
+        double ms = time_ms(steps);
+        double c = 0.0;
+        CUDA_CHECK(cudaMemcpy(&c, d_cyc, sizeof(double), cudaMemcpyDeviceToHost));
+        turn.push_back(ms * 1e6 / steps);
+        cyc.push_back(c);
+      }
+      if (!first) std::printf(",");
+      first = false;
+      std::printf("\n    {\"dep\": \"%s\", \"grid\": %d, \"num_warps\": %d, \"stage_bytes\": %d, \"steps\": %d, "
+                  "\"turnaround_ns_samples\": [", dep_names[DEP], grid, W, SB, steps);
+      for (size_t i = 0; i < turn.size(); ++i) std::printf(i ? ", %.2f" : "%.2f", turn[i]);
+      std::printf("], \"cycles_per_step_samples\": [");
+      for (size_t i = 0; i < cyc.size(); ++i) std::printf(i ? ", %.1f" : "%.1f", cyc[i]);
+      std::printf("]}");
+    }
+  };
+  auto each_dep = [&](auto sb_c, auto w_c) {
+    run_point(std::integral_constant<int, 0>{}, sb_c, w_c);
+    run_point(std::integral_constant<int, 2>{}, sb_c, w_c);
+  };
+  auto each_sb = [&](auto w_c) {
+    each_dep(std::integral_constant<int, 4096>{}, w_c);
+    each_dep(std::integral_constant<int, 8192>{}, w_c);
+    each_dep(std::integral_constant<int, 16384>{}, w_c);
+    each_dep(std::integral_constant<int, 32768>{}, w_c);
+    each_dep(std::integral_constant<int, 49152>{}, w_c);
+    each_dep(std::integral_constant<int, 65536>{}, w_c);
+  };
+  each_sb(std::integral_constant<int, 4>{});
+  each_sb(std::integral_constant<int, 8>{});
+  std::printf("\n  ]\n}\n");
+  CUDA_CHECK(cudaFree(d_l2)); CUDA_CHECK(cudaFree(d_sink_f)); CUDA_CHECK(cudaFree(d_cyc));
+  return 0;
+}
