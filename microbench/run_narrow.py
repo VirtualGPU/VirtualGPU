@@ -51,6 +51,8 @@ MODES = {
     "stage-narrow": "stage_narrow",
     "stage-narrow-batched": "stage_narrow",
     "stage-narrow-validate": "stage_narrow",
+    "stage-narrow-k1": "stage_narrow",
+    "stage-narrow-k1-calibrate": "stage_narrow",
 }
 SAMPLES = 15
 WARMUP = 3

@@ -626,6 +626,12 @@ int main(int argc, char** argv) {
   if (mode == "stage-narrow-validate") {
     return run_stage_narrow_validate(device, samples, warmup);
   }
+  if (mode == "stage-narrow-k1") {
+    return run_stage_narrow_k1(device, samples, warmup);
+  }
+  if (mode == "stage-narrow-k1-calibrate") {
+    return run_stage_narrow_k1_calibrate(device, samples, warmup);
+  }
   std::fprintf(stderr, "Unknown mode: %s\n", mode.c_str());
   return 2;
 }
