@@ -62,6 +62,9 @@ def _tiles(
     BN: tl.constexpr,
     SCALE_LOG2: tl.constexpr,
     ABLATE: tl.constexpr,
+    EX2: tl.constexpr,
+    ALU: tl.constexpr,
+    RED: tl.constexpr,
 ):
     offsets = tl.arange(0, BN)
     live = start >= 0
@@ -88,9 +91,17 @@ def _tiles(
         else:
             logits = tl.dot(q, tl.trans(k)) * SCALE_LOG2
         logits = tl.where(cols[None, :] < SEQ, logits, -float("inf"))
+        # Extra softmax work on its dependent chain (zero for every ablation variant): ALU adds a
+        # compare, select and add per element; RED another row reduction; EX2 another exp2.
+        for _ in tl.static_range(ALU):
+            logits = tl.where(logits > 1.0e30, logits * 0.5, logits) + 0.0001
         new_max = tl.maximum(maximum, tl.max(logits, 1))
+        for r in tl.static_range(RED):
+            new_max = tl.maximum(new_max, tl.max(logits * (0.999 - 0.001 * r), 1))
         correction = tl.math.exp2(maximum - new_max)
         weights = tl.math.exp2(logits - new_max[:, None])
+        for _ in tl.static_range(EX2):
+            weights = tl.math.exp2(weights * 0.5 - 0.5)
         acc = tl.dot(weights.to(tl.float16), v, acc * correction[:, None])
         normalizer = normalizer * correction + tl.sum(weights, 1)
         maximum = new_max
@@ -126,6 +137,9 @@ def ablated_attention(
     BM: tl.constexpr,
     BN: tl.constexpr,
     ABLATE: tl.constexpr,
+    EX2: tl.constexpr = 0,
+    ALU: tl.constexpr = 0,
+    RED: tl.constexpr = 0,
 ):
     query_block = tl.program_id(0)
     head_batch = tl.program_id(1)
@@ -157,6 +171,9 @@ def ablated_attention(
         BN,
         SCALE_LOG2,
         ABLATE,
+        EX2,
+        ALU,
+        RED,
     )
     tl.store(
         Out + q_base + addresses, (acc / normalizer[:, None]).to(tl.float16), rows[:, None] < SEQ
