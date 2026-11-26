@@ -57,11 +57,29 @@ Observations, with the current core's predictions computed after the fact for or
 2. **Loads alone, all issued before the barrier, cost more per byte when narrow, on each CTA's chain.** With 4 KiB stages, where every thread issues all its loads before its first use, 2 and 4 B loads are 19% to 37% slower than predicted and 16 B loads 4% to 18% faster; the gap shrinks from 1 to 3 CTAs per SM.
 3. **The 16 KiB, 2 and 4 B kernels are not representative.** Their SASS interleaves each load with its shared memory store after the first seven loads (`LDG7 STS3 LDG2 STS1 ...`), so a thread keeps only a few loads in flight; `sync-loop-narrow` with 16 KiB stages compiles the same way. 4 KiB stages keep all 16 loads ahead of the stores. The Triton `mask-mnk` kernels issue most of their loads first (`m16n64k32-w4`: 18 of 20, `m128n128k64-w8`: 64 of 64; offline `ptxas-blackwell` from the archived PTX). The 16 KiB stages of the first `sync-loop-narrow` points, part of the 45% to 54% hot-L2 gap reported there, carry the same scheduling.
 
+## Register staging with every load first (measurement only)
+
+`stage-narrow-batched` repeats `stage-narrow` with two changes: every thread issues all its loads before its first shared memory store (each store address carries the XOR of every loaded value, masked by a run-time zero), and the stores go to Triton's swizzled layout for 128 B rows (16 B chunks XORed with the row index, 8 phases, as `swizzled_shared<vec = 8, perPhase = 1, maxPhase = 8>`). SASS on GB10: every instance issues all its loads and then all its stores (2 B, 16 KiB: 64 `LDG.E.U16`, then 64 `STS.U16`), store widths are `STS.U16`, `STS` and `STS.128`, and no kernel uses local memory. Stages of 4, 8 and 16 KiB, otherwise as `stage-narrow`; 162 points.
+
+Captured on the same day under the lock (thermal gate 51.7 / 52.2 C, 2515 / 2522 MHz; 51 to 60 C and 2496 to 2515 MHz during capture, no throttle reason). Two points are excluded: 2 B loads and stores with 16 KiB stages fit only 2 CTAs per SM, not 3, since each thread holds 64 loaded values. Raw capture `stage-narrow-batched-1.json` (SHA-256 `559d279f...`) in `h5-stage-batched-captures.tar.gz` (`d933ee9e69196a73ee9cd6bc714fa636085aced521ba3bc29303b559fa8f257c`), in the same two places; summary [h5-stage-narrow-batched-gb10-posthoc.json](h5-stage-narrow-batched-gb10-posthoc.json).
+
+1. **The interleaving was most of the 16 KiB gap.** 2 B loads and stores with 16 KiB stages at 1 CTA per SM take 306 us batched against 603 us interleaved.
+2. **Narrow loads still cost more per byte, and narrow stores more again.** Time relative to 16 B at the same stage, 1 CTA per SM, no MMA:
+
+   | Variant | 2 B, 4 / 8 / 16 KiB | 4 B, 4 / 8 / 16 KiB |
+   |---|---|---|
+   | Loads only | 1.58 / 1.30 / 1.42 | 1.31 / 1.02 / 1.09 |
+   | Stores only | 2.33 / 2.47 / 2.31 | 1.37 / 1.45 / 1.54 |
+   | Loads and stores | 1.52 / 1.57 / 1.59 | 1.21 / 1.14 / 1.26 |
+
+   The load gap shrinks as CTAs per SM grow (a cost on each CTA's chain); stores-only time hardly changes with CTAs per SM (a shared pipe). The current model predicts the same time for every width; its errors for 2 B loads and stores are -39% to -49% at 1 CTA per SM, -0% to -19% for 16 B.
+3. **A width-independent miss.** With 32 dependent MMAs per warp and 1 CTA per SM, every width is predicted 28% to 48% fast, loads only or stores only. This is the MMA chain, not narrow loads, and is left out of H5.
+
 ## Open item outside H5
 
 **Hot L2 with few loads in flight is predicted too slow.** `gmem-narrow-validate`, hot L2, `.cg`: 1 B loads with 4 in flight per thread are predicted 3.2 to 3.7 times as slow as measured at 1 CTA per SM and 1.2 to 2.8 times at 3 CTAs, aligned or not; other widths at 4 in flight up to 1.3 times; at 12 and 24 in flight the MAPE is 9% to 11%. The point values are in [h5-dram-form-gb10-posthoc.json](h5-dram-form-gb10-posthoc.json) (`gmem_l2_regression`). Not investigated.
 
 ## Next steps
 
-- Register staging: rebuild the staging kernels so every thread issues all its loads before its first store, check that in SASS, then propose forms from these points and the rebuilt ones (a per-wavefront shared memory store cost and a per-request cost on the chain at hot L2 are the candidates the observations suggest) and freeze them before validating on another set of points.
+- Register staging: propose forms from the `stage-narrow` and `stage-narrow-batched` points (a per-instruction shared memory store cost on the shared pipe and a per-request cost on the CTA's chain for loads from L2), freeze them with one calibration point each, and validate on another set of points.
 - DRAM-side form: the RTX 4070 cross-GPU test first; only after it passes, wiring the form into the core for `mask-mnk` with its DRAM-sourced fraction from the L2 model, agreed beforehand with the owner of the round-trip path in `sim.rs`.

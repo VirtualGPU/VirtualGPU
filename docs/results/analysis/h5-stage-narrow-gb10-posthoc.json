@@ -436,5 +436,6 @@
    "measured_ns": 172192.0,
    "repeat_spread": 0.0113
   }
- }
+ },
+ "excluded_ctas_per_sm_fit": {}
 }
