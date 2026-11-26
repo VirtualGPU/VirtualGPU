@@ -6728,9 +6728,12 @@ static int run_sync_loop_free(int device, int samples, int warmup) {
       double latency_sum = 0.0, spread_sum = 0.0;
       for (int g = 0; g < grid / G; ++g) {
         double mean = 0.0, sq = 0.0;
-        for (int i = 0; i < G; ++i) mean += static_cast<double>(finish[g * G + i] - finish[g * G]) / G;
+        auto rel = [&](int i) {
+          return static_cast<double>(static_cast<long long>(finish[g * G + i] - finish[g * G]));
+        };
+        for (int i = 0; i < G; ++i) mean += rel(i) / G;
         for (int i = 0; i < G; ++i) {
-          const double x = static_cast<double>(finish[g * G + i] - finish[g * G]) - mean;
+          const double x = rel(i) - mean;
           sq += x * x / G;
         }
         spread_sum += std::sqrt(sq);
