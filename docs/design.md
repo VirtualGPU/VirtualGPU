@@ -1,18 +1,17 @@
-# VirtualGPU Design
+# VirtualGPU design
 
-Status: design phase complete. No code exists yet.
+What VirtualGPU is for, the ideas it rests on and where it stops. How each part works today is in [`docs/components/`](components/):
 
-This document is the overview. Each component has its own detailed design in [`docs/proposals/`](proposals/):
+| Component | Doc |
+| --- | --- |
+| Triton frontend | [frontend.md](components/frontend.md) |
+| Kernel IR and L2 reuse model | [kernel-ir.md](components/kernel-ir.md) |
+| Performance model core | [model-core.md](components/model-core.md) |
+| Microbenchmarks and GPU profiles | [profiles.md](components/profiles.md) |
+| GPU-free autotuning | [autotune.md](components/autotune.md) |
+| Validation | [validation.md](components/validation.md) |
 
-| Component | Design |
-|---|---|
-| Triton frontend | [frontend.md](proposals/frontend.md) |
-| Kernel IR and L2 reuse model | [kernel-ir-and-l2.md](proposals/kernel-ir-and-l2.md) |
-| Performance model core | [model-core.md](proposals/model-core.md) |
-| Microbenchmark suite and GPU profile format | [microbench-and-profile.md](proposals/microbench-and-profile.md) |
-| Validation and evaluation | [validation.md](proposals/validation.md) |
-
-A plain-language overview is in [roadmap.html](roadmap.html).
+What comes next is in the [roadmap](../ROADMAP.md).
 
 ## Decisions
 
@@ -291,7 +290,7 @@ These were also the configs whose KernelIR carried the `linear_access_fallback` 
 
 These are residuals of the v0.2 core on the development set, not of `phase1-final`.
 
-**Spill reload latency and the L1 transition are not in v0.2.** Spills are charged as local-memory bandwidth with a linear overflow past one L1 threshold (6.4). The measurements show this is wrong in two ways: reloads cost latency on an iteration's critical path, so the model is 17% to 93% fast on `spill_reload_latency_by_count`, and the move from L1 to L2 is a step at the L1 capacity that follows the shared memory carveout (`l1_to_l2_spill_threshold_by_carveout`), not a linear overflow. Both changes wait for the number of local loads a kernel executes per iteration, which the assembler's static spill report does not give (for causal attention it also sums the main and the diagonal loop) and which needs the GPU performance counters, so they are left to v0.3. Spilling configs are therefore predicted too fast: on the opened phase 1 holdout (post-hoc, `docs/analysis/posthoc-core-phase1-phase2.md`), `m128n128k64-w4` and `m128n64k64-w4` of `mask-mnk` are 42% and 60% fast.
+**Spill reload latency and the L1 transition are not in v0.2.** Spills are charged as local-memory bandwidth with a linear overflow past one L1 threshold (6.4). The measurements show this is wrong in two ways: reloads cost latency on an iteration's critical path, so the model is 17% to 93% fast on `spill_reload_latency_by_count`, and the move from L1 to L2 is a step at the L1 capacity that follows the shared memory carveout (`l1_to_l2_spill_threshold_by_carveout`), not a linear overflow. Both changes wait for the number of local loads a kernel executes per iteration, which the assembler's static spill report does not give (for causal attention it also sums the main and the diagonal loop) and which needs the GPU performance counters, so they are left to v0.3. Spilling configs are therefore predicted too fast: on the opened phase 1 holdout (post-hoc, `docs/results/analysis/posthoc-core-phase1-phase2.md`), `m128n128k64-w4` and `m128n64k64-w4` of `mask-mnk` are 42% and 60% fast.
 
 **Synchronous loads in GEMM.** GEMM configs with `num_stages = 1`, which stage their loads through registers (`ld.global`, then `st.shared`), are predicted slow: median error +9.1% warm and +2.2% cold on the development set (core `7b1be46`, profile `0.21.0`), against +3.6% and +0.2% before the round-trip port floor (`e51f8ef`). The floor first made them +11% and +5%, mostly because it let every CTA on an SM wait for all the SM's bytes after the latency, as if their round trips were in phase; `7b1be46` shares the port out of phase, as `sync_stage_loop` with 1 to 8 CTAs per SM shows. What remains is not explained. It is not a register-staging cost the model misses: on `sync_stage_loop` (profile `0.21.0`, 12 to 32 KiB stages, two or three CTAs per SM) register-staged loops are predicted with MAPE 4.2% (RTX 4070) and 8.3% (GB10), median error -0.2% and -7.1%, so no separate staging mechanism (next-version mechanism (c)) is needed there; with one CTA per SM the staging shows, and the model charges it by keeping the shared memory stores on a CTA's dependent chain, which taking them off makes worse.
 
@@ -302,7 +301,7 @@ The serial-fill explanation ruled out in 9.1 was ruled out as an addition to the
 - [GPGPU-Sim](https://github.com/gpgpu-sim/gpgpu-sim_distribution) / [Accel-Sim](https://accel-sim.github.io/): cycle-level NVIDIA simulation; detailed but hours per large kernel and behind on recent architectures.
 - [Timeloop](https://github.com/NVlabs/timeloop): loop-nest mapping analysis for accelerator architects; its data reuse analysis is relevant to tile-level GEMM modeling.
 - [Triton-CPU](https://github.com/triton-lang/triton-cpu): runs Triton kernels on CPUs for correctness; no GPU performance model.
-- [GPU-Tile-Sim](https://arxiv.org/abs/2607.11262) (MICRO 2026): tile-graph simulation from TileLang IR, 1.22%–8.71% MAPE on A100 and H100. Closest in spirit; no public code found.
+- [GPU-Tile-Sim](https://arxiv.org/abs/2607.11262) (MICRO 2026): tile-graph simulation from TileLang IR, 1.22% to 8.71% MAPE on A100 and H100. Closest in spirit; no public code found.
 - [NeuSight](https://arxiv.org/abs/2407.13853) (ASPLOS 2025): tile-based performance forecasting for unseen GPUs, bounded by hardware peaks.
 - [KernelSight-LM](https://arxiv.org/abs/2606.28565): kernel-level prediction; 12.1% per-kernel error on an unseen GPU generation versus 22.0% for roofline.
 
@@ -311,10 +310,9 @@ These works establish that tile-level modeling of LLM kernels is accurate. What 
 ## 11. Open questions
 
 1. How to obtain register usage and spills for AMD targets.
-2. Which Triton release line to pin first, to keep TTGIR adapters small.
-3. How to feed workload descriptions (expert routing, page tables) into data-dependent kernels.
-4. Profile format versioning, and how to review community-submitted profiles.
-5. Whether a softer verdict rule than unanimity is worth calibrating.
-6. Which clock controls are available on each test system (WSL2 for the RTX 4070, GB10's unified memory).
+2. How to feed workload descriptions (expert routing, page tables) into data-dependent kernels.
+3. Profile format versioning, and how to review community-submitted profiles.
+4. Whether a softer verdict rule than the 5% unanimity rule is worth calibrating.
+5. Which clock controls are available on each test system (WSL2 for the RTX 4070, GB10's unified memory).
 
-Each component design lists its own open questions in more detail.
+When one is answered, record the answer in the section it belongs to and delete it here. Work that follows from it goes in the [roadmap](../ROADMAP.md).

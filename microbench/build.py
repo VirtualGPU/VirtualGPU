@@ -6,7 +6,6 @@ import argparse
 import os
 import shutil
 import subprocess
-import sys
 import sysconfig
 from pathlib import Path
 
@@ -73,7 +72,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Build VirtualGPU CUDA microbenchmark binary.")
     parser.add_argument("--arch", default="sm_89", help="Target GPU arch, e.g. sm_89 or sm_121.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUT, help="Output binary path.")
-    parser.add_argument("--nvcc", type=Path, default=None, help="Optional explicit path to nvcc binary.")
+    parser.add_argument(
+        "--nvcc", type=Path, default=None, help="Optional explicit path to nvcc binary."
+    )
     args = parser.parse_args()
     out = build(args.arch, args.output, args.nvcc)
     print(f"Built {out}")

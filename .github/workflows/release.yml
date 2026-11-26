@@ -6,120 +6,190 @@ on:
       - "v*.*.*"
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
-  linux-wheels:
+  check:
+    name: Check version
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Manual runs build and test only, with the version in pyproject.toml.
+      - name: Tag matches the versions and has a CHANGELOG section
+        if: github.event_name == 'push'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: python3 scripts/release_notes.py "$TAG" > /dev/null
+
+  wheels:
     name: Build Linux wheel (${{ matrix.arch }})
+    needs: [check]
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: x86_64
-            runner: ubuntu-latest
-            manylinux: auto
+            runner: ubuntu-24.04
           - arch: aarch64
             runner: ubuntu-24.04-arm
-            manylinux: auto
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
+
       - name: Bundle GPU profiles into the package
         run: mkdir -p python/virtualgpu/profiles && cp profiles/*.json python/virtualgpu/profiles/
-      - name: Build cp310-abi3 wheel (Python 3.10-3.13)
-        uses: PyO3/maturin-action@v1
+
+      - name: Build cp310-abi3 wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           target: ${{ matrix.arch }}
           args: --release --out dist --strip
-          manylinux: ${{ matrix.manylinux }}
-      - name: Upload wheel artifact
-        uses: actions/upload-artifact@v4
+          manylinux: auto
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wheel-linux-${{ matrix.arch }}
           path: dist/*.whl
 
   sdist:
-    name: Build source distribution
-    runs-on: ubuntu-latest
+    name: Build source archive
+    needs: [check]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Bundle GPU profiles into the package
         run: mkdir -p python/virtualgpu/profiles && cp profiles/*.json python/virtualgpu/profiles/
+
       - name: Build sdist
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           command: sdist
           args: --out dist
-      - name: Upload sdist artifact
-        uses: actions/upload-artifact@v4
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sdist
           path: dist/*.tar.gz
 
-  verify-wheel:
-    name: Verify installed wheel in clean venv (Python ${{ matrix.python-version }})
-    needs: [linux-wheels]
-    runs-on: ubuntu-latest
+  verify:
+    name: Verify wheel (Python ${{ matrix.python-version }})
+    needs: [wheels]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.12", "3.13"]
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: profiles
+
+      - name: Download wheel
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: wheel-linux-x86_64
-          path: /tmp/vgpu-wheels
-      - uses: actions/setup-python@v5
+          path: ${{ runner.temp }}/wheels
+
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install wheel in clean venv and smoke-test schemas, profiles, and CLI
+
+      - name: Install in a clean venv and check schemas, profiles and CLI
+        env:
+          WHEELS: ${{ runner.temp }}/wheels
+          VENV: ${{ runner.temp }}/venv
         run: |
-          python -m venv /tmp/vgpu-smoke-venv
-          /tmp/vgpu-smoke-venv/bin/pip install --upgrade pip
-          /tmp/vgpu-smoke-venv/bin/pip install /tmp/vgpu-wheels/*.whl
-          cd /tmp
-          /tmp/vgpu-smoke-venv/bin/python - <<'PY'
+          python -m venv "$VENV"
+          "$VENV/bin/pip" install --upgrade pip
+          "$VENV/bin/pip" install "$WHEELS"/*.whl
+          cd "$RUNNER_TEMP"
+          PROFILES="$GITHUB_WORKSPACE/profiles" "$VENV/bin/python" - <<'PY'
           import json
+          import os
+          from pathlib import Path
+
           import virtualgpu
           from virtualgpu import _core
 
-          print("virtualgpu version:", virtualgpu.__version__)
+          print("virtualgpu", virtualgpu.__version__)
           for name in ("kernel_ir", "gpu_profile"):
-              schema = json.loads(_core.schema(name))
-              assert "$schema" in schema, f"missing $schema in {name}"
+              assert "$schema" in json.loads(_core.schema(name)), name
           profiles = virtualgpu.list_profiles()
-          print("bundled profiles:", profiles)
-          assert "rtx4070" in profiles and "gb10" in profiles
-          p = virtualgpu.profile_path("rtx4070")
-          assert p.is_file()
+          expected = sorted(p.stem for p in Path(os.environ["PROFILES"]).glob("*.json"))
+          assert profiles == expected, (profiles, expected)
+          for name in profiles:
+              assert virtualgpu.profile_path(name).is_file(), name
           PY
-          /tmp/vgpu-smoke-venv/bin/virtualgpu --help
+          "$VENV/bin/virtualgpu" --help
 
   release:
     name: Publish GitHub Release
-    needs: [linux-wheels, sdist, verify-wheel]
+    needs: [wheels, sdist, verify]
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: artifacts
           merge-multiple: true
-      - name: Generate SHA256SUMS
-        run: |
-          cd artifacts
-          sha256sum *.whl *.tar.gz > SHA256SUMS.txt
-          cat SHA256SUMS.txt
-      - name: Create GitHub Release (wheels + sdist; no PyPI upload)
-        uses: softprops/action-gh-release@v2
+
+      - name: SHA-256 sums
+        working-directory: artifacts
+        run: sha256sum -- *.whl *.tar.gz > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          files: |
+          subject-path: |
             artifacts/*.whl
             artifacts/*.tar.gz
-            artifacts/SHA256SUMS.txt
-          generate_release_notes: true
+
+      # Releases are immutable, so the draft gets every file before it is published once.
+      - name: Draft, upload and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          python3 scripts/release_notes.py "$TAG" > notes.md
+          gh release create "$TAG" --draft --verify-tag --title "$TAG" --notes-file notes.md \
+            artifacts/*.whl artifacts/*.tar.gz artifacts/SHA256SUMS.txt
+          gh release edit "$TAG" --draft=false

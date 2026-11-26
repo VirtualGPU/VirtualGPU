@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import importlib.util
 import json
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 import jsonschema
 import pytest
 import triton
 import triton.language as tl
-
 from virtualgpu.frontend import (
     ARTIFACT_HASH_VERSION,
     MockTensor,
@@ -25,17 +24,23 @@ from virtualgpu.frontend import (
 )
 from virtualgpu.frontend.ttgir import _extract_loop_body, parse_ttgir_summary
 
-
-SCHEMA_PATH = Path(__file__).resolve().parents[4] / "schemas" / "kernel_ir.schema.json"
+SCHEMA_PATH = Path(__file__).resolve().parents[3] / "schemas" / "kernel_ir.schema.json"
 
 
 @triton.jit
 def _matmul_kernel(
-    a_ptr, b_ptr, c_ptr,
-    M, N, K,
-    stride_am, stride_ak,
-    stride_bk, stride_bn,
-    stride_cm, stride_cn,
+    a_ptr,
+    b_ptr,
+    c_ptr,
+    M,
+    N,
+    K,
+    stride_am,
+    stride_ak,
+    stride_bk,
+    stride_bn,
+    stride_cm,
+    stride_cn,
     BLOCK_SIZE_M: tl.constexpr,
     BLOCK_SIZE_N: tl.constexpr,
     BLOCK_SIZE_K: tl.constexpr,
@@ -75,8 +80,12 @@ def _matmul_kernel(
 
 @triton.jit
 def _matmul_tma_kernel(
-    a_ptr, b_ptr, c_ptr,
-    M, N, K,
+    a_ptr,
+    b_ptr,
+    c_ptr,
+    M,
+    N,
+    K,
     BLOCK_SIZE_M: tl.constexpr,
     BLOCK_SIZE_N: tl.constexpr,
     BLOCK_SIZE_K: tl.constexpr,
@@ -102,11 +111,18 @@ def _matmul_tma_kernel(
 
 @triton.jit
 def _nonstandard_gemm(
-    lhs, rhs, out,
-    rows, cols, inner,
-    l_s0, l_s1,
-    r_s0, r_s1,
-    o_s0, o_s1,
+    lhs,
+    rhs,
+    out,
+    rows,
+    cols,
+    inner,
+    l_s0,
+    l_s1,
+    r_s0,
+    r_s1,
+    o_s0,
+    o_s1,
     BM: tl.constexpr,
     BN: tl.constexpr,
     BK: tl.constexpr,
@@ -119,10 +135,22 @@ def _nonstandard_gemm(
     acc = tl.zeros((BM, BN), dtype=tl.float32)
     for k in range(0, tl.cdiv(inner, BK)):
         kk = k * BK + rk
-        a = tl.load(lhs + rm[:, None] * l_s0 + kk[None, :] * l_s1, (rm[:, None] < rows) & (kk[None, :] < inner), other=0.0)
-        b = tl.load(rhs + kk[:, None] * r_s0 + rn[None, :] * r_s1, (kk[:, None] < inner) & (rn[None, :] < cols), other=0.0)
+        a = tl.load(
+            lhs + rm[:, None] * l_s0 + kk[None, :] * l_s1,
+            (rm[:, None] < rows) & (kk[None, :] < inner),
+            other=0.0,
+        )
+        b = tl.load(
+            rhs + kk[:, None] * r_s0 + rn[None, :] * r_s1,
+            (kk[:, None] < inner) & (rn[None, :] < cols),
+            other=0.0,
+        )
         acc = tl.dot(a, b, acc)
-    tl.store(out + rm[:, None] * o_s0 + rn[None, :] * o_s1, acc.to(tl.float16), (rm[:, None] < rows) & (rn[None, :] < cols))
+    tl.store(
+        out + rm[:, None] * o_s0 + rn[None, :] * o_s1,
+        acc.to(tl.float16),
+        (rm[:, None] < rows) & (rn[None, :] < cols),
+    )
 
 
 def _load_schema() -> dict:
@@ -134,7 +162,9 @@ def test_parse_ptxas_verbose_zero_and_ptxas_only_spill() -> None:
         "ptxas info    : 0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\n"
         "ptxas info    : Used 128 registers, used 1 barriers, 416 bytes cmem[0]\n"
     )
-    r_clean = parse_ptxas_verbose(clean, ptx="", assembler="ptxas", assembler_version="12.9", target_sm="sm_89")
+    r_clean = parse_ptxas_verbose(
+        clean, ptx="", assembler="ptxas", assembler_version="12.9", target_sm="sm_89"
+    )
     assert r_clean.registers_per_thread == 128
     assert r_clean.barriers == 1
     assert r_clean.spill_scope == "none"
@@ -144,7 +174,9 @@ def test_parse_ptxas_verbose_zero_and_ptxas_only_spill() -> None:
         "ptxas info    : 320 bytes stack frame, 328 bytes spill stores, 316 bytes spill loads\n"
         "ptxas info    : Used 255 registers, used 1 barriers, 320 bytes cumulative stack size\n"
     )
-    r_spill = parse_ptxas_verbose(spilled, ptx="", assembler="ptxas", assembler_version="12.9", target_sm="sm_89")
+    r_spill = parse_ptxas_verbose(
+        spilled, ptx="", assembler="ptxas", assembler_version="12.9", target_sm="sm_89"
+    )
     assert r_spill.stack_frame_bytes == 320
     assert r_spill.spill_stores_bytes == 328
     assert r_spill.spill_loads_bytes == 316
@@ -200,7 +232,13 @@ def test_extract_tma_gemm_sm121_uses_async_tensor() -> None:
         M=1024,
         N=1024,
         K=512,
-        config={"BLOCK_SIZE_M": 128, "BLOCK_SIZE_N": 128, "BLOCK_SIZE_K": 32, "num_warps": 4, "num_stages": 3},
+        config={
+            "BLOCK_SIZE_M": 128,
+            "BLOCK_SIZE_N": 128,
+            "BLOCK_SIZE_K": 32,
+            "num_warps": 4,
+            "num_stages": 3,
+        },
         target_arch="sm_121",
     )
     jsonschema.validate(instance=ir, schema=schema)
@@ -286,10 +324,27 @@ def test_runtime_specialization_parity_and_artifact_hashing() -> None:
         MockTensor("f16", ptr=0x10000),
         MockTensor("f16", ptr=0x20000),
         MockTensor("f16", ptr=0x30000),
-        1024, 1024, 512, 512, 1, 1024, 1, 1024, 1,
+        1024,
+        1024,
+        512,
+        512,
+        1,
+        1024,
+        1,
+        1024,
+        1,
     )
-    kwargs = {"BLOCK_SIZE_M": 128, "BLOCK_SIZE_N": 128, "BLOCK_SIZE_K": 32, "GROUP_SIZE_M": 8, "num_warps": 4, "num_stages": 3}
-    _, sig_a, consts_a, attrs_a = specialize_triton_call(_matmul_kernel, "sm_89", args_aligned, kwargs)
+    kwargs = {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 32,
+        "GROUP_SIZE_M": 8,
+        "num_warps": 4,
+        "num_stages": 3,
+    }
+    _, sig_a, consts_a, attrs_a = specialize_triton_call(
+        _matmul_kernel, "sm_89", args_aligned, kwargs
+    )
     assert sig_a["stride_ak"] == "constexpr"
     assert consts_a[(7,)] == 1
     assert ["tt.divisibility", 16] in attrs_a[(0,)]
@@ -299,7 +354,15 @@ def test_runtime_specialization_parity_and_artifact_hashing() -> None:
         MockTensor("f16", ptr=0x10002),
         MockTensor("f16", ptr=0x20000),
         MockTensor("f16", ptr=0x30000),
-        300, 300, 100, 100, 2, 300, 1, 300, 1,
+        300,
+        300,
+        100,
+        100,
+        2,
+        300,
+        1,
+        300,
+        1,
     )
     _, sig_u, _, attrs_u = specialize_triton_call(_matmul_kernel, "sm_89", args_unaligned, kwargs)
     assert sig_u["stride_ak"] == "i32"
@@ -326,17 +389,17 @@ def test_runtime_specialization_parity_and_artifact_hashing() -> None:
 
     ttgir1 = (
         '#loc = loc("/a/b.py":1:1)\n'
-        '#loc1 = loc(callsite(#loc at #loc))\n'
+        "#loc1 = loc(callsite(#loc at #loc))\n"
         'tt.func public @k(%a: !tt.ptr<f16> loc("a"(#loc))) {\n'
-        '  %0 = tt.dot %a, %b, %c : tensor<128x32xf16> loc(callsite(#loc1 at #loc))\n'
-        '}\n'
+        "  %0 = tt.dot %a, %b, %c : tensor<128x32xf16> loc(callsite(#loc1 at #loc))\n"
+        "}\n"
     )
     ttgir2 = (
         '#loc = loc("/other/path.py":99:5)\n'
-        '#loc1 = loc(callsite(#loc at #loc))\n'
+        "#loc1 = loc(callsite(#loc at #loc))\n"
         'tt.func public @k(%a: !tt.ptr<f16> loc("a"(#loc))) {\n'
-        '  %0 = tt.dot %a, %b, %c : tensor<128x32xf16> loc(#loc1)\n'
-        '}\n'
+        "  %0 = tt.dot %a, %b, %c : tensor<128x32xf16> loc(#loc1)\n"
+        "}\n"
     )
     assert hash_ttgir(ttgir1) == hash_ttgir(ttgir2)
     bundle = artifact_hashes(ptx1, ttgir1)
@@ -351,8 +414,15 @@ def test_nonstandard_param_names_use_triton_binder() -> None:
         MockTensor("f16", ptr=0x10000),
         MockTensor("f16", ptr=0x200000),
         MockTensor("f16", ptr=0x400000),
-        1024, 1024, 512,
-        512, 1, 1024, 1, 1024, 1,
+        1024,
+        1024,
+        512,
+        512,
+        1,
+        1024,
+        1,
+        1024,
+        1,
     )
     ir = extract_gemm_kernel_ir(
         _nonstandard_gemm,
@@ -394,9 +464,16 @@ def test_scalar_evaluator_recovers_group_size_m_swizzle() -> None:
     assert "linear_access_fallback" not in ir_g4["diagnostics"]
     coords_g4 = [(e[0], e[1]) for e in ir_g4["access_map"]["acc_A"]["entries"][:10]]
     assert coords_g4 == [
-        (0, 0), (1, 0), (2, 0), (3, 0),
-        (0, 1), (1, 1), (2, 1), (3, 1),
-        (0, 2), (1, 2),
+        (0, 0),
+        (1, 0),
+        (2, 0),
+        (3, 0),
+        (0, 1),
+        (1, 1),
+        (2, 1),
+        (3, 1),
+        (0, 2),
+        (1, 2),
     ]
 
     # With GROUP_SIZE_M = 1, traversal is row-major: (0,0), (0,1), (0,2), ...
@@ -419,9 +496,16 @@ def test_scalar_evaluator_recovers_group_size_m_swizzle() -> None:
     assert "linear_access_fallback" not in ir_g1["diagnostics"]
     coords_g1 = [(e[0], e[1]) for e in ir_g1["access_map"]["acc_A"]["entries"][:10]]
     assert coords_g1 == [
-        (0, 0), (0, 1), (0, 2), (0, 3),
-        (0, 4), (0, 5), (0, 6), (0, 7),
-        (1, 0), (1, 1),
+        (0, 0),
+        (0, 1),
+        (0, 2),
+        (0, 3),
+        (0, 4),
+        (0, 5),
+        (0, 6),
+        (0, 7),
+        (1, 0),
+        (1, 1),
     ]
 
 
@@ -465,21 +549,51 @@ def test_ptx_and_ttgir_hash_invariant_across_file_paths_and_line_numbers() -> No
             spec.loader.exec_module(mod)
             return mod.same_gemm
 
-        cfg = {"M": 1024, "N": 1024, "K": 512, "BM": 128, "BN": 128, "BK": 32, "GROUP_M": 8, "num_warps": 4, "num_stages": 3}
-        args = (MockTensor("f16", 0x10000), MockTensor("f16", 0x200000), MockTensor("f16", 0x400000))
-        ir1 = extract_gemm_kernel_ir(_load(p1), M=1024, N=1024, K=512, config=cfg, target_arch="sm_89", call_args=args)
-        ir2 = extract_gemm_kernel_ir(_load(p2), M=1024, N=1024, K=512, config=cfg, target_arch="sm_89", call_args=args)
-        assert ir1["metadata"]["toolchain"]["ptx_sha256"] == ir2["metadata"]["toolchain"]["ptx_sha256"]
-        assert ir1["metadata"]["toolchain"]["ttgir_sha256"] == ir2["metadata"]["toolchain"]["ttgir_sha256"]
+        cfg = {
+            "M": 1024,
+            "N": 1024,
+            "K": 512,
+            "BM": 128,
+            "BN": 128,
+            "BK": 32,
+            "GROUP_M": 8,
+            "num_warps": 4,
+            "num_stages": 3,
+        }
+        args = (
+            MockTensor("f16", 0x10000),
+            MockTensor("f16", 0x200000),
+            MockTensor("f16", 0x400000),
+        )
+        ir1 = extract_gemm_kernel_ir(
+            _load(p1), M=1024, N=1024, K=512, config=cfg, target_arch="sm_89", call_args=args
+        )
+        ir2 = extract_gemm_kernel_ir(
+            _load(p2), M=1024, N=1024, K=512, config=cfg, target_arch="sm_89", call_args=args
+        )
+        assert (
+            ir1["metadata"]["toolchain"]["ptx_sha256"] == ir2["metadata"]["toolchain"]["ptx_sha256"]
+        )
+        assert (
+            ir1["metadata"]["toolchain"]["ttgir_sha256"]
+            == ir2["metadata"]["toolchain"]["ttgir_sha256"]
+        )
 
 
 @triton.jit
 def _persistent_gemm(
-    a_ptr, b_ptr, c_ptr,
-    M, N, K,
-    stride_am, stride_ak,
-    stride_bk, stride_bn,
-    stride_cm, stride_cn,
+    a_ptr,
+    b_ptr,
+    c_ptr,
+    M,
+    N,
+    K,
+    stride_am,
+    stride_ak,
+    stride_bk,
+    stride_bn,
+    stride_cm,
+    stride_cn,
     BLOCK_SIZE_M: tl.constexpr,
     BLOCK_SIZE_N: tl.constexpr,
     BLOCK_SIZE_K: tl.constexpr,
@@ -498,19 +612,37 @@ def _persistent_gemm(
         acc = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
         for k in range(0, tl.cdiv(K, BLOCK_SIZE_K)):
             kk = k * BLOCK_SIZE_K + offs_k
-            a = tl.load(a_ptr + offs_am[:, None] * stride_am + kk[None, :] * stride_ak, mask=kk[None, :] < K, other=0.0)
-            b = tl.load(b_ptr + kk[:, None] * stride_bk + offs_bn[None, :] * stride_bn, mask=kk[:, None] < K, other=0.0)
+            a = tl.load(
+                a_ptr + offs_am[:, None] * stride_am + kk[None, :] * stride_ak,
+                mask=kk[None, :] < K,
+                other=0.0,
+            )
+            b = tl.load(
+                b_ptr + kk[:, None] * stride_bk + offs_bn[None, :] * stride_bn,
+                mask=kk[:, None] < K,
+                other=0.0,
+            )
             acc = tl.dot(a, b, acc)
-        tl.store(c_ptr + offs_am[:, None] * stride_cm + offs_bn[None, :] * stride_cn, acc.to(tl.float16))
+        tl.store(
+            c_ptr + offs_am[:, None] * stride_cm + offs_bn[None, :] * stride_cn, acc.to(tl.float16)
+        )
 
 
 @triton.jit
 def _three_input_gemm(
-    a0_ptr, a1_ptr, b_ptr, c_ptr,
-    M, N, K,
-    stride_am, stride_ak,
-    stride_bk, stride_bn,
-    stride_cm, stride_cn,
+    a0_ptr,
+    a1_ptr,
+    b_ptr,
+    c_ptr,
+    M,
+    N,
+    K,
+    stride_am,
+    stride_ak,
+    stride_bk,
+    stride_bn,
+    stride_cm,
+    stride_cn,
     BLOCK_SIZE_M: tl.constexpr,
     BLOCK_SIZE_N: tl.constexpr,
     BLOCK_SIZE_K: tl.constexpr,
@@ -535,7 +667,8 @@ def _three_input_gemm(
         a1_ptrs += BLOCK_SIZE_K * stride_ak
         b_ptrs += BLOCK_SIZE_K * stride_bk
     tl.store(
-        c_ptr + (pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M))[:, None] * stride_cm
+        c_ptr
+        + (pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M))[:, None] * stride_cm
         + (pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N))[None, :] * stride_cn,
         acc.to(tl.float16),
     )
@@ -548,8 +681,15 @@ def test_three_input_kernel_derives_prefetch_by_commit_group_count() -> None:
         MockTensor("f16", 0x210000),
         MockTensor("f16", 0x410000),
         MockTensor("f16", 0x610000),
-        1024, 1024, 512,
-        512, 1, 1024, 1, 1024, 1,
+        1024,
+        1024,
+        512,
+        512,
+        1,
+        1024,
+        1,
+        1024,
+        1,
     )
     for req_stages, expected_prefetch in ((2, 0), (3, 1), (4, 2)):
         kw = {
@@ -560,10 +700,14 @@ def test_three_input_kernel_derives_prefetch_by_commit_group_count() -> None:
             "num_stages": req_stages,
         }
         opts, sig, consts, attrs = specialize_triton_call(_three_input_gemm, "sm_89", args, kw)
-        art = compile_triton_aot(_three_input_gemm, sig, consts, "sm_89", 4, req_stages, attrs=attrs, options=opts)
+        art = compile_triton_aot(
+            _three_input_gemm, sig, consts, "sm_89", 4, req_stages, attrs=attrs, options=opts
+        )
         loop_body = _extract_loop_body(art.ttgir)
         assert loop_body.count("ttg.async_commit_group") == 3
-        summary = parse_ttgir_summary(art.ttgir, art.ptx, requested_num_stages=req_stages, element_bytes=2)
+        summary = parse_ttgir_summary(
+            art.ttgir, art.ptx, requested_num_stages=req_stages, element_bytes=2
+        )
         assert summary.async_copy == "async_element"
         assert summary.num_stages == req_stages - 1
         assert summary.prefetch_distance == expected_prefetch
@@ -575,14 +719,14 @@ def test_prefetch_derivation_diagnostics_and_unsupported_on_unresolved() -> None
     # Synthetic mismatch between PTX wait_group and TTGIR async_wait
     fake_ttgir = (
         'module attributes {"ttg.num-warps" = 4 : i32, "ttg.threads-per-warp" = 32 : i32} {\n'
-        '  %a = ttg.local_alloc : () -> !ttg.memdesc<2x64x32xf16, #shared, #smem, mutable>\n'
-        '  scf.for %i = %c0 to %c10 step %c1 {\n'
-        '    %w = ttg.async_wait %t {num = 4 : i32}\n'
-        '    %c = ttg.async_copy_global_to_local %p, %a : tensor<64x32x!tt.ptr<f16>>\n'
-        '    %g1 = ttg.async_commit_group tokens %c\n'
-        '    %g2 = ttg.async_commit_group tokens %c\n'
-        '  }\n'
-        '}\n'
+        "  %a = ttg.local_alloc : () -> !ttg.memdesc<2x64x32xf16, #shared, #smem, mutable>\n"
+        "  scf.for %i = %c0 to %c10 step %c1 {\n"
+        "    %w = ttg.async_wait %t {num = 4 : i32}\n"
+        "    %c = ttg.async_copy_global_to_local %p, %a : tensor<64x32x!tt.ptr<f16>>\n"
+        "    %g1 = ttg.async_commit_group tokens %c\n"
+        "    %g2 = ttg.async_commit_group tokens %c\n"
+        "  }\n"
+        "}\n"
     )
     fake_ptx = (
         "$L__loop:\n"
@@ -598,11 +742,11 @@ def test_prefetch_derivation_diagnostics_and_unsupported_on_unresolved() -> None
     # Unresolvable cp.async wait/commit must mark unsupported_features rather than guessing
     unresolved_cp = (
         'module attributes {"ttg.num-warps" = 4 : i32, "ttg.threads-per-warp" = 32 : i32} {\n'
-        '  %a = ttg.local_alloc : () -> !ttg.memdesc<2x64x32xf16, #shared, #smem, mutable>\n'
-        '  scf.for %i = %c0 to %c10 step %c1 {\n'
-        '    %c = ttg.async_copy_global_to_local %p, %a : tensor<64x32x!tt.ptr<f16>>\n'
-        '  }\n'
-        '}\n'
+        "  %a = ttg.local_alloc : () -> !ttg.memdesc<2x64x32xf16, #shared, #smem, mutable>\n"
+        "  scf.for %i = %c0 to %c10 step %c1 {\n"
+        "    %c = ttg.async_copy_global_to_local %p, %a : tensor<64x32x!tt.ptr<f16>>\n"
+        "  }\n"
+        "}\n"
     )
     s_unres = parse_ttgir_summary(unresolved_cp, "", requested_num_stages=3, element_bytes=2)
     assert "prefetch_distance_unresolved" in s_unres.unsupported_features
@@ -610,11 +754,11 @@ def test_prefetch_derivation_diagnostics_and_unsupported_on_unresolved() -> None
     # TMA IR missing wait_barrier and PTX try_wait must mark unsupported_features
     fake_tma = (
         'module attributes {"ttg.num-warps" = 4 : i32, "ttg.threads-per-warp" = 32 : i32} {\n'
-        '  %a = ttg.local_alloc : () -> !ttg.memdesc<2x64x32xf16, #shared, #smem, mutable>\n'
-        '  scf.for %i = %c0 to %c10 step %c1 {\n'
-        '    ttng.async_tma_copy_global_to_local %d[%x, %y] %a, %b, %p\n'
-        '  }\n'
-        '}\n'
+        "  %a = ttg.local_alloc : () -> !ttg.memdesc<2x64x32xf16, #shared, #smem, mutable>\n"
+        "  scf.for %i = %c0 to %c10 step %c1 {\n"
+        "    ttng.async_tma_copy_global_to_local %d[%x, %y] %a, %b, %p\n"
+        "  }\n"
+        "}\n"
     )
     s_tma = parse_ttgir_summary(fake_tma, "", requested_num_stages=3, element_bytes=2)
     assert s_tma.prefetch_distance == 0
@@ -626,16 +770,16 @@ def test_tma_prefetch_accounts_for_arrive_vs_mma_order() -> None:
     # Case A: wait -> MMA -> arrive/issue next TMA => 0 in-flight during MMA
     tma_issue_after_mma_ir = (
         'module attributes {"ttg.num-warps" = 4 : i32, "ttg.threads-per-warp" = 32 : i32} {\n'
-        '  %a = ttg.local_alloc : () -> !ttg.memdesc<1x64x32xf16, #shared, #smem, mutable>\n'
-        '  ttng.async_tma_copy_global_to_local %da[%x, %y] %a, %b, %p\n'
-        '  ttng.async_tma_copy_global_to_local %db[%x, %y] %a, %b, %p\n'
-        '  scf.for %i = %c0 to %c10 step %c1 {\n'
-        '    ttng.wait_barrier %b, %ph\n'
-        '    %acc = tt.dot %x, %y, %z : tensor<64x32xf16, #op0> * tensor<32x64xf16, #op1> -> tensor<64x64xf32, #mma>\n'
-        '    ttng.async_tma_copy_global_to_local %da[%x, %y] %a, %b, %p\n'
-        '    ttng.async_tma_copy_global_to_local %db[%x, %y] %a, %b, %p\n'
-        '  }\n'
-        '}\n'
+        "  %a = ttg.local_alloc : () -> !ttg.memdesc<1x64x32xf16, #shared, #smem, mutable>\n"
+        "  ttng.async_tma_copy_global_to_local %da[%x, %y] %a, %b, %p\n"
+        "  ttng.async_tma_copy_global_to_local %db[%x, %y] %a, %b, %p\n"
+        "  scf.for %i = %c0 to %c10 step %c1 {\n"
+        "    ttng.wait_barrier %b, %ph\n"
+        "    %acc = tt.dot %x, %y, %z : tensor<64x32xf16, #op0> * tensor<32x64xf16, #op1> -> tensor<64x64xf32, #mma>\n"
+        "    ttng.async_tma_copy_global_to_local %da[%x, %y] %a, %b, %p\n"
+        "    ttng.async_tma_copy_global_to_local %db[%x, %y] %a, %b, %p\n"
+        "  }\n"
+        "}\n"
     )
     tma_issue_after_mma_ptx = (
         "mbarrier.arrive.expect_tx.shared::cta.b64 _, [%r0], 16384;\n"
@@ -645,7 +789,9 @@ def test_tma_prefetch_accounts_for_arrive_vs_mma_order() -> None:
         "  mbarrier.arrive.expect_tx.shared::cta.b64 _, [%r0], 16384;\n"
         "  bra $L__loop;\n"
     )
-    s_after = parse_ttgir_summary(tma_issue_after_mma_ir, tma_issue_after_mma_ptx, requested_num_stages=2, element_bytes=2)
+    s_after = parse_ttgir_summary(
+        tma_issue_after_mma_ir, tma_issue_after_mma_ptx, requested_num_stages=2, element_bytes=2
+    )
     assert s_after.prefetch_distance == 0
     assert s_after.unsupported_features == []
     assert "prefetch_distance_mismatch" not in s_after.diagnostics
@@ -653,16 +799,16 @@ def test_tma_prefetch_accounts_for_arrive_vs_mma_order() -> None:
     # Case B: wait -> arrive/issue next TMA -> MMA => 1 in-flight during MMA
     tma_issue_before_mma_ir = (
         'module attributes {"ttg.num-warps" = 4 : i32, "ttg.threads-per-warp" = 32 : i32} {\n'
-        '  %a = ttg.local_alloc : () -> !ttg.memdesc<1x64x32xf16, #shared, #smem, mutable>\n'
-        '  ttng.async_tma_copy_global_to_local %da[%x, %y] %a, %b, %p\n'
-        '  ttng.async_tma_copy_global_to_local %db[%x, %y] %a, %b, %p\n'
-        '  scf.for %i = %c0 to %c10 step %c1 {\n'
-        '    ttng.wait_barrier %b, %ph\n'
-        '    ttng.async_tma_copy_global_to_local %da[%x, %y] %a, %b, %p\n'
-        '    ttng.async_tma_copy_global_to_local %db[%x, %y] %a, %b, %p\n'
-        '    %acc = tt.dot %x, %y, %z : tensor<64x32xf16, #op0> * tensor<32x64xf16, #op1> -> tensor<64x64xf32, #mma>\n'
-        '  }\n'
-        '}\n'
+        "  %a = ttg.local_alloc : () -> !ttg.memdesc<1x64x32xf16, #shared, #smem, mutable>\n"
+        "  ttng.async_tma_copy_global_to_local %da[%x, %y] %a, %b, %p\n"
+        "  ttng.async_tma_copy_global_to_local %db[%x, %y] %a, %b, %p\n"
+        "  scf.for %i = %c0 to %c10 step %c1 {\n"
+        "    ttng.wait_barrier %b, %ph\n"
+        "    ttng.async_tma_copy_global_to_local %da[%x, %y] %a, %b, %p\n"
+        "    ttng.async_tma_copy_global_to_local %db[%x, %y] %a, %b, %p\n"
+        "    %acc = tt.dot %x, %y, %z : tensor<64x32xf16, #op0> * tensor<32x64xf16, #op1> -> tensor<64x64xf32, #mma>\n"
+        "  }\n"
+        "}\n"
     )
     tma_issue_before_mma_ptx = (
         "mbarrier.arrive.expect_tx.shared::cta.b64 _, [%r0], 16384;\n"
@@ -672,7 +818,9 @@ def test_tma_prefetch_accounts_for_arrive_vs_mma_order() -> None:
         "  mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 d, a, b, c;\n"
         "  bra $L__loop;\n"
     )
-    s_before = parse_ttgir_summary(tma_issue_before_mma_ir, tma_issue_before_mma_ptx, requested_num_stages=2, element_bytes=2)
+    s_before = parse_ttgir_summary(
+        tma_issue_before_mma_ir, tma_issue_before_mma_ptx, requested_num_stages=2, element_bytes=2
+    )
     assert s_before.prefetch_distance == 1
     assert s_before.unsupported_features == []
     assert "prefetch_distance_mismatch" not in s_before.diagnostics
@@ -702,9 +850,16 @@ def test_persistent_kernel_emits_explicit_diagnostic() -> None:
 
 @triton.jit
 def _inloop_addr_gemm(
-    A, B, C,
-    M: tl.constexpr, N: tl.constexpr, K: tl.constexpr,
-    BM: tl.constexpr, BN: tl.constexpr, BK: tl.constexpr, GROUP_M: tl.constexpr,
+    A,
+    B,
+    C,
+    M: tl.constexpr,
+    N: tl.constexpr,
+    K: tl.constexpr,
+    BM: tl.constexpr,
+    BN: tl.constexpr,
+    BK: tl.constexpr,
+    GROUP_M: tl.constexpr,
 ):
     pid = tl.program_id(0)
     grid_m = tl.cdiv(M, BM)
@@ -719,22 +874,48 @@ def _inloop_addr_gemm(
     acc = tl.full((BM, BN), 0, tl.float32)
     for step in range(tl.cdiv(K, BK)):
         inner = step * BK + offsets
-        a = tl.load(A + rows[:, None] * K + inner[None, :], (rows[:, None] < M) & (inner[None, :] < K), other=0)
-        b = tl.load(B + inner[:, None] * N + cols[None, :], (inner[:, None] < K) & (cols[None, :] < N), other=0)
+        a = tl.load(
+            A + rows[:, None] * K + inner[None, :],
+            (rows[:, None] < M) & (inner[None, :] < K),
+            other=0,
+        )
+        b = tl.load(
+            B + inner[:, None] * N + cols[None, :],
+            (inner[:, None] < K) & (cols[None, :] < N),
+            other=0,
+        )
         acc = tl.dot(a, b, acc)
-    tl.store(C + rows[:, None] * N + cols[None, :], acc.to(tl.float16), (rows[:, None] < M) & (cols[None, :] < N))
+    tl.store(
+        C + rows[:, None] * N + cols[None, :],
+        acc.to(tl.float16),
+        (rows[:, None] < M) & (cols[None, :] < N),
+    )
 
 
 def test_num_stages_1_2_3_recover_identical_access_map_without_fallback() -> None:
     """num_stages=1 (no software pipelining) must recover the exact same access_map as num_stages=2/3."""
-    call_args = (MockTensor("f16", 0x10000), MockTensor("f16", 0x200000), MockTensor("f16", 0x400000))
+    call_args = (
+        MockTensor("f16", 0x10000),
+        MockTensor("f16", 0x200000),
+        MockTensor("f16", 0x400000),
+    )
     irs_inloop = [
         extract_gemm_kernel_ir(
             _inloop_addr_gemm,
             M=256,
             N=256,
             K=256,
-            config={"M": 256, "N": 256, "K": 256, "BM": 64, "BN": 64, "BK": 32, "GROUP_M": 4, "num_warps": 4, "num_stages": ns},
+            config={
+                "M": 256,
+                "N": 256,
+                "K": 256,
+                "BM": 64,
+                "BN": 64,
+                "BK": 32,
+                "GROUP_M": 4,
+                "num_warps": 4,
+                "num_stages": ns,
+            },
             target_arch="sm_89",
             dtype="f16",
             call_args=call_args,
@@ -742,7 +923,9 @@ def test_num_stages_1_2_3_recover_identical_access_map_without_fallback() -> Non
         for ns in (1, 2, 3)
     ]
     for ns, ir in zip((1, 2, 3), irs_inloop):
-        assert "linear_access_fallback" not in ir["diagnostics"], f"num_stages={ns} fell back to linear access map"
+        assert "linear_access_fallback" not in ir["diagnostics"], (
+            f"num_stages={ns} fell back to linear access map"
+        )
     assert irs_inloop[0]["access_map"] == irs_inloop[1]["access_map"] == irs_inloop[2]["access_map"]
 
     # Also verify pointer-iter_args stepping kernels across num_stages=1/2/3
@@ -752,15 +935,28 @@ def test_num_stages_1_2_3_recover_identical_access_map_without_fallback() -> Non
             M=256,
             N=256,
             K=256,
-            config={"BLOCK_SIZE_M": 64, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 32, "GROUP_SIZE_M": 4, "num_warps": 4, "num_stages": ns},
+            config={
+                "BLOCK_SIZE_M": 64,
+                "BLOCK_SIZE_N": 64,
+                "BLOCK_SIZE_K": 32,
+                "GROUP_SIZE_M": 4,
+                "num_warps": 4,
+                "num_stages": ns,
+            },
             target_arch="sm_89",
             dtype="f16",
         )
         for ns in (1, 2, 3)
     ]
     for ns, ir in zip((1, 2, 3), irs_ptr_step):
-        assert "linear_access_fallback" not in ir["diagnostics"], f"iter_args num_stages={ns} fell back"
-    assert irs_ptr_step[0]["access_map"] == irs_ptr_step[1]["access_map"] == irs_ptr_step[2]["access_map"]
+        assert "linear_access_fallback" not in ir["diagnostics"], (
+            f"iter_args num_stages={ns} fell back"
+        )
+    assert (
+        irs_ptr_step[0]["access_map"]
+        == irs_ptr_step[1]["access_map"]
+        == irs_ptr_step[2]["access_map"]
+    )
 
 
 def test_transfer_width_bytes_from_ptx_aligned_vs_unaligned() -> None:
@@ -775,7 +971,14 @@ def test_transfer_width_bytes_from_ptx_aligned_vs_unaligned() -> None:
             M=256,
             N=256,
             K=256,
-            config={"BLOCK_SIZE_M": 64, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 32, "GROUP_SIZE_M": 4, "num_warps": 4, "num_stages": ns},
+            config={
+                "BLOCK_SIZE_M": 64,
+                "BLOCK_SIZE_N": 64,
+                "BLOCK_SIZE_K": 32,
+                "GROUP_SIZE_M": 4,
+                "num_warps": 4,
+                "num_stages": ns,
+            },
             target_arch="sm_89",
             dtype="f16",
         )
@@ -790,7 +993,14 @@ def test_transfer_width_bytes_from_ptx_aligned_vs_unaligned() -> None:
             M=255,
             N=255,
             K=253,
-            config={"BLOCK_SIZE_M": 64, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 32, "GROUP_SIZE_M": 4, "num_warps": 4, "num_stages": ns},
+            config={
+                "BLOCK_SIZE_M": 64,
+                "BLOCK_SIZE_N": 64,
+                "BLOCK_SIZE_K": 32,
+                "GROUP_SIZE_M": 4,
+                "num_warps": 4,
+                "num_stages": ns,
+            },
             target_arch="sm_89",
             dtype="f16",
         )
@@ -810,15 +1020,29 @@ def test_mock_tensor_dtype_singleton_survives_gc_and_mixed_specialization() -> N
         ("f32", "bf16", "f16", "*fp32", "*bf16", "*fp16"),
         ("bf16", "f16", "f32", "*bf16", "*fp16", "*fp32"),
     ]
-    kw = {"BLOCK_SIZE_M": 64, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 32, "GROUP_SIZE_M": 4, "num_warps": 4, "num_stages": 3}
+    kw = {
+        "BLOCK_SIZE_M": 64,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 32,
+        "GROUP_SIZE_M": 4,
+        "num_warps": 4,
+        "num_stages": 3,
+    }
     for i in range(60):
         da, db, dc, ea, eb, ec = combos[i % len(combos)]
         args = (
             MockTensor(da, 0x10000),
             MockTensor(db, 0x200000),
             MockTensor(dc, 0x400000),
-            128, 128, 128,
-            128, 1, 128, 1, 128, 1,
+            128,
+            128,
+            128,
+            128,
+            1,
+            128,
+            1,
+            128,
+            1,
         )
         _, sig, _, _ = specialize_triton_call(_matmul_kernel, "sm_89", args, kw)
         assert sig["a_ptr"] == ea, f"iter {i}: expected a_ptr={ea}, got {sig['a_ptr']}"

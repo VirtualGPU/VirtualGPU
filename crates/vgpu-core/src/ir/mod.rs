@@ -461,13 +461,19 @@ impl KernelIR {
             || self.metadata.target_arch.is_empty()
             || self.metadata.frontend.is_empty()
         {
-            return Err(IrValidationError::new("metadata identifiers must be non-empty"));
+            return Err(IrValidationError::new(
+                "metadata identifiers must be non-empty",
+            ));
         }
         if self.launch.grid.contains(&0) {
-            return Err(IrValidationError::new("launch.grid dimensions must be >= 1"));
+            return Err(IrValidationError::new(
+                "launch.grid dimensions must be >= 1",
+            ));
         }
         if self.launch.cluster_shape.contains(&0) {
-            return Err(IrValidationError::new("launch.cluster_shape dimensions must be >= 1"));
+            return Err(IrValidationError::new(
+                "launch.cluster_shape dimensions must be >= 1",
+            ));
         }
         if self.launch.num_warps == 0 {
             return Err(IrValidationError::new("launch.num_warps must be >= 1"));
@@ -479,7 +485,9 @@ impl KernelIR {
             )));
         }
         if self.launch.warp_groups.is_empty() {
-            return Err(IrValidationError::new("launch.warp_groups must be non-empty"));
+            return Err(IrValidationError::new(
+                "launch.warp_groups must be non-empty",
+            ));
         }
         let mut wg_ids = HashSet::new();
         let mut wg_warps: u32 = 0;
@@ -527,7 +535,10 @@ impl KernelIR {
             }
         }
 
-        match (self.body.outer_loop.trip_count_mode, &self.body.outer_loop.trip_counts) {
+        match (
+            self.body.outer_loop.trip_count_mode,
+            &self.body.outer_loop.trip_counts,
+        ) {
             (OuterTripCountMode::Uniform, TripCounts::Uniform(n)) if *n >= 1 => {}
             (OuterTripCountMode::PerCta, TripCounts::PerItem(v)) => {
                 if v.len() as u64 != self.total_ctas() {
@@ -581,7 +592,9 @@ impl KernelIR {
             }
         }
         if self.body.pipeline_loop.num_stages == 0 {
-            return Err(IrValidationError::new("pipeline_loop.num_stages must be >= 1"));
+            return Err(IrValidationError::new(
+                "pipeline_loop.num_stages must be >= 1",
+            ));
         }
 
         let all_ops = self
@@ -708,13 +721,17 @@ mod tests {
 
     #[test]
     fn parse_and_validate_flash_attention_causal_gqa_example() {
-        let json = include_str!("../../../../schemas/examples/flash_attention_causal_gqa_sm89.json");
+        let json =
+            include_str!("../../../../schemas/examples/flash_attention_causal_gqa_sm89.json");
         let ir = KernelIR::from_json_str(json)
             .expect("flash_attention_causal_gqa_sm89.json should deserialize");
         ir.validate()
             .expect("flash_attention_causal_gqa_sm89.json should validate");
         assert_eq!(ir.total_ctas(), 128);
-        assert_eq!(ir.body.pipeline_loop.trip_count_mode, InnerTripCountMode::PerCta);
+        assert_eq!(
+            ir.body.pipeline_loop.trip_count_mode,
+            InnerTripCountMode::PerCta
+        );
         assert_eq!(ir.inner_trip_count(0, 0), Some(1));
         assert_eq!(ir.inner_trip_count(15, 0), Some(16));
         assert_eq!(ir.inner_trip_count(16, 0), Some(1));

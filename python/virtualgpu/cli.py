@@ -5,9 +5,10 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
-from pathlib import Path
 import sys
-from typing import Any, Sequence
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
 
 from virtualgpu.api import extract_gemm_configs, predict_gemm_configs, predict_ir_dir
 from virtualgpu.autotune import autotune_offline
@@ -158,33 +159,77 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_ext = sub.add_parser("extract", help="Compile Triton GEMM configs offline and emit KernelIR JSON files.")
+    p_ext = sub.add_parser(
+        "extract", help="Compile Triton GEMM configs offline and emit KernelIR JSON files."
+    )
     p_ext.add_argument("--kernel", required=True, help="Triton kernel import spec 'module:func'")
-    p_ext.add_argument("--suite", type=Path, help="Path to validation suite JSON (e.g. validation/suite.json)")
+    p_ext.add_argument(
+        "--suite", type=Path, help="Path to validation suite JSON (e.g. validation/suite.json)"
+    )
     p_ext.add_argument("--case", help="Case ID in --suite")
     p_ext.add_argument("--configs", nargs="*", help="Optional subset of config IDs from --suite")
-    p_ext.add_argument("--shape", type=int, nargs=3, metavar=("M", "N", "K"), help="GEMM shape when not using --suite")
-    p_ext.add_argument("--configs-json", type=Path, help="JSON list of config dicts when not using --suite")
+    p_ext.add_argument(
+        "--shape",
+        type=int,
+        nargs=3,
+        metavar=("M", "N", "K"),
+        help="GEMM shape when not using --suite",
+    )
+    p_ext.add_argument(
+        "--configs-json", type=Path, help="JSON list of config dicts when not using --suite"
+    )
     p_ext.add_argument("--arch", required=True, help="Target SM architecture (e.g. sm_89, sm_121)")
     p_ext.add_argument("--dtype", default="f16", help="Input tensor dtype (default: f16)")
-    p_ext.add_argument("--out-dir", type=Path, required=True, help="Directory to write <config_id>.json KernelIRs")
+    p_ext.add_argument(
+        "--out-dir", type=Path, required=True, help="Directory to write <config_id>.json KernelIRs"
+    )
     p_ext.add_argument("--cache-dir", type=Path, help="AOT compilation cache directory")
     p_ext.add_argument("--no-cache", action="store_true", help="Disable AOT compilation cache")
     p_ext.set_defaults(func=_cmd_extract)
 
-    p_pred = sub.add_parser("predict", help="Predict kernel latency records in validation/score.py format.")
-    p_pred.add_argument("--kernel", help="Triton kernel import spec 'module:func' for end-to-end prediction")
+    p_pred = sub.add_parser(
+        "predict", help="Predict kernel latency records in validation/score.py format."
+    )
+    p_pred.add_argument(
+        "--kernel", help="Triton kernel import spec 'module:func' for end-to-end prediction"
+    )
     p_pred.add_argument("--suite", type=Path, help="Path to validation suite JSON")
     p_pred.add_argument("--case", help="Case ID")
     p_pred.add_argument("--configs", nargs="*", help="Optional subset of config IDs from --suite")
-    p_pred.add_argument("--shape", type=int, nargs=3, metavar=("M", "N", "K"), help="GEMM shape when not using --suite")
-    p_pred.add_argument("--configs-json", type=Path, help="JSON list of config dicts when not using --suite")
-    p_pred.add_argument("--ir-dir", type=Path, help="Directory of KernelIR JSONs (input if no --kernel, or output dir if --kernel is set)")
-    p_pred.add_argument("--profile", type=Path, required=True, help="GPU profile JSON path or bundled profile name (rtx4070, gb10)")
-    p_pred.add_argument("--cache", choices=("cold", "warm"), default="cold", help="Initial L2 cache state")
+    p_pred.add_argument(
+        "--shape",
+        type=int,
+        nargs=3,
+        metavar=("M", "N", "K"),
+        help="GEMM shape when not using --suite",
+    )
+    p_pred.add_argument(
+        "--configs-json", type=Path, help="JSON list of config dicts when not using --suite"
+    )
+    p_pred.add_argument(
+        "--ir-dir",
+        type=Path,
+        help="Directory of KernelIR JSONs (input if no --kernel, or output dir if --kernel is set)",
+    )
+    p_pred.add_argument(
+        "--profile",
+        type=Path,
+        required=True,
+        help="GPU profile JSON path or bundled profile name, like rtx4070",
+    )
+    p_pred.add_argument(
+        "--cache", choices=("cold", "warm"), default="cold", help="Initial L2 cache state"
+    )
     p_pred.add_argument("--dtype", default="f16", help="Input tensor dtype (default: f16)")
-    p_pred.add_argument("--draws", type=int, default=32, help="Number of perturbation draws (default: 32; 0 = nominal only)")
-    p_pred.add_argument("--seed", type=int, default=17, help="RNG seed for perturbation draws (default: 17)")
+    p_pred.add_argument(
+        "--draws",
+        type=int,
+        default=32,
+        help="Number of perturbation draws (default: 32; 0 = nominal only)",
+    )
+    p_pred.add_argument(
+        "--seed", type=int, default=17, help="RNG seed for perturbation draws (default: 17)"
+    )
     p_pred.add_argument("--cache-dir", type=Path, help="AOT compilation cache directory")
     p_pred.add_argument("--no-cache", action="store_true", help="Disable AOT compilation cache")
     p_pred.add_argument("--out", type=Path, help="Output JSON path (prints to stdout if omitted)")
@@ -194,19 +239,47 @@ def build_parser() -> argparse.ArgumentParser:
         "autotune",
         help="Rank a @triton.autotune kernel offline on CPU and emit an AutotuneReport.",
     )
-    p_auto.add_argument("--kernel", required=True, help="Import spec 'module:kernel' (Autotuner or JITFunction)")
-    p_auto.add_argument("--shape", type=int, nargs=3, required=True, metavar=("M", "N", "K"), help="GEMM shape")
-    p_auto.add_argument("--configs-json", type=Path, help="Optional JSON list of configs (required for bare JITFunction)")
-    p_auto.add_argument("--profile", type=Path, required=True, help="GPU profile JSON path or bundled profile name (rtx4070, gb10)")
-    p_auto.add_argument("--cache", choices=("cold", "warm"), default="cold", help="Initial L2 cache state")
+    p_auto.add_argument(
+        "--kernel", required=True, help="Import spec 'module:kernel' (Autotuner or JITFunction)"
+    )
+    p_auto.add_argument(
+        "--shape", type=int, nargs=3, required=True, metavar=("M", "N", "K"), help="GEMM shape"
+    )
+    p_auto.add_argument(
+        "--configs-json",
+        type=Path,
+        help="Optional JSON list of configs (required for bare JITFunction)",
+    )
+    p_auto.add_argument(
+        "--profile",
+        type=Path,
+        required=True,
+        help="GPU profile JSON path or bundled profile name, like rtx4070",
+    )
+    p_auto.add_argument(
+        "--cache", choices=("cold", "warm"), default="cold", help="Initial L2 cache state"
+    )
     p_auto.add_argument("--dtype", default="f16", help="Input tensor dtype (default: f16)")
-    p_auto.add_argument("--draws", type=int, default=32, help="Number of perturbation draws (default: 32)")
-    p_auto.add_argument("--seed", type=int, default=17, help="RNG seed for perturbation draws (default: 17)")
-    p_auto.add_argument("--top-k", type=int, default=5, help="Shortlist size recommended for hardware verification (default: 5)")
+    p_auto.add_argument(
+        "--draws", type=int, default=32, help="Number of perturbation draws (default: 32)"
+    )
+    p_auto.add_argument(
+        "--seed", type=int, default=17, help="RNG seed for perturbation draws (default: 17)"
+    )
+    p_auto.add_argument(
+        "--top-k",
+        type=int,
+        default=5,
+        help="Shortlist size recommended for hardware verification (default: 5)",
+    )
     p_auto.add_argument("--cache-dir", type=Path, help="AOT compilation cache directory")
     p_auto.add_argument("--no-cache", action="store_true", help="Disable AOT compilation cache")
-    p_auto.add_argument("--strict", action="store_true", help="Exit with error if no config can be modeled")
-    p_auto.add_argument("--out", type=Path, help="Write AutotuneReport JSON to file (and print summary to stdout)")
+    p_auto.add_argument(
+        "--strict", action="store_true", help="Exit with error if no config can be modeled"
+    )
+    p_auto.add_argument(
+        "--out", type=Path, help="Write AutotuneReport JSON to file (and print summary to stdout)"
+    )
     p_auto.set_defaults(func=_cmd_autotune)
 
     return parser

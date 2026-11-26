@@ -44,6 +44,18 @@ validation = [
     "triton==3.9.0",
 ]
 
+[dependency-groups]
+# Local and CI tools. Triton only installs on Linux.
+dev = [
+    "maturin>=1.7,<2",
+    "pytest>=8",
+    "ruff==0.17.6",
+    "pre-commit>=4",
+    "jsonschema>=4",
+    "numpy>=2,<3",
+    "triton==3.9.0; sys_platform == 'linux'",
+]
+
 [tool.maturin]
 manifest-path = "crates/vgpu-core/Cargo.toml"
 python-source = "python"
@@ -54,6 +66,17 @@ include = [
     { path = "profiles/*.json", format = "sdist" },
     { path = "python/virtualgpu/profiles/*.json", format = ["sdist", "wheel"] },
 ]
-exclude = [
-    "python/virtualgpu/frontend/tests/**",
-]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+# Sealed records hash these sources, so they are never reformatted.
+extend-exclude = ["validation"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# The formatter owns line length, and zip strict would change behavior.
+ignore = ["E501", "B905"]
+
+[tool.pytest.ini_options]
+testpaths = ["python/tests"]

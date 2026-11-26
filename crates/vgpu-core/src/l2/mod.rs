@@ -197,7 +197,7 @@ struct LastSeen {
     covered_steps: u64,
 }
 
-/// Stateful, instance-local L2 reuse model driven by Agent 4's event scheduler.
+/// Stateful, instance-local L2 reuse model driven by the event scheduler in `sim.rs`.
 pub struct L2Model<'a> {
     ir: &'a KernelIR,
     profile: L2Profile,
@@ -300,11 +300,14 @@ impl<'a> L2Model<'a> {
                 }
                 let effective_steps = effective_chunk_steps(entry, inner_trips);
                 let full_stream = step_aligned.saturating_mul(effective_steps);
-                let slot = self.active_chunks.entry(ckey).or_insert_with(|| ActiveChunk {
-                    trips: Vec::new(),
-                    max_streamed_steps: 0,
-                    max_streamed_bytes: 0,
-                });
+                let slot = self
+                    .active_chunks
+                    .entry(ckey)
+                    .or_insert_with(|| ActiveChunk {
+                        trips: Vec::new(),
+                        max_streamed_steps: 0,
+                        max_streamed_bytes: 0,
+                    });
                 if slot.trips.is_empty() {
                     self.active_working_set_bytes =
                         self.active_working_set_bytes.saturating_add(step_aligned);
@@ -320,7 +323,8 @@ impl<'a> L2Model<'a> {
                 });
             }
         }
-        self.resident_tiles.insert(tile_key, ResidentTile { chunks });
+        self.resident_tiles
+            .insert(tile_key, ResidentTile { chunks });
     }
 
     pub fn end_tile(&mut self, _sm_id: u32, cta_id: u32, outer_idx: u32, _t_ns: f64) {
@@ -342,9 +346,8 @@ impl<'a> L2Model<'a> {
                         .active_working_set_bytes
                         .saturating_sub(rc.step_aligned_bytes);
                     // Advance L2 stream clock by the full K-stream volume in O(1).
-                    self.stream_clock_bytes = self
-                        .stream_clock_bytes
-                        .saturating_add(streamed_bytes);
+                    self.stream_clock_bytes =
+                        self.stream_clock_bytes.saturating_add(streamed_bytes);
                     if self.options.cross_wave_reuse {
                         self.last_seen_stream_byte.insert(
                             rc.key,
@@ -455,8 +458,9 @@ impl<'a> L2Model<'a> {
         let merged_raw = miss_raw * (sharing_count - 1.0) / sharing_count;
 
         let eff_cap = self.profile.l2_effective_capacity_bytes.max(1) as f64;
-        let working_set =
-            (self.active_working_set_bytes.saturating_add(self.spill_l2_pressure_bytes)) as f64;
+        let working_set = (self
+            .active_working_set_bytes
+            .saturating_add(self.spill_l2_pressure_bytes)) as f64;
 
         let (cap_factor, near_cliff) = match self.options.eviction_mode {
             EvictionMode::SoftLru => {
@@ -539,8 +543,9 @@ impl<'a> L2Model<'a> {
         let l1_bytes = total_traffic.saturating_sub(overflow_bytes);
 
         let eff_cap = self.profile.l2_effective_capacity_bytes.max(1) as f64;
-        let working_set =
-            (self.active_working_set_bytes.saturating_add(self.spill_l2_pressure_bytes)) as f64;
+        let working_set = (self
+            .active_working_set_bytes
+            .saturating_add(self.spill_l2_pressure_bytes)) as f64;
         let l2_fit = if working_set <= eff_cap {
             1.0
         } else {
@@ -573,10 +578,7 @@ impl<'a> L2Model<'a> {
         let eff_cap = self.profile.l2_effective_capacity_bytes.max(1) as f64;
         let query_bytes = reuse_distance_bytes.max(0.0);
         if !self.profile.rescan_hit_curve.is_empty() {
-            let nom_cap = self
-                .profile
-                .nominal_l2_effective_capacity_bytes
-                .max(1) as f64;
+            let nom_cap = self.profile.nominal_l2_effective_capacity_bytes.max(1) as f64;
             let scale = eff_cap / nom_cap;
             let scaled_query = query_bytes / scale;
             interpolate(&self.profile.rescan_hit_curve, scaled_query).clamp(0.0, 1.0)
@@ -614,7 +616,12 @@ impl<'a> L2Model<'a> {
             .fold(0u64, |acc, &v| acc.saturating_add(v))
     }
 
-    fn lookup_strided(&self, access_ref: &str, cta_id: u32, outer_idx: u32) -> Option<Strided2dEntry> {
+    fn lookup_strided(
+        &self,
+        access_ref: &str,
+        cta_id: u32,
+        outer_idx: u32,
+    ) -> Option<Strided2dEntry> {
         let idx = self.ir.dense_tile_index(cta_id, outer_idx)?;
         match self.ir.access_map.get(access_ref)? {
             AccessEntry::Strided2dPerOuterTile { entries, .. } => entries.get(idx).copied(),
@@ -681,7 +688,12 @@ mod tests {
     fn swizzled_resident_ctas_share_a_and_b_in_l2() {
         let json = include_str!("../../../../schemas/examples/gemm_sm89.json");
         let ir = KernelIR::from_json_str(json).unwrap();
-        let mut l2 = L2Model::new(&ir, synthetic_l2_profile(), L2InitState::Cold, L2Options::default());
+        let mut l2 = L2Model::new(
+            &ir,
+            synthetic_l2_profile(),
+            L2InitState::Cold,
+            L2Options::default(),
+        );
 
         // First 16 CTAs in GROUP_SIZE_M=8 cover pid_m in 0..8, pid_n in 0..2:
         // each A row-slice is shared by 2 CTAs; each B col-slice is shared by 8 CTAs.
@@ -692,10 +704,18 @@ mod tests {
         let res_a = l2.split(0, 0, 0, "load_A", 0, 128, false, CachePolicy::Default, 0.0);
         let res_b = l2.split(0, 0, 0, "load_B", 0, 128, false, CachePolicy::Default, 0.0);
 
-        assert!((res_a.hit_ratio - 0.5).abs() < 1e-6, "A shared by 2 CTAs -> 50% hit");
-        assert!((res_b.hit_ratio - 0.875).abs() < 1e-6, "B shared by 8 CTAs -> 87.5% hit");
+        assert!(
+            (res_a.hit_ratio - 0.5).abs() < 1e-6,
+            "A shared by 2 CTAs -> 50% hit"
+        );
+        assert!(
+            (res_b.hit_ratio - 0.875).abs() < 1e-6,
+            "B shared by 8 CTAs -> 87.5% hit"
+        );
         assert_eq!(res_a.sector_aligned_bytes, 128 * 64 * 128);
-        assert!((res_a.l2_bytes + res_a.dram_bytes - res_a.sector_aligned_bytes as f64).abs() < 1e-3);
+        assert!(
+            (res_a.l2_bytes + res_a.dram_bytes - res_a.sector_aligned_bytes as f64).abs() < 1e-3
+        );
         assert!(!res_a.near_cliff);
 
         // End wave 1 (8 A stripes + 2 B stripes = 10 MiB <= 36 MiB L2) -> rescan curve gives 1.0.
@@ -703,8 +723,21 @@ mod tests {
             l2.end_tile(cta % 46, cta, 0, 1000.0);
         }
         l2.begin_tile(0, 16, 0, 1000.0);
-        let res_a_next = l2.split(0, 16, 0, "load_A", 0, 128, false, CachePolicy::Default, 1000.0);
-        assert!((res_a_next.hit_ratio - 1.0).abs() < 1e-6, "10 MiB reuse distance fits in 36 MiB L2");
+        let res_a_next = l2.split(
+            0,
+            16,
+            0,
+            "load_A",
+            0,
+            128,
+            false,
+            CachePolicy::Default,
+            1000.0,
+        );
+        assert!(
+            (res_a_next.hit_ratio - 1.0).abs() < 1e-6,
+            "10 MiB reuse distance fits in 36 MiB L2"
+        );
     }
 
     #[test]
@@ -728,7 +761,17 @@ mod tests {
                 l2.begin_tile(cta % 46, cta, 0, 0.0);
             }
             if wave_start >= 256 {
-                let res_b = l2.split(0, wave_start, 0, "load_B", 0, 128, false, CachePolicy::Default, 0.0);
+                let res_b = l2.split(
+                    0,
+                    wave_start,
+                    0,
+                    "load_B",
+                    0,
+                    128,
+                    false,
+                    CachePolicy::Default,
+                    0.0,
+                );
                 total_b_hit_wave2_plus += res_b.hit_ratio;
                 count_b_wave2_plus += 1;
             }
@@ -740,7 +783,17 @@ mod tests {
         // After streaming 64 MiB (> 45 MiB cliff on RTX 4070), a solo CTA reusing an early B column
         // must see near-zero cross-wave hit (not 1.0 and not C_eff/F).
         l2.begin_tile(0, 256, 0, 2000.0);
-        let solo_b = l2.split(0, 256, 0, "load_B", 0, 128, false, CachePolicy::Default, 2000.0);
+        let solo_b = l2.split(
+            0,
+            256,
+            0,
+            "load_B",
+            0,
+            128,
+            false,
+            CachePolicy::Default,
+            2000.0,
+        );
         assert!(
             solo_b.hit_ratio < 0.05,
             "evicted B stripe after 64 MiB stream must miss, got {}",
@@ -761,7 +814,12 @@ mod tests {
         let prof = synthetic_l2_profile();
 
         // 1. Large 4096^3 GEMM (64 MiB > 46.8 MiB cliff): warm hit must be 0.0.
-        let mut l2_large = L2Model::new(&ir_large, prof.clone(), L2InitState::Warm, L2Options::default());
+        let mut l2_large = L2Model::new(
+            &ir_large,
+            prof.clone(),
+            L2InitState::Warm,
+            L2Options::default(),
+        );
         l2_large.begin_tile(0, 0, 0, 0.0);
         let large_res = l2_large.split(0, 0, 0, "load_A", 0, 128, false, CachePolicy::Default, 0.0);
         assert!(
@@ -773,7 +831,12 @@ mod tests {
         // 2. Small footprint (K=8 -> 4 MiB <= 36 MiB L2): warm hit must be 1.0.
         let mut ir_small = ir_large.clone();
         ir_small.body.pipeline_loop.trip_counts = TripCounts::Uniform(8);
-        let mut l2_small = L2Model::new(&ir_small, prof.clone(), L2InitState::Warm, L2Options::default());
+        let mut l2_small = L2Model::new(
+            &ir_small,
+            prof.clone(),
+            L2InitState::Warm,
+            L2Options::default(),
+        );
         assert_eq!(l2_small.total_read_footprint_bytes(), 4 * 1024 * 1024);
         l2_small.begin_tile(0, 0, 0, 0.0);
         let small_res = l2_small.split(0, 0, 0, "load_A", 0, 8, false, CachePolicy::Default, 0.0);
@@ -815,7 +878,10 @@ mod tests {
         assert_eq!(l2.active_working_set_bytes(), 80 * 1024);
 
         let res = l2.split(0, 0, 0, "load_B", 0, 16, false, CachePolicy::Default, 0.0);
-        assert!(res.near_cliff, "working set == C_eff should flag near_cliff");
+        assert!(
+            res.near_cliff,
+            "working set == C_eff should flag near_cliff"
+        );
         assert!(res.hit_ratio < 0.875 && res.hit_ratio > 0.7);
     }
 
@@ -823,7 +889,12 @@ mod tests {
     fn spill_overflow_transitions_from_l1_to_l2_dram() {
         let json = include_str!("../../../../schemas/examples/gemm_sm89.json");
         let ir = KernelIR::from_json_str(json).unwrap();
-        let mut l2 = L2Model::new(&ir, synthetic_l2_profile(), L2InitState::Cold, L2Options::default());
+        let mut l2 = L2Model::new(
+            &ir,
+            synthetic_l2_profile(),
+            L2InitState::Cold,
+            L2Options::default(),
+        );
 
         // 256 active threads * 128B stack = 32KB <= 64KB threshold -> fits in L1.
         let small = l2.account_spill(0, 256, 128, 32, 32);
@@ -904,15 +975,16 @@ mod tests {
             l2_sector_bytes: 32,
             l1_size_bytes: 128 * 1024,
             l1_to_l2_spill_threshold_bytes_per_sm: 64 * 1024,
-            rescan_hit_curve: vec![
-                (36.0 * mib, 1.0),
-                (39.0 * mib, 0.326),
-                (45.0 * mib, 0.0),
-            ],
+            rescan_hit_curve: vec![(36.0 * mib, 1.0), (39.0 * mib, 0.326), (45.0 * mib, 0.0)],
         };
 
         // 1. Unperturbed: 39 MiB query must hit the 39 MiB cliff point (0.326), NOT shifted by 64 MiB spec.
-        let mut l2_nom = L2Model::new(&ir_39m, base_prof.clone(), L2InitState::Warm, L2Options::default());
+        let mut l2_nom = L2Model::new(
+            &ir_39m,
+            base_prof.clone(),
+            L2InitState::Warm,
+            L2Options::default(),
+        );
         l2_nom.begin_tile(0, 0, 0, 0.0);
         let r_nom = l2_nom.split(0, 0, 0, "load_A", 0, 78, false, CachePolicy::Default, 0.0);
         assert!(
@@ -926,7 +998,12 @@ mod tests {
         ir_19_5m.body.pipeline_loop.trip_counts = TripCounts::Uniform(39); // 19.5 MiB footprint
         let mut perturbed = base_prof;
         perturbed.l2_effective_capacity_bytes = 18 * 1024 * 1024;
-        let mut l2_pert = L2Model::new(&ir_19_5m, perturbed, L2InitState::Warm, L2Options::default());
+        let mut l2_pert = L2Model::new(
+            &ir_19_5m,
+            perturbed,
+            L2InitState::Warm,
+            L2Options::default(),
+        );
         l2_pert.begin_tile(0, 0, 0, 0.0);
         let r_pert = l2_pert.split(0, 0, 0, "load_A", 0, 39, false, CachePolicy::Default, 0.0);
         assert!(
@@ -950,7 +1027,10 @@ mod tests {
         }
         let cold_b = l2_cold.split(0, 0, 0, "load_B", 0, 128, false, CachePolicy::Default, 0.0);
         let total = cold_b.sector_aligned_bytes as f64;
-        assert!(cold_b.resident_hit_bytes.abs() < 1e-6, "cold wave 1 has zero resident hits");
+        assert!(
+            cold_b.resident_hit_bytes.abs() < 1e-6,
+            "cold wave 1 has zero resident hits"
+        );
         assert!((cold_b.merged_bytes - total * 0.875).abs() < 1e-3);
         assert!((cold_b.dram_bytes - total * 0.125).abs() < 1e-3);
         assert!((cold_b.l2_bytes - (cold_b.resident_hit_bytes + cold_b.merged_bytes)).abs() < 1e-6);
@@ -961,7 +1041,17 @@ mod tests {
             l2_cold.end_tile(cta % 46, cta, 0, 1000.0);
         }
         l2_cold.begin_tile(0, 16, 0, 1000.0);
-        let xwave_a = l2_cold.split(0, 16, 0, "load_A", 0, 128, false, CachePolicy::Default, 1000.0);
+        let xwave_a = l2_cold.split(
+            0,
+            16,
+            0,
+            "load_A",
+            0,
+            128,
+            false,
+            CachePolicy::Default,
+            1000.0,
+        );
         let total_a = xwave_a.sector_aligned_bytes as f64;
         assert!((xwave_a.resident_hit_bytes - total_a).abs() < 1e-3);
         assert!(xwave_a.merged_bytes.abs() < 1e-6);
@@ -989,7 +1079,8 @@ mod tests {
 
     #[test]
     fn causal_gqa_attention_footprint_and_kv_sharing() {
-        let ir_json = include_str!("../../../../schemas/examples/flash_attention_causal_gqa_sm89.json");
+        let ir_json =
+            include_str!("../../../../schemas/examples/flash_attention_causal_gqa_sm89.json");
         let ir = KernelIR::from_json_str(ir_json).unwrap();
         let prof = synthetic_l2_profile();
         let mut l2 = L2Model::new(&ir, prof, L2InitState::Cold, L2Options::default());
@@ -1010,7 +1101,11 @@ mod tests {
 
         // Over [0, 16), cta 15 sees effective_R = 1.0 + 1.0 + 8/16 = 2.5 -> merged = 1.5/2.5 = 0.6.
         let res_long = l2.split(0, 15, 0, "load_K", 0, 16, false, CachePolicy::Default, 0.0);
-        assert!((res_long.hit_ratio - 0.6).abs() < 1e-6, "expected 0.6, got {}", res_long.hit_ratio);
+        assert!(
+            (res_long.hit_ratio - 0.6).abs() < 1e-6,
+            "expected 0.6, got {}",
+            res_long.hit_ratio
+        );
         assert!(res_long.resident_hit_bytes.abs() < 1e-6);
 
         // Over [0, 8), all three h_kv=0 CTAs fully overlap -> R = 3.0 -> merged = 2/3.
@@ -1028,7 +1123,8 @@ mod tests {
 
     #[test]
     fn causal_cross_wave_short_cta_only_warms_its_prefix() {
-        let ir_json = include_str!("../../../../schemas/examples/flash_attention_causal_gqa_sm89.json");
+        let ir_json =
+            include_str!("../../../../schemas/examples/flash_attention_causal_gqa_sm89.json");
         let ir = KernelIR::from_json_str(ir_json).unwrap();
         let prof = synthetic_l2_profile();
         let mut l2 = L2Model::new(&ir, prof, L2InitState::Cold, L2Options::default());
@@ -1040,7 +1136,17 @@ mod tests {
         // Wave 2: solo long CTA (cta=15, h_q=0, qb=15, trips=16) on same h_kv=0.
         l2.begin_tile(0, 15, 0, 100.0);
         // Full [0, 16) only overlaps on steps 0..2 -> resident hit ratio = 2/16 = 0.125.
-        let full = l2.split(0, 15, 0, "load_K", 0, 16, false, CachePolicy::Default, 100.0);
+        let full = l2.split(
+            0,
+            15,
+            0,
+            "load_K",
+            0,
+            16,
+            false,
+            CachePolicy::Default,
+            100.0,
+        );
         assert!(
             (full.hit_ratio - 0.125).abs() < 1e-6,
             "short 2-step CTA must only warm 2/16 of a 16-step CTA, got {}",
@@ -1050,7 +1156,17 @@ mod tests {
 
         // Prefix [0, 2) is 100% resident; tail [2, 16) is 0% resident.
         let prefix = l2.split(0, 15, 0, "load_K", 0, 2, false, CachePolicy::Default, 100.0);
-        let tail = l2.split(0, 15, 0, "load_K", 2, 16, false, CachePolicy::Default, 100.0);
+        let tail = l2.split(
+            0,
+            15,
+            0,
+            "load_K",
+            2,
+            16,
+            false,
+            CachePolicy::Default,
+            100.0,
+        );
         assert!((prefix.hit_ratio - 1.0).abs() < 1e-6);
         assert!(tail.hit_ratio.abs() < 1e-6);
     }

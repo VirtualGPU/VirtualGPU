@@ -8,7 +8,6 @@ from typing import Any
 
 import jsonschema
 import pytest
-
 from virtualgpu.api import (
     extract_gemm_configs,
     predict_gemm_configs,
@@ -17,10 +16,10 @@ from virtualgpu.api import (
 )
 from virtualgpu.cli import main as cli_main
 from virtualgpu.frontend import compiler as compiler_mod
-from virtualgpu.frontend.tests.test_triton_frontend import _matmul_kernel
 
+from tests.frontend.test_triton_frontend import _matmul_kernel
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 SCHEMA_PATH = REPO_ROOT / "schemas" / "kernel_ir.schema.json"
 PROFILE_EXAMPLE_PATH = REPO_ROOT / "schemas" / "examples" / "profile_example.json"
 
@@ -66,7 +65,9 @@ class _DummyCore:
         }
 
 
-def test_aot_disk_cache_hits_and_skips_recompilation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_aot_disk_cache_hits_and_skips_recompilation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     cache_dir = tmp_path / "aot_cache"
     cfg = {
         "config_id": "c_cache",
@@ -206,30 +207,42 @@ def test_cli_extract_and_predict_ir_dir(tmp_path: Path, monkeypatch: pytest.Monk
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     cfg_file = tmp_path / "configs.json"
     cfg_file.write_text(
-        json.dumps([
-            {
-                "config_id": "c01",
-                "BLOCK_SIZE_M": 64,
-                "BLOCK_SIZE_N": 64,
-                "BLOCK_SIZE_K": 32,
-                "GROUP_SIZE_M": 8,
-                "num_warps": 4,
-                "num_stages": 3,
-            }
-        ]),
+        json.dumps(
+            [
+                {
+                    "config_id": "c01",
+                    "BLOCK_SIZE_M": 64,
+                    "BLOCK_SIZE_N": 64,
+                    "BLOCK_SIZE_K": 32,
+                    "GROUP_SIZE_M": 8,
+                    "num_warps": 4,
+                    "num_stages": 3,
+                }
+            ]
+        ),
         encoding="utf-8",
     )
     ir_dir = tmp_path / "irs"
     cache_dir = tmp_path / "cache"
-    rc = cli_main([
-        "extract",
-        "--kernel", "virtualgpu.frontend.tests.test_triton_frontend:_matmul_kernel",
-        "--shape", "512", "512", "256",
-        "--configs-json", str(cfg_file),
-        "--arch", "sm_89",
-        "--out-dir", str(ir_dir),
-        "--cache-dir", str(cache_dir),
-    ])
+    rc = cli_main(
+        [
+            "extract",
+            "--kernel",
+            "tests.frontend.test_triton_frontend:_matmul_kernel",
+            "--shape",
+            "512",
+            "512",
+            "256",
+            "--configs-json",
+            str(cfg_file),
+            "--arch",
+            "sm_89",
+            "--out-dir",
+            str(ir_dir),
+            "--cache-dir",
+            str(cache_dir),
+        ]
+    )
     assert rc == 0
     ir_path = ir_dir / "c01.json"
     assert ir_path.is_file()
@@ -240,16 +253,25 @@ def test_cli_extract_and_predict_ir_dir(tmp_path: Path, monkeypatch: pytest.Monk
 
     monkeypatch.setattr(virtualgpu, "_core", _DummyCore, raising=False)
     out_preds = tmp_path / "preds.json"
-    rc2 = cli_main([
-        "predict",
-        "--ir-dir", str(ir_dir),
-        "--case", "smoke-case",
-        "--profile", str(PROFILE_EXAMPLE_PATH),
-        "--cache", "cold",
-        "--draws", "4",
-        "--seed", "17",
-        "--out", str(out_preds),
-    ])
+    rc2 = cli_main(
+        [
+            "predict",
+            "--ir-dir",
+            str(ir_dir),
+            "--case",
+            "smoke-case",
+            "--profile",
+            str(PROFILE_EXAMPLE_PATH),
+            "--cache",
+            "cold",
+            "--draws",
+            "4",
+            "--seed",
+            "17",
+            "--out",
+            str(out_preds),
+        ]
+    )
     assert rc2 == 0
     preds = json.loads(out_preds.read_text(encoding="utf-8"))
     assert len(preds) == 1

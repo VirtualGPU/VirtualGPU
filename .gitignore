@@ -1,11 +1,41 @@
+# Rust build output
 /target/
+
+# Python
 .venv/
+venv/
 __pycache__/
-*.pyc
-*.so
+*.py[cod]
 *.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Built extension and packages
+*.so
+*.pyd
+*.whl
 /dist/
 /build/
-.pytest_cache/
-/results/
+
+# Release copies the profiles here before building the wheel
 python/virtualgpu/profiles/
+
+# Local validation runs. Published records live in validation/
+/results/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.sw?
+
+# Local tools and secrets
+/.claude/
+/CLAUDE.md
+/.mcp.json
+.playwright-mcp/
+.env

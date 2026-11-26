@@ -6,7 +6,6 @@ import copy
 from pathlib import Path
 
 import pytest
-
 from virtualgpu.profile import (
     DEFAULT_SCHEMA_PATH,
     ProfileValidationError,
@@ -37,7 +36,10 @@ def test_rtx4070_profile_is_valid() -> None:
     assert mem["dram_bw_read_gbps"]["source"] == "measured"
     assert mem["l2_bw_read_gbps"]["source"] == "measured"
     assert len(mem["l2_bw_by_active_sms"]) >= 8
-    assert mem["l2_bw_by_active_sms"][0]["bw_gbps"]["value"] > mem["dram_bw_by_active_sms"][0]["bw_gbps"]["value"]
+    assert (
+        mem["l2_bw_by_active_sms"][0]["bw_gbps"]["value"]
+        > mem["dram_bw_by_active_sms"][0]["bw_gbps"]["value"]
+    )
     assert mem["l2_effective_capacity_bytes"]["source"] == "measured"
     assert mem["l2_effective_capacity_bytes"]["value"] <= profile["specs"]["l2_size_bytes"]
     assert mem["dram_latency_loaded_ns"]["source"] == "measured"
@@ -63,10 +65,16 @@ def test_rtx4070_profile_is_valid() -> None:
     assert len(mem["l1_to_l2_spill_threshold_by_carveout"]) >= 6
     assert all(
         len(entry.get("miss_rate_by_working_set", [])) >= 30
-        and all(0.0 <= pt["estimated_miss_rate"]["value"] <= 1.0 for pt in entry["miss_rate_by_working_set"])
+        and all(
+            0.0 <= pt["estimated_miss_rate"]["value"] <= 1.0
+            for pt in entry["miss_rate_by_working_set"]
+        )
         for entry in mem["l1_to_l2_spill_threshold_by_carveout"]
     )
-    assert profile["measured"]["spill"]["l1_to_l2_spill_threshold_bytes_per_sm"]["source"] == "measured"
+    assert (
+        profile["measured"]["spill"]["l1_to_l2_spill_threshold_bytes_per_sm"]["source"]
+        == "measured"
+    )
     assert len(profile["measured"]["pipeline"]["stage_sync_overhead_ns"]) >= 8
     assert len(profile["measured"]["pipeline"]["fixed_sync_ns"]) >= 8
     assert profile["measured"]["pipeline"]["min_async_roundtrip_ns"]["source"] == "measured"
@@ -75,7 +83,9 @@ def test_rtx4070_profile_is_valid() -> None:
     assert len(profile["measured"]["pipeline"]["sync_stage_loop_ablation"]) >= 64
     assert profile["measured"]["async_pipeline"]["cp_async_bw_per_sm_gbps"]["source"] == "measured"
     assert profile["measured"]["overhead"]["launch_overhead_us"]["source"] == "measured"
-    mma_f16 = profile["measured"]["compute"]["mma_tflops_per_sm_by_warps"]["mma.sync:f16:f16:f32:16x8x16"]
+    mma_f16 = profile["measured"]["compute"]["mma_tflops_per_sm_by_warps"][
+        "mma.sync:f16:f16:f32:16x8x16"
+    ]
     assert len(mma_f16) >= 4
     assert all(pt["tflops_per_sm"]["source"] == "measured" for pt in mma_f16)
     assert len(profile["measured"]["compute"]["mma_chain_latency"]) >= 128
@@ -100,7 +110,10 @@ def test_gb10_profile_is_valid() -> None:
     assert mem["dram_bw_read_gbps"]["source"] == "measured"
     assert mem["l2_bw_read_gbps"]["source"] == "measured"
     assert len(mem["l2_bw_by_active_sms"]) >= 8
-    assert mem["l2_bw_by_active_sms"][0]["bw_gbps"]["value"] > mem["dram_bw_by_active_sms"][0]["bw_gbps"]["value"]
+    assert (
+        mem["l2_bw_by_active_sms"][0]["bw_gbps"]["value"]
+        > mem["dram_bw_by_active_sms"][0]["bw_gbps"]["value"]
+    )
     assert len(mem["dram_bw_by_bytes_in_flight"]) >= 40
     assert len(mem["dram_bw_by_bytes_in_flight_strided"]) >= 40
     assert len(mem["gmem_load_issue_per_sm"]) >= 24
@@ -109,10 +122,16 @@ def test_gb10_profile_is_valid() -> None:
     assert len(mem["l1_to_l2_spill_threshold_by_carveout"]) >= 6
     assert all(
         len(entry.get("miss_rate_by_working_set", [])) >= 30
-        and all(0.0 <= pt["estimated_miss_rate"]["value"] <= 1.0 for pt in entry["miss_rate_by_working_set"])
+        and all(
+            0.0 <= pt["estimated_miss_rate"]["value"] <= 1.0
+            for pt in entry["miss_rate_by_working_set"]
+        )
         for entry in mem["l1_to_l2_spill_threshold_by_carveout"]
     )
-    assert profile["measured"]["spill"]["l1_to_l2_spill_threshold_bytes_per_sm"]["source"] == "measured"
+    assert (
+        profile["measured"]["spill"]["l1_to_l2_spill_threshold_bytes_per_sm"]["source"]
+        == "measured"
+    )
     assert len(mem["dram_closed_loop_mma"]) >= 140
     assert len(profile["measured"]["pipeline"]["serial_stage_fill"]) >= 32
     assert len(profile["measured"]["pipeline"]["sync_stage_loop"]) >= 564
@@ -173,7 +192,10 @@ def test_rejects_latency_curve_bw_exceeding_peak() -> None:
     max_allowed = peak_mv["value"] * (1.0 + peak_mv["rel_uncertainty"])
     profile["measured"]["memory"]["dram_latency_by_bw"] = [
         {"achieved_bw_gbps": 0.0, "latency_ns": profile["measured"]["memory"]["dram_latency_ns"]},
-        {"achieved_bw_gbps": max_allowed + 1.0, "latency_ns": profile["measured"]["memory"]["dram_latency_ns"]},
+        {
+            "achieved_bw_gbps": max_allowed + 1.0,
+            "latency_ns": profile["measured"]["memory"]["dram_latency_ns"],
+        },
     ]
     with pytest.raises(ProfileValidationError, match="dram_bw_read_gbps"):
         validate_profile(profile)
