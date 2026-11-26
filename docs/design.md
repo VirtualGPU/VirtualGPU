@@ -312,6 +312,15 @@ Ascend 910B3 (`profiles/ascend910b3.json`, `0.3.0-ascend`) brings a second vendo
 - **MLP issue-mode naming.** The AscendC M2 MLP curves (`dram_bw_by_bytes_in_flight`, `l2_bw_by_bytes_in_flight`) reuse the existing schema enum names `cp_async` and `ld_global_v4` to represent 2-buffer asynchronous and 1-buffer synchronous MTE2 DMA transfers.
 - **GEMM residuals and scope.** Only the Triton-Ascend GEMM frontend is wired end-to-end (Attention and a sealed multi-shape holdout are follow-ups). In an informal 2-shape FP16 GEMM sanity check ([`docs/results/ascend910b3-gemm-sanity.md`](results/ascend910b3-gemm-sanity.md), not a holdout), `multibuffer = True` configs are predicted 18% to 28% fast because Cube `MTE1` (`L1 -> L0A/L0B`) and `Fixpipe` (`L0C -> GM` NZ-to-ND) pipelines are not modeled separately, while `multibuffer = False` configs are overestimated (~+100% to +127%) as DRAM-bandwidth bound. All Ascend predictions therefore carry `unvalidated_feature` and `unvalidated_target_ascend`.
 
+### 9.5 Narrow register-staged loads (H5)
+
+GEMM configs whose global loads are 1 to 4 B wide and staged through registers into shared memory are predicted too fast; on GB10 `mask-mnk-1153` (odd K, every load 2 B) all 36 configs are 27% to 82% fast (post-hoc, `docs/results/analysis/h5-two-byte-posthoc.md`). The core lets the load width reach only the `lsu` pipe on the shared path, and the round trip uses MLP curves measured with 16 B loads. The narrow-load microbenchmarks (`docs/results/analysis/h5-narrow-microbench-posthoc.md`, `h5-followups-gb10-posthoc.md`) found two costs, and neither is in the core:
+
+- **From DRAM.** On GB10 narrow loads run at a GPU-wide limit of about 3.4 warp requests per ns, or at the sector limit of the strided DRAM curve, which offset rows reach sooner. A form with these two limits (one constant) passed its rule in one GB10 session and missed it by 0.9 points in the second (aligned 2 B: -8.3% and -10.9% against a 10% limit). The RTX 4070 test is pending: its first capture was void (perturbed by the desktop), and it hinted that on that GPU the cost follows the rows each CTA keeps in flight rather than a request limit.
+- **Register staging.** Narrow shared memory stores cost per instruction on the shared memory pipe, and narrow loads from L2 add time per load on each CTA's chain. Together (two constants, each from one calibration point) they bring the MAPE on new GB10 points from 28.7% to 10.7%, and from 25.7% to 16.9% in a last round, but the forms missed the pass rule each time (1 and 2 B 15% fast in the first, largely from an unrelated underestimate of dependent MMA chains; MAPE 16.9% in the last), so they are not used.
+
+**Effect on users.** Configs with narrow register-staged loads, which Triton emits when rows are not 16-byte aligned, rank faster than they are; measure them on the target GPU.
+
 ## 10. Related work
 
 - [GPGPU-Sim](https://github.com/gpgpu-sim/gpgpu-sim_distribution) / [Accel-Sim](https://accel-sim.github.io/): cycle-level NVIDIA simulation; detailed but hours per large kernel and behind on recent architectures.
