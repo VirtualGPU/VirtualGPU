@@ -52,3 +52,5 @@ Each parametrized form takes its one constant from one point where its mechanism
 The SM-side points use `.cg` and one line per batch so that L1 hits cannot enter their constants. The predictions are frozen on a grid of each constant in [validation/h5-candidates-frozen.json](../../../validation/h5-candidates-frozen.json) (SHA-256 `4bb2ee23bc29866888a684f99ef726295e7966be0089b6fde227eefb33ff6f3f`); at each calibration point the prediction is monotone in the constant. `evaluate` interpolates the grid at the calibrated constant. A form that misses the held-out points by more than 15% MAPE does not go into the core.
 
 The kernels were checked in SASS on GB10 (`sm_121a`, CUDA 13.0): unmasked loads carry no predicate, the always-true and tail masks compile to predicated `LDG.E.U16` without branches or widening, `.cg` loads compile to `LDG.E.*.STRONG.GPU`, every `sync-loop-narrow` instance keeps its `ldmatrix`, and no narrow kernel uses local memory or stack.
+
+The measured results are in [h5-narrow-microbench-posthoc.md](h5-narrow-microbench-posthoc.md): no candidate passed.
