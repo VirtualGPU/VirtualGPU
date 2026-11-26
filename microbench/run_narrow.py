@@ -38,6 +38,7 @@ MODES = {
     "sync-loop-narrow-validate": "sync_loop_narrow",
     "stage-narrow": "stage_narrow",
     "stage-narrow-batched": "stage_narrow",
+    "stage-narrow-validate": "stage_narrow",
 }
 SAMPLES = 15
 WARMUP = 3

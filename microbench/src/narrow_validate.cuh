@@ -56,6 +56,8 @@ constexpr int kLoadStore = 2;
 template <int W>
 struct Elem;
 template <>
+struct Elem<1> { using T = uint16_t; };
+template <>
 struct Elem<2> { using T = uint16_t; };
 template <>
 struct Elem<4> { using T = uint32_t; };
@@ -65,7 +67,9 @@ struct Elem<16> { using T = uint4; };
 template <int W>
 __device__ __forceinline__ typename Elem<W>::T ldg(const uint8_t* p) {
   typename Elem<W>::T v;
-  if constexpr (W == 2) {
+  if constexpr (W == 1) {
+    asm volatile("ld.global.u8 %0, [%1];\n" : "=h"(v) : "l"(p));
+  } else if constexpr (W == 2) {
     asm volatile("ld.global.u16 %0, [%1];\n" : "=h"(v) : "l"(p));
   } else if constexpr (W == 4) {
     asm volatile("ld.global.u32 %0, [%1];\n" : "=r"(v) : "l"(p));
@@ -78,7 +82,9 @@ __device__ __forceinline__ typename Elem<W>::T ldg(const uint8_t* p) {
 
 template <int W>
 __device__ __forceinline__ void sts(uint32_t addr, typename Elem<W>::T v) {
-  if constexpr (W == 2) {
+  if constexpr (W == 1) {
+    asm volatile("st.shared.u8 [%0], %1;\n" :: "r"(addr), "h"(v) : "memory");
+  } else if constexpr (W == 2) {
     asm volatile("st.shared.u16 [%0], %1;\n" :: "r"(addr), "h"(v) : "memory");
   } else if constexpr (W == 4) {
     asm volatile("st.shared.u32 [%0], %1;\n" :: "r"(addr), "r"(v) : "memory");
@@ -232,11 +238,10 @@ __device__ __forceinline__ uint32_t swizzled(int row, int byte) {
   return static_cast<uint32_t>(row * 128 + ((((byte >> 4) ^ (row & 7)) << 4) | (byte & 15)));
 }
 
-template <int VARIANT, int W, int ROWS, int MMA_ITERS>
+template <int VARIANT, int W, int ROWS, int MMA_ITERS, int WARPS = 4>
 __global__ void stage_batched_kernel(const uint8_t* __restrict__ src, float* __restrict__ sink,
                                      size_t pitch, int steps, int distinct, uint32_t zero) {
   extern __shared__ uint4 stage[];
-  constexpr int WARPS = 4;
   constexpr int THREADS = WARPS * 32;
   constexpr int STAGE_BYTES = ROWS * 128;
   constexpr int PER_THREAD = STAGE_BYTES / (THREADS * W);
@@ -305,12 +310,11 @@ __global__ void stage_batched_kernel(const uint8_t* __restrict__ src, float* __r
   if (live == 0x9e3779b9u || sum == -999999.0f) sink[blockIdx.x * blockDim.x + tid] = sum;
 }
 
-template <int VARIANT, int W, int ROWS, int MMA_ITERS>
+template <int VARIANT, int W, int ROWS, int MMA_ITERS, int WARPS = 4>
 void stage_batched_point(const cudaDeviceProp& prop, Timer& timer, const Buffers& b, int cps,
                          int samples, int warmup, bool& first) {
-  constexpr int WARPS = 4;
   constexpr int STAGE_BYTES = ROWS * 128;
-  auto kernel = stage_batched_kernel<VARIANT, W, ROWS, MMA_ITERS>;
+  auto kernel = stage_batched_kernel<VARIANT, W, ROWS, MMA_ITERS, WARPS>;
   const int smem = std::max(STAGE_BYTES, pad_bytes(prop, cps));
   set_smem(kernel, smem);
   int fit = 0;
@@ -414,6 +418,56 @@ static int run_stage_narrow(int device, int samples, int warmup) {
   stage_narrow_widths<kLoadOnly>(prop, timer, b, samples, warmup, first);
   stage_narrow_widths<kStoreOnly>(prop, timer, b, samples, warmup, first);
   stage_narrow_widths<kLoadStore>(prop, timer, b, samples, warmup, first);
+  std::printf("\n  ]\n}\n");
+  return 0;
+}
+
+namespace narrow {
+
+// New points for the register staging forms: 8 warps, 8 and 12 KiB stages,
+// 1 to 16 B, MMA chains of 0 and 8, at 1 CTA per SM and at the most CTAs
+// per SM that fit (`high`).
+template <int VARIANT, int W, int ROWS, int MMA_ITERS>
+void staging_validate_point(const cudaDeviceProp& prop, Timer& timer, const Buffers& b, int samples,
+                            int warmup, bool& first) {
+  for (int cps : {1, 3})
+    stage_batched_point<VARIANT, W, ROWS, MMA_ITERS, 8>(prop, timer, b, cps, samples, warmup, first);
+}
+
+template <int VARIANT, int W>
+void staging_validate_width(const cudaDeviceProp& prop, Timer& timer, const Buffers& b, int samples,
+                            int warmup, bool& first) {
+  staging_validate_point<VARIANT, W, 64, 0>(prop, timer, b, samples, warmup, first);
+  staging_validate_point<VARIANT, W, 64, 8>(prop, timer, b, samples, warmup, first);
+  staging_validate_point<VARIANT, W, 96, 0>(prop, timer, b, samples, warmup, first);
+  staging_validate_point<VARIANT, W, 96, 8>(prop, timer, b, samples, warmup, first);
+}
+
+template <int VARIANT>
+void staging_validate_variant(const cudaDeviceProp& prop, Timer& timer, const Buffers& b, int samples,
+                              int warmup, bool& first) {
+  staging_validate_width<VARIANT, 1>(prop, timer, b, samples, warmup, first);
+  staging_validate_width<VARIANT, 2>(prop, timer, b, samples, warmup, first);
+  staging_validate_width<VARIANT, 4>(prop, timer, b, samples, warmup, first);
+  staging_validate_width<VARIANT, 16>(prop, timer, b, samples, warmup, first);
+}
+
+}  // namespace narrow
+
+static int run_stage_narrow_validate(int device, int samples, int warmup) {
+  using namespace narrow;
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  Buffers b;
+  Timer timer;
+  bool first = true;
+  std::printf("{\n  \"samples\": %d,\n  \"stage_narrow\": [", samples);
+  // The two calibration points, remeasured in the same session.
+  stage_batched_point<kStoreOnly, 2, 128, 0>(prop, timer, b, 3, samples, warmup, first);
+  stage_batched_point<kLoadOnly, 2, 32, 0>(prop, timer, b, 1, samples, warmup, first);
+  staging_validate_variant<kLoadOnly>(prop, timer, b, samples, warmup, first);
+  staging_validate_variant<kStoreOnly>(prop, timer, b, samples, warmup, first);
+  staging_validate_variant<kLoadStore>(prop, timer, b, samples, warmup, first);
   std::printf("\n  ]\n}\n");
   return 0;
 }
