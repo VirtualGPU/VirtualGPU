@@ -45,7 +45,7 @@ Median error by width and alignment, pure loads from DRAM:
 
 The form passes its rule on GB10. The cross-GPU test on the RTX 4070, with R calibrated at the same point there, waits for that GPU to be free.
 
-The hot-L2 regression points stay where the current model puts them, but that is not accurate everywhere: the median error is within 13% in every width and alignment group, while 1 B loads with 4 in flight are predicted 2.8 to 3.7 times too slow (MAPE 53% at 4 in flight against 9% to 11% at 12 and 24). This is a separate issue of the current model at hot L2 with few loads in flight, in the opposite direction to H5, and is left out of H5 (see the open item below).
+The hot-L2 regression points stay where the current model puts them, but that is not accurate everywhere: the median error is within 13% in every width and alignment group, while 1 B loads with 4 in flight are predicted 1.2 to 3.7 times as slow as measured, 3.2 to 3.7 times at 1 CTA per SM (MAPE 53% at 4 in flight against 9% to 11% at 12 and 24). This is a separate issue of the current model at hot L2 with few loads in flight, in the opposite direction to H5, and is left out of H5 (see the open item below).
 
 ## Register staging, split into its parts (measurement only)
 
@@ -59,7 +59,7 @@ Observations, with the current core's predictions computed after the fact for or
 
 ## Open item outside H5
 
-**Hot L2 with few loads in flight is predicted too slow.** `gmem-narrow-validate`, hot L2, `.cg`: 1 B loads with 4 in flight per thread are predicted 2.8 to 3.7 times as slow as measured at 1 and 3 CTAs per SM, 4 and 8 warps, aligned or not; at 12 and 24 in flight the MAPE is 9% to 11%. The point values are in [h5-dram-form-gb10-posthoc.json](h5-dram-form-gb10-posthoc.json) (`gmem_l2_regression`). Not investigated.
+**Hot L2 with few loads in flight is predicted too slow.** `gmem-narrow-validate`, hot L2, `.cg`: 1 B loads with 4 in flight per thread are predicted 3.2 to 3.7 times as slow as measured at 1 CTA per SM and 1.2 to 2.8 times at 3 CTAs, aligned or not; other widths at 4 in flight up to 1.3 times; at 12 and 24 in flight the MAPE is 9% to 11%. The point values are in [h5-dram-form-gb10-posthoc.json](h5-dram-form-gb10-posthoc.json) (`gmem_l2_regression`). Not investigated.
 
 ## Next steps
 
