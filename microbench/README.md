@@ -7,7 +7,7 @@ CUDA C++ benchmarks that read a GPU's static limits and measure its real rates, 
 | `src/vgpu_bench.cu` | The `vgpu_bench` binary and its subcommands (`dram-bw`, `l2`, `mma`, `cta-dispatch`, `spill-latency` and more) |
 | `src/m2_kernels.cuh` | Kernels for the closed loop, pipeline, sync loop, SFU, shuffle and spill benchmarks |
 | `src/narrow_kernels.cuh` | Post-hoc narrow-load benchmarks (`gmem-narrow`, `sync-loop-narrow`): 1 to 16 B register-staged loads, aligned and offset rows, from hot L2 and DRAM |
-| `src/narrow_validate.cuh` | Follow-ups: new validation points for the DRAM-side narrow request form (`gmem-narrow-validate`, `sync-loop-narrow-validate`) and register staging split into loads and shared memory stores (`stage-narrow`) |
+| `src/narrow_validate.cuh` | Follow-ups: new validation points for the DRAM-side narrow request form (`gmem-narrow-validate`, `sync-loop-narrow-validate`) and register staging split into loads and shared memory stores (`stage-narrow`, and `stage-narrow-batched` with every load issued before the first store and Triton's swizzled layout) |
 | `build.py` | Builds `vgpu_bench` for one architecture |
 | `collect_profile.py` | Runs every benchmark and writes the profile |
 | `run_narrow.py` | Repeats a narrow-load benchmark behind the thermal gate; not part of the profile |
