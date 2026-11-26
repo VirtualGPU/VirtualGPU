@@ -98,6 +98,8 @@ The new points are 8 warps, 8 and 12 KiB stages, 1 to 16 B, chains of 0 and 8 MM
 
 b1 + b2 meets the MAPE limit, but 1 and 2 B stay 15% fast, so no form passes. Each part removes about half of the narrow gap where it acts; the 1 and 2 B points need more than a per-instruction store cost and a per-load chain cost calibrated at 2 B.
 
+**Where the remaining 1 and 2 B error sits (post-hoc, after this verdict).** Split by the MMA chain, the b1 + b2 median errors on the judged points are 1 B -8%, 2 B -10%, 4 B +2%, 16 B -0% without MMA, and 1 B -20%, 2 B -17%, 4 B -6%, 16 B -10% with 8 MMAs per warp. The 4-warp `stage-narrow-batched` points, predicted after the fact with the same Q and tau, show the same split more cleanly: without MMA 2 B -1%, 4 B +2%, 16 B +4%; with 32 MMAs every width is 15% to 17% fast. Stage size, CTAs per SM and the variant move the narrow residual by a few points only (8 and 12 KiB: -15% and -16%; 1 and 3 CTAs: -14% and -17%). So b1 + b2 accounts for the width dependence, and most of what remains is the width-independent underestimate of dependent MMA chains (the same kind as H7 in attention), which reached the verdict because the 16 B 8-MMA points sat just inside the 10% rule (-9.7%).
+
 ## Open item outside H5
 
 **Hot L2 with few loads in flight is predicted too slow.** `gmem-narrow-validate`, hot L2, `.cg`: 1 B loads with 4 in flight per thread are predicted 3.2 to 3.7 times as slow as measured at 1 CTA per SM and 1.2 to 2.8 times at 3 CTAs, aligned or not; other widths at 4 in flight up to 1.3 times; at 12 and 24 in flight the MAPE is 9% to 11%. The point values are in [h5-dram-form-gb10-posthoc.json](h5-dram-form-gb10-posthoc.json) (`gmem_l2_regression`). Not investigated.
