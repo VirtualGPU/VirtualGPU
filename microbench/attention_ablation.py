@@ -1,7 +1,8 @@
 """Post-hoc ablation of the fused attention kernel's single-buffer round trip.
 
 A copy of validation/attention.py's kernel with one compile-time switch. ABLATE:
-0 = unchanged, 1 = no loads in the loop (K and V read once before it), 2 = the next
+0 = unchanged, 1 = no loads in the loop (K and V read once before it, with a per-tile
+QK accumulator offset so the QK product is not hoisted out of the loop), 2 = the next
 tile's load mask depends on the PV accumulator, 3 = the same reduction as 2 but kept
 off the loads. Shapes are development shapes only.
 
@@ -78,7 +79,13 @@ def _tiles(
         else:
             k = tl.load(k_base + addresses, inside, other=0)
             v = tl.load(v_base + addresses, inside, other=0)
-        logits = tl.dot(q, tl.trans(k)) * SCALE_LOG2
+        if ABLATE == 1:
+            # A per-tile row offset keeps the loop-invariant QK product inside
+            # the loop; softmax is unchanged by it.
+            offset = tl.zeros((q.shape[0], BN), tl.float32) + tile.to(tl.float32)
+            logits = tl.dot(q, tl.trans(k), offset) * SCALE_LOG2
+        else:
+            logits = tl.dot(q, tl.trans(k)) * SCALE_LOG2
         logits = tl.where(cols[None, :] < SEQ, logits, -float("inf"))
         new_max = tl.maximum(maximum, tl.max(logits, 1))
         correction = tl.math.exp2(maximum - new_max)
@@ -174,6 +181,20 @@ def ctas_per_sm(registers, smem, warps, target):
     )
 
 
+def loop_mma_count(ptx):
+    """mma.sync instructions inside backward-branch loops of the PTX."""
+    lines = ptx.splitlines()
+    labels = {
+        m.group(1): i for i, line in enumerate(lines) if (m := re.match(r"\s*(\$L__\w+):", line))
+    }
+    count = 0
+    for i, line in enumerate(lines):
+        m = re.search(r"bra(?:\.uni)?\s+(\$L__\w+);", line)
+        if m and labels.get(m.group(1), i) < i:
+            count += sum("mma.sync" in body for body in lines[labels[m.group(1)] : i])
+    return count
+
+
 def check(target):
     """Compile every variant offline and report resources and loop instruction counts."""
     from virtualgpu.frontend.compiler import compile_triton_aot, specialize_triton_call
@@ -222,6 +243,7 @@ def check(target):
                             target,
                         ),
                         "ptx_counts": counts,
+                        "loop_mma": loop_mma_count(ptx),
                     }
                 )
             )
