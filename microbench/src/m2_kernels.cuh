@@ -6442,7 +6442,9 @@ static int run_sync_loop_delta(int device, int samples, int warmup, bool flag_on
   CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
   const int sm_count = prop.multiProcessorCount;
   constexpr int G = 16;
-  if (sm_count % G != 0) { std::fprintf(stderr, "sync-loop-delta: %d SMs is not a multiple of %d\n", sm_count, G); return 1; }
+  // Whole groups only, one CTA per SM: 48 CTAs on GB10, 32 on the RTX 4070 (46 SMs).
+  const int grid = sm_count / G * G;
+  if (grid == 0) { std::fprintf(stderr, "sync-loop-delta: fewer than %d SMs\n", G); return 1; }
   const size_t cold_bytes = 256ULL * 1024ULL * 1024ULL;
   const size_t cold_mask = cold_bytes / sizeof(uint4) - 1;
   uint4* d_cold = nullptr;
@@ -6477,8 +6479,8 @@ static int run_sync_loop_delta(int device, int samples, int warmup, bool flag_on
     CUDA_CHECK(cudaMemcpy(&cycles, d_clock, sizeof(cycles), cudaMemcpyDeviceToHost));
     pingpong.push_back(static_cast<double>(cycles) / ROUNDS / 2.0);
   }
-  std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"group\": %d,\n  \"lead_ns\": %llu,\n  \"flag_one_way_cycles_samples\": [",
-              samples, sm_count, G, LEAD_NS);
+  std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"grid\": %d,\n  \"group\": %d,\n  \"lead_ns\": %llu,\n  \"flag_one_way_cycles_samples\": [",
+              samples, sm_count, grid, G, LEAD_NS);
   for (size_t i = 0; i < pingpong.size(); ++i) std::printf(i ? ", %.1f" : "%.1f", pingpong[i]);
   std::printf("],\n  \"sync_loop_delta\": [");
   if (flag_only) {
@@ -6503,11 +6505,11 @@ static int run_sync_loop_delta(int device, int samples, int warmup, bool flag_on
     auto launch = [&](int steps) {
       CUDA_CHECK(cudaMemset(d_progress, 0, 64 * sizeof(unsigned)));
       CUDA_CHECK(cudaMemset(d_done, 0, 64 * sizeof(unsigned)));
-      kernel<<<sm_count, 256, SMEM>>>(d_cold, d_sink, warm ? warm_mask : cold_mask, warm ? 0 : cold_start, steps,
+      kernel<<<grid, 256, SMEM>>>(d_cold, d_sink, warm ? warm_mask : cold_mask, warm ? 0 : cold_start, steps,
                                       LEAD_NS, delta_ns, d_progress, d_start, d_done, d_latency, d_issue, d_late,
                                       d_clock);
       CUDA_CHECK(cudaDeviceSynchronize());
-      if (!warm) cold_start = (cold_start + static_cast<size_t>(steps) * (sm_count / G) * (SB / sizeof(uint4))) & cold_mask;
+      if (!warm) cold_start = (cold_start + static_cast<size_t>(steps) * (grid / G) * (SB / sizeof(uint4))) & cold_mask;
       CUDA_CHECK(cudaMemcpy(lat.data(), d_latency, sm_count * sizeof(double), cudaMemcpyDeviceToHost));
       CUDA_CHECK(cudaMemcpy(issue.data(), d_issue, sm_count * sizeof(double), cudaMemcpyDeviceToHost));
       CUDA_CHECK(cudaMemcpy(late.data(), d_late, sm_count * sizeof(unsigned), cudaMemcpyDeviceToHost));
@@ -6521,11 +6523,11 @@ static int run_sync_loop_delta(int device, int samples, int warmup, bool flag_on
     for (int w = 0; w < warmup; ++w) launch(steps);
     std::vector<double> lead_s, follow_s, offset_s, ghz_s;
     unsigned late_steps = 0;
-    const int leads = sm_count / G, followers = sm_count - leads;
+    const int leads = grid / G, followers = grid - leads;
     for (int s = 0; s < samples; ++s) {
       launch(steps);
       double lead_sum = 0.0, follow_sum = 0.0, lead_issue = 0.0, follow_issue = 0.0;
-      for (int b = 0; b < sm_count; ++b) {
+      for (int b = 0; b < grid; ++b) {
         if (b % G == 0) { lead_sum += lat[b]; lead_issue += issue[b]; }
         else { follow_sum += lat[b]; follow_issue += issue[b]; }
         late_steps += late[b];
