@@ -6130,3 +6130,160 @@ static int run_sync_loop_bytes(int device, int samples, int warmup) {
   CUDA_CHECK(cudaFree(d_l2)); CUDA_CHECK(cudaFree(d_sink_f)); CUDA_CHECK(cudaFree(d_cyc));
   return 0;
 }
+
+// Single-buffer loop (gemm_s2 shape) where the first 1/FD of each stage's 16 B vectors come from a cold
+// DRAM region that advances every step, and the rest from a warm 4 MiB L2 region. Groups of G CTAs read
+// the same cold addresses in a step, so all but the first request of a group can merge into its fill.
+// FD = 0: no cold vectors. NOLOAD: no copies in the loop. The cold vectors are vector 0 of the lowest
+// threads, so each thread issues its cold copy first.
+#define MISS_MMA(acc0, acc1, acc2, acc3)                                                          \
+  asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, " \
+               "{%8,%9}, {%0,%1,%2,%3};\n"                                                         \
+               : "+f"(acc0), "+f"(acc1), "+f"(acc2), "+f"(acc3)                                    \
+               : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1))
+
+template <bool NOLOAD, int STAGE_BYTES, int NUM_WARPS, int MI, int FD, int G>
+__global__ void miss_kernel(const uint4* __restrict__ hot, const uint4* __restrict__ cold, float* __restrict__ sink,
+                            size_t hot_mask, size_t cold_mask, int steps, double* __restrict__ out_cyc) {
+  extern __shared__ uint4 smem[];
+  const uint32_t tid = threadIdx.x;
+  const uint32_t warp_id = tid >> 5;
+  const uint32_t lane = tid & 31u;
+  constexpr size_t STAGE_U4 = static_cast<size_t>(STAGE_BYTES) / sizeof(uint4);
+  constexpr size_t COLD_U4 = FD == 0 ? 0 : STAGE_U4 / FD;
+  constexpr int VECS = STAGE_BYTES / (NUM_WARPS * 32 * 16);
+  constexpr int LD_N = STAGE_BYTES / (NUM_WARPS * 512);
+  const size_t groups = gridDim.x / G;
+  const size_t group = blockIdx.x / G;
+  size_t hot_base = (static_cast<size_t>(blockIdx.x) * STAGE_U4) & hot_mask;
+  const size_t hot_step = static_cast<size_t>(gridDim.x) * STAGE_U4;
+  if constexpr (NOLOAD) {
+    for (size_t i = tid; i < STAGE_U4; i += blockDim.x) smem[i] = make_uint4(0x3c003c00u, 0x3c003c00u, 0x3c003c00u, 0x3c003c00u);
+    __syncthreads();
+  }
+  uint32_t a0 = 0x3c003c00u, a1 = 0x3c003c00u, a2 = 0x3c003c00u, a3 = 0x3c003c00u;
+  uint32_t b0 = 0x3c003c00u, b1 = 0x3c003c00u;
+  uint32_t live_acc = 0u;
+  float c00 = 0.f, c01 = 0.f, c02 = 0.f, c03 = 0.f, c10 = 0.f, c11 = 0.f, c12 = 0.f, c13 = 0.f;
+  float c20 = 0.f, c21 = 0.f, c22 = 0.f, c23 = 0.f, c30 = 0.f, c31 = 0.f, c32 = 0.f, c33 = 0.f;
+  uint64_t t0 = static_cast<uint64_t>(clock64());
+  for (int step = 0; step < steps; ++step) {
+    if constexpr (!NOLOAD) {
+      const size_t cold_base = ((static_cast<size_t>(step) * groups + group) * COLD_U4) & cold_mask;
+      #pragma unroll
+      for (int v = 0; v < VECS; ++v) {
+        size_t off = static_cast<size_t>(v) * (NUM_WARPS * 32) + tid;
+        uint32_t saddr = static_cast<uint32_t>(__cvta_generic_to_shared(smem + off));
+        const void* gptr = off < COLD_U4 ? static_cast<const void*>(cold + ((cold_base + off) & cold_mask))
+                                         : static_cast<const void*>(hot + ((hot_base + off) & hot_mask));
+        asm volatile("cp.async.cg.shared.global [%0], [%1], 16;\n" :: "r"(saddr), "l"(gptr) : "memory");
+      }
+      asm volatile("cp.async.commit_group;\n" ::: "memory");
+      asm volatile("cp.async.wait_group 0;\n" ::: "memory");
+    }
+    asm volatile("bar.sync 0;\n" ::: "memory");
+    #pragma unroll
+    for (int r = 0; r < LD_N; ++r) {
+      size_t off_u4 = (static_cast<size_t>(r) * NUM_WARPS + warp_id) * 32ULL + lane;
+      uint32_t saddr = static_cast<uint32_t>(__cvta_generic_to_shared(smem + off_u4));
+      uint32_t r0, r1, r2, r3;
+      asm volatile("ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0,%1,%2,%3}, [%4];\n"
+                   : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "r"(saddr) : "memory");
+      live_acc ^= (r0 ^ r1 ^ r2 ^ r3);
+      if (r == LD_N - 1) { a0 = r0; a1 = r1; a2 = r2; a3 = r3; b0 = r0; b1 = r1; }
+    }
+    #pragma unroll
+    for (int m = 0; m < MI; ++m) { MISS_MMA(c00, c01, c02, c03); MISS_MMA(c10, c11, c12, c13); MISS_MMA(c20, c21, c22, c23); MISS_MMA(c30, c31, c32, c33); }
+    asm volatile("bar.sync 0;\n" ::: "memory");
+    hot_base = (hot_base + hot_step) & hot_mask;
+  }
+  uint64_t t1 = static_cast<uint64_t>(clock64());
+  if (blockIdx.x == 0 && tid == 0) *out_cyc = static_cast<double>(t1 - t0) / static_cast<double>(steps);
+  float sum = c00 + c01 + c02 + c03 + c10 + c11 + c12 + c13 + c20 + c21 + c22 + c23 + c30 + c31 + c32 + c33 +
+              static_cast<float>(live_acc & 1u);
+  if (sum == -999999.0f) sink[blockIdx.x * blockDim.x + tid] = sum;
+}
+#undef MISS_MMA
+
+// sync-loop-miss: free and noload points of miss_kernel (8 warps, MI = 8, one CTA per SM). Configs:
+// grid 1; grid = SMs with G = 1; grid = SMs with G = 16.
+static int run_sync_loop_miss(int device, int samples, int warmup) {
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  const int sm_count = prop.multiProcessorCount;
+  const size_t hot_bytes = 4ULL * 1024ULL * 1024ULL;
+  const size_t cold_bytes = 256ULL * 1024ULL * 1024ULL;
+  uint4 *d_hot = nullptr, *d_cold = nullptr;
+  float* d_sink_f = nullptr;
+  double* d_cyc = nullptr;
+  CUDA_CHECK(cudaMalloc(&d_hot, hot_bytes));
+  CUDA_CHECK(cudaMalloc(&d_cold, cold_bytes));
+  CUDA_CHECK(cudaMalloc(&d_sink_f, static_cast<size_t>(sm_count) * 8 * 256 * sizeof(float)));
+  CUDA_CHECK(cudaMalloc(&d_cyc, sizeof(double)));
+  CUDA_CHECK(cudaMemset(d_hot, 0x3c, hot_bytes));
+  CUDA_CHECK(cudaMemset(d_cold, 0x3c, cold_bytes));
+  cudaEvent_t ev_start, ev_stop;
+  CUDA_CHECK(cudaEventCreate(&ev_start));
+  CUDA_CHECK(cudaEventCreate(&ev_stop));
+  const size_t hot_mask = hot_bytes / sizeof(uint4) - 1, cold_mask = cold_bytes / sizeof(uint4) - 1;
+
+  std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"sync_loop_miss\": [", samples, sm_count);
+  bool first = true;
+  auto run_point = [&](auto noload_c, auto sb_c, auto fd_c, auto g_c, int grid) {
+    constexpr bool NOLOAD = decltype(noload_c)::value;
+    constexpr int SB = decltype(sb_c)::value, FD = decltype(fd_c)::value, G = decltype(g_c)::value;
+    auto kernel = miss_kernel<NOLOAD, SB, 8, 8, FD, G>;
+    CUDA_CHECK(cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, SB));
+    auto time_ms = [&](int st) {
+      CUDA_CHECK(cudaEventRecord(ev_start));
+      kernel<<<grid, 256, SB>>>(d_hot, d_cold, d_sink_f, hot_mask, cold_mask, st, d_cyc);
+      CUDA_CHECK(cudaEventRecord(ev_stop));
+      CUDA_CHECK(cudaEventSynchronize(ev_stop));
+      float ms = 0.0f;
+      CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
+      return static_cast<double>(ms);
+    };
+    double probe = time_ms(64);
+    int steps = static_cast<int>(1.0 / std::max(probe / 64.0, 1e-5));
+    steps = std::min(65536, std::max(256, ((steps + 63) / 64) * 64));
+    for (int w = 0; w < warmup; ++w) time_ms(steps);
+    std::vector<double> turn, cyc;
+    for (int s = 0; s < samples; ++s) {
+      double ms = time_ms(steps);
+      double c = 0.0;
+      CUDA_CHECK(cudaMemcpy(&c, d_cyc, sizeof(double), cudaMemcpyDeviceToHost));
+      turn.push_back(ms * 1e6 / steps);
+      cyc.push_back(c);
+    }
+    if (!first) std::printf(",");
+    first = false;
+    std::printf("\n    {\"dep\": \"%s\", \"grid\": %d, \"group\": %d, \"num_warps\": 8, \"stage_bytes\": %d, "
+                "\"cold_fraction_den\": %d, \"steps\": %d, \"turnaround_ns_samples\": [",
+                NOLOAD ? "noload" : "free", grid, G, SB, FD, steps);
+    for (size_t i = 0; i < turn.size(); ++i) std::printf(i ? ", %.2f" : "%.2f", turn[i]);
+    std::printf("], \"cycles_per_step_samples\": [");
+    for (size_t i = 0; i < cyc.size(); ++i) std::printf(i ? ", %.1f" : "%.1f", cyc[i]);
+    std::printf("]}");
+  };
+  using T = std::true_type;
+  using F = std::false_type;
+  auto each_config = [&](auto noload_c, auto sb_c, auto fd_c) {
+    run_point(noload_c, sb_c, fd_c, std::integral_constant<int, 1>{}, 1);
+    run_point(noload_c, sb_c, fd_c, std::integral_constant<int, 1>{}, sm_count);
+    run_point(noload_c, sb_c, fd_c, std::integral_constant<int, 16>{}, sm_count);
+  };
+  auto each_sb = [&](auto sb_c) {
+    each_config(T{}, sb_c, std::integral_constant<int, 0>{});
+    each_config(F{}, sb_c, std::integral_constant<int, 0>{});
+    each_config(F{}, sb_c, std::integral_constant<int, 16>{});
+    each_config(F{}, sb_c, std::integral_constant<int, 4>{});
+    each_config(F{}, sb_c, std::integral_constant<int, 1>{});
+  };
+  each_sb(std::integral_constant<int, 8192>{});
+  each_sb(std::integral_constant<int, 16384>{});
+  each_sb(std::integral_constant<int, 32768>{});
+  each_sb(std::integral_constant<int, 65536>{});
+  std::printf("\n  ]\n}\n");
+  CUDA_CHECK(cudaFree(d_hot)); CUDA_CHECK(cudaFree(d_cold)); CUDA_CHECK(cudaFree(d_sink_f)); CUDA_CHECK(cudaFree(d_cyc));
+  return 0;
+}

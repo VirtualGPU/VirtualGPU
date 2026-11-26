@@ -1,4 +1,4 @@
-//! Post-hoc: the model on the sync-loop-overlap and sync-loop-bytes microbenchmark points.
+//! Post-hoc: the model on the sync-loop-overlap, sync-loop-bytes and sync-loop-miss microbenchmark points.
 //! Ignored by default. Run one test with PROFILE (profile JSON), POINTS (benchmark JSON) and
 //! OUT (output text), for example:
 //! PROFILE=profiles/gb10.json POINTS=bytes.json OUT=model.txt \
@@ -6,7 +6,7 @@
 use serde_json::Value;
 use vgpu_core::kernel::{Access, Kernel, Spill, Tile, TripCounts, Work};
 use vgpu_core::profile::Profile;
-use vgpu_core::sim::{simulate, ConstantHitRatio, Machine};
+use vgpu_core::sim::{simulate, ConstantHitRatio, Machine, Traffic, L2};
 
 const MMA_KEY: &str = "mma.sync:f16:f16:f32:16x8x16";
 const STEPS: u32 = 512;
@@ -26,8 +26,44 @@ fn env(name: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| panic!("set {name}"))
 }
 
+/// Fixed split of load bytes into resident, merged and DRAM fractions; stores go to DRAM.
+struct FixedSplit(f64, f64);
+
+impl L2 for FixedSplit {
+    fn split(
+        &mut self,
+        _: u32,
+        _: u32,
+        _: u32,
+        a: &Access,
+        k0: u32,
+        k1: u32,
+        is_write: bool,
+        _: f64,
+    ) -> Traffic {
+        let bytes = a.nominal_bytes * f64::from(k1 - k0);
+        if is_write {
+            return Traffic {
+                resident: 0.0,
+                merged: 0.0,
+                dram: bytes,
+            };
+        }
+        Traffic {
+            resident: bytes * (1.0 - self.0 - self.1),
+            merged: bytes * self.0,
+            dram: bytes * self.1,
+        }
+    }
+}
+
 /// Per-step model time for one point, with launch costs removed.
 fn per_step_ns(p: &Profile, q: &Point) -> f64 {
+    let hit = if q.dram { 0.0 } else { 1.0 };
+    per_step_split_ns(p, q, &mut ConstantHitRatio(hit))
+}
+
+fn per_step_split_ns(p: &Profile, q: &Point, l2: &mut impl L2) -> f64 {
     let mut m = Machine::nominal(p, MMA_KEY).unwrap();
     m.launch_overhead_ns = 0.0;
     m.cta_launch_ns = 0.0;
@@ -74,11 +110,7 @@ fn per_step_ns(p: &Profile, q: &Point) -> f64 {
             epilogue: Work::default(),
         },
     };
-    let hit = if q.dram { 0.0 } else { 1.0 };
-    simulate(&kernel, p, &m, &mut ConstantHitRatio(hit))
-        .unwrap()
-        .makespan_ns
-        / f64::from(STEPS)
+    simulate(&kernel, p, &m, l2).unwrap().makespan_ns / f64::from(STEPS)
 }
 
 fn median(q: &Value) -> f64 {
@@ -155,4 +187,44 @@ fn sync_loop_bytes() {
         let label = format!("{} {} {} {}", pt.dep, pt.grid, pt.num_warps, pt.stage_bytes);
         (pt, label)
     });
+}
+
+/// Lines: dep grid group stage_bytes cold_fraction_den model_ns measured_ns (gemm_s2 shape, 8 warps,
+/// 32 MMAs per warp). The model gets the benchmark's split: the cold fraction f misses, and with
+/// groups of G CTAs reading the same cold addresses all but 1/G of it merges.
+#[test]
+#[ignore = "post-hoc analysis, needs PROFILE, POINTS and OUT"]
+fn sync_loop_miss() {
+    let p = Profile::from_json(&std::fs::read_to_string(env("PROFILE")).unwrap()).unwrap();
+    let pts: Value =
+        serde_json::from_str(&std::fs::read_to_string(env("POINTS")).unwrap()).unwrap();
+    let mut out = String::new();
+    for q in pts["sync_loop_miss"].as_array().unwrap() {
+        let (grid, group, fd) = (u(q, "grid"), u(q, "group"), u(q, "cold_fraction_den"));
+        let pt = Point {
+            grid,
+            ctas_per_sm: 1,
+            num_warps: u(q, "num_warps"),
+            stage_bytes: u(q, "stage_bytes"),
+            mma_per_warp: 32,
+            attention: false,
+            dep: q["dep"].as_str().unwrap().to_string(),
+            dram: false,
+        };
+        let f = if fd == 0 { 0.0 } else { 1.0 / f64::from(fd) };
+        let first = if grid == 1 {
+            1.0
+        } else {
+            1.0 / f64::from(group)
+        };
+        let mut split = FixedSplit(f * (1.0 - first), f * first);
+        let model = per_step_split_ns(&p, &pt, &mut split);
+        out += &format!(
+            "{} {grid} {group} {} {fd} {model:.1} {:.1}\n",
+            pt.dep,
+            pt.stage_bytes,
+            median(q)
+        );
+    }
+    std::fs::write(env("OUT"), out).unwrap();
 }

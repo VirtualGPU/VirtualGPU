@@ -578,6 +578,9 @@ int main(int argc, char** argv) {
   if (mode == "sync-loop-bytes") {
     return run_sync_loop_bytes(device, samples, warmup);
   }
+  if (mode == "sync-loop-miss") {
+    return run_sync_loop_miss(device, samples, warmup);
+  }
   std::fprintf(stderr, "Unknown mode: %s\n", mode.c_str());
   return 2;
 }
