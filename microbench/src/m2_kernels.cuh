@@ -6246,7 +6246,7 @@ static int run_sync_loop_miss(int device, int samples, int warmup) {
       CUDA_CHECK(cudaEventRecord(ev_start));
       kernel<<<grid, 256, SMEM>>>(d_hot, d_cold, d_sink_f, hot_mask, cold_mask, cold_start, st, d_cyc);
       CUDA_CHECK(cudaEventRecord(ev_stop));
-      constexpr size_t COLD_U4 = FD == 0 ? 0 : static_cast<size_t>(SB) / sizeof(uint4) / FD;
+      constexpr size_t COLD_U4 = FD == 0 ? 0 : static_cast<size_t>(SB) / sizeof(uint4) / (FD == 0 ? 1 : FD);
       cold_start = (cold_start + static_cast<size_t>(st) * static_cast<size_t>(grid / G) * COLD_U4) & cold_mask;
       CUDA_CHECK(cudaEventSynchronize(ev_stop));
       float ms = 0.0f;
