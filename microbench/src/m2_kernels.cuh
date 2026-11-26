@@ -5613,3 +5613,264 @@ static int run_sync_loop_reconcile(int device, int samples, int warmup) {
   CUDA_CHECK(cudaFree(d_sink_f));
   return 0;
 }
+
+// ---------------------------------------------------------------------------
+// 26. Post-hoc: single-buffer loop overlap of the next loads with in-flight MMAs
+// ---------------------------------------------------------------------------
+// PATTERN: 0 = gemm_s2 (cp.async, wait 0, ldmatrix, MMA), 1 = attention (cp.async, wait 0,
+// ldmatrix, QK MMA, dependent softmax, PV MMA that depends on it).
+// DEP: 0 = free (next loads issued right after the last barrier, as compiled),
+// 1 = dep (next load address depends on the last MMA results), 2 = noload, 3 = nocompute.
+// MI: MMA groups of 4 independent m16n8k16 per warp, per MMA block.
+#define OVL_MMA(acc0, acc1, acc2, acc3)                                                           \
+  asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, " \
+               "{%8,%9}, {%0,%1,%2,%3};\n"                                                         \
+               : "+f"(acc0), "+f"(acc1), "+f"(acc2), "+f"(acc3)                                    \
+               : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1))
+
+template <int PATTERN, int DEP, int STAGE_BYTES, int NUM_WARPS, int MI>
+__global__ void ovl_kernel(const uint4* __restrict__ src, float* __restrict__ sink, size_t buf_mask,
+                           int steps, double* __restrict__ out_cyc) {
+  extern __shared__ uint4 smem[];
+  const uint32_t tid = threadIdx.x;
+  const uint32_t warp_id = tid >> 5;
+  const uint32_t lane = tid & 31u;
+  constexpr size_t STAGE_U4 = static_cast<size_t>(STAGE_BYTES) / sizeof(uint4);
+  constexpr int VECS = STAGE_BYTES / (NUM_WARPS * 32 * 16);
+  constexpr int LD_N = STAGE_BYTES / (NUM_WARPS * 512);
+  const size_t grid_stage_u4 = static_cast<size_t>(gridDim.x) * STAGE_U4;
+  size_t base = (static_cast<size_t>(blockIdx.x) * STAGE_U4) & buf_mask;
+  if constexpr (DEP == 2) {
+    for (size_t i = tid; i < STAGE_U4; i += blockDim.x) smem[i] = make_uint4(0x3c003c00u, 0x3c003c00u, 0x3c003c00u, 0x3c003c00u);
+    __syncthreads();
+  }
+  uint32_t a0 = 0x3c003c00u, a1 = 0x3c003c00u, a2 = 0x3c003c00u, a3 = 0x3c003c00u;
+  uint32_t b0 = 0x3c003c00u, b1 = 0x3c003c00u;
+  uint32_t live_acc = 0u;
+  float c00 = 0.f, c01 = 0.f, c02 = 0.f, c03 = 0.f, c10 = 0.f, c11 = 0.f, c12 = 0.f, c13 = 0.f;
+  float c20 = 0.f, c21 = 0.f, c22 = 0.f, c23 = 0.f, c30 = 0.f, c31 = 0.f, c32 = 0.f, c33 = 0.f;
+  float o00 = 0.f, o01 = 0.f, o02 = 0.f, o03 = 0.f, o10 = 0.f, o11 = 0.f, o12 = 0.f, o13 = 0.f;
+  float o20 = 0.f, o21 = 0.f, o22 = 0.f, o23 = 0.f, o30 = 0.f, o31 = 0.f, o32 = 0.f, o33 = 0.f;
+  float sf_acc = 0.5f;
+  uint64_t t0 = static_cast<uint64_t>(clock64());
+  for (int step = 0; step < steps; ++step) {
+    if constexpr (DEP == 1) {
+      float d = c00 + c10 + c20 + c30 + o00 + o10 + o20 + o30;
+      base = (base + ((__float_as_uint(d) == 0xdeadbeefu) ? 1ULL : 0ULL)) & buf_mask;
+    }
+    if constexpr (DEP != 2) {
+      #pragma unroll
+      for (int v = 0; v < VECS; ++v) {
+        size_t off = static_cast<size_t>(v) * (NUM_WARPS * 32) + tid;
+        uint32_t saddr = static_cast<uint32_t>(__cvta_generic_to_shared(smem + off));
+        const void* gptr = src + ((base + off) & buf_mask);
+        asm volatile("cp.async.cg.shared.global [%0], [%1], 16;\n" :: "r"(saddr), "l"(gptr) : "memory");
+      }
+      asm volatile("cp.async.commit_group;\n" ::: "memory");
+      asm volatile("cp.async.wait_group 0;\n" ::: "memory");
+    }
+    asm volatile("bar.sync 0;\n" ::: "memory");
+    #pragma unroll
+    for (int r = 0; r < LD_N; ++r) {
+      size_t off_u4 = (static_cast<size_t>(r) * NUM_WARPS + warp_id) * 32ULL + lane;
+      uint32_t saddr = static_cast<uint32_t>(__cvta_generic_to_shared(smem + off_u4));
+      uint32_t r0, r1, r2, r3;
+      asm volatile("ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0,%1,%2,%3}, [%4];\n"
+                   : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "r"(saddr) : "memory");
+      live_acc ^= (r0 ^ r1 ^ r2 ^ r3);
+      if constexpr (DEP != 3) {
+        if (r == LD_N - 1) { a0 = r0; a1 = r1; a2 = r2; a3 = r3; b0 = r0; b1 = r1; }
+      }
+    }
+    if constexpr (DEP != 3) {
+      #pragma unroll
+      for (int m = 0; m < MI; ++m) { OVL_MMA(c00, c01, c02, c03); OVL_MMA(c10, c11, c12, c13); OVL_MMA(c20, c21, c22, c23); OVL_MMA(c30, c31, c32, c33); }
+      if constexpr (PATTERN == 1) {
+        // Softmax on the QK results: 32 dependent ex2 and a 4-step shuffle reduction, then PV.
+        float x = -0.5f - static_cast<float>(__float_as_uint(c00 + c10 + c20 + c30) & 7u) * 0.01f + sf_acc * 0.001f;
+        float s = 0.f;
+        #pragma unroll
+        for (int i = 0; i < 32; ++i) { float e; asm volatile("ex2.approx.f32 %0, %1;\n" : "=f"(e) : "f"(x)); s = fmaf(e, 0.5f, s); x = -e; }
+        #pragma unroll
+        for (int sh = 1; sh <= 8; sh <<= 1) s += __shfl_xor_sync(0xffffffffu, s, sh);
+        sf_acc = s;
+        a0 = 0x3c003c00u ^ (__float_as_uint(s) & 1u);
+        #pragma unroll
+        for (int m = 0; m < MI; ++m) { OVL_MMA(o00, o01, o02, o03); OVL_MMA(o10, o11, o12, o13); OVL_MMA(o20, o21, o22, o23); OVL_MMA(o30, o31, o32, o33); }
+      }
+    }
+    asm volatile("bar.sync 0;\n" ::: "memory");
+    base = (base + grid_stage_u4) & buf_mask;
+  }
+  uint64_t t1 = static_cast<uint64_t>(clock64());
+  if (blockIdx.x == 0 && tid == 0) *out_cyc = static_cast<double>(t1 - t0) / static_cast<double>(steps);
+  float sum = c00 + c01 + c02 + c03 + c10 + c11 + c12 + c13 + c20 + c21 + c22 + c23 + c30 + c31 + c32 + c33 +
+              o00 + o01 + o02 + o03 + o10 + o11 + o12 + o13 + o20 + o21 + o22 + o23 + o30 + o31 + o32 + o33 +
+              sf_acc + static_cast<float>(live_acc & 1u);
+  if (sum == -999999.0f) sink[blockIdx.x * blockDim.x + tid] = sum;
+}
+
+// Cycles from issuing the last of MI groups of MMAs until a dependent read of their results completes.
+template <int NUM_WARPS, int MI>
+__global__ void ovl_drain_kernel(float* __restrict__ sink, int steps, double* __restrict__ out) {
+  const uint32_t tid = threadIdx.x;
+  uint32_t a0 = 0x3c003c00u, a1 = 0x3c003c00u, a2 = 0x3c003c00u, a3 = 0x3c003c00u;
+  uint32_t b0 = 0x3c003c00u, b1 = 0x3c003c00u;
+  float c00 = 0.f, c01 = 0.f, c02 = 0.f, c03 = 0.f, c10 = 0.f, c11 = 0.f, c12 = 0.f, c13 = 0.f;
+  float c20 = 0.f, c21 = 0.f, c22 = 0.f, c23 = 0.f, c30 = 0.f, c31 = 0.f, c32 = 0.f, c33 = 0.f;
+  uint64_t issue = 0, drain = 0;
+  float carry = 0.f;
+  for (int step = 0; step < steps; ++step) {
+    asm volatile("bar.sync 0;\n" ::: "memory");
+    uint64_t s0 = static_cast<uint64_t>(clock64());
+    #pragma unroll
+    for (int m = 0; m < MI; ++m) { OVL_MMA(c00, c01, c02, c03); OVL_MMA(c10, c11, c12, c13); OVL_MMA(c20, c21, c22, c23); OVL_MMA(c30, c31, c32, c33); }
+    uint64_t s1 = static_cast<uint64_t>(clock64());
+    float d;
+    asm volatile("add.f32 %0, %1, %2;\n" : "=f"(d) : "f"(c00 + c10), "f"(c20 + c30));
+    asm volatile("add.f32 %0, %0, %1;\n" : "+f"(carry) : "f"(d));
+    uint64_t s2 = static_cast<uint64_t>(clock64());
+    issue += s1 - s0;
+    drain += s2 - s1;
+    a0 = 0x3c003c00u ^ (__float_as_uint(carry) & 1u);
+  }
+  if (blockIdx.x == 0 && tid == 0) { out[0] = static_cast<double>(issue) / steps; out[1] = static_cast<double>(drain) / steps; }
+  if (carry + c01 + c11 + c21 + c31 == -999999.0f) sink[blockIdx.x * blockDim.x + tid] = carry;
+}
+#undef OVL_MMA
+
+static int run_sync_loop_overlap(int device, int samples, int warmup) {
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  const int sm_count = prop.multiProcessorCount;
+  const size_t dram_bytes = 256ULL * 1024ULL * 1024ULL;
+  const size_t l2_bytes = 4ULL * 1024ULL * 1024ULL;
+  const size_t dram_mask = (dram_bytes / sizeof(uint4)) - 1ULL;
+  const size_t l2_mask = (l2_bytes / sizeof(uint4)) - 1ULL;
+  const size_t flush_vec4 = dram_bytes / sizeof(uint4);
+  uint4 *d_dram = nullptr, *d_flush = nullptr, *d_l2 = nullptr, *d_sink_u4 = nullptr;
+  float* d_sink_f = nullptr;
+  double* d_cyc = nullptr;
+  CUDA_CHECK(cudaMalloc(&d_dram, dram_bytes));
+  CUDA_CHECK(cudaMalloc(&d_flush, dram_bytes));
+  CUDA_CHECK(cudaMalloc(&d_l2, l2_bytes));
+  CUDA_CHECK(cudaMalloc(&d_sink_u4, 1024 * sizeof(uint4)));
+  CUDA_CHECK(cudaMalloc(&d_sink_f, static_cast<size_t>(sm_count) * 8 * 256 * sizeof(float)));
+  CUDA_CHECK(cudaMalloc(&d_cyc, 2 * sizeof(double)));
+  CUDA_CHECK(cudaMemset(d_dram, 0x3c, dram_bytes));
+  CUDA_CHECK(cudaMemset(d_flush, 25, dram_bytes));
+  CUDA_CHECK(cudaMemset(d_l2, 0x3c, l2_bytes));
+  cudaEvent_t ev_start, ev_stop;
+  CUDA_CHECK(cudaEventCreate(&ev_start));
+  CUDA_CHECK(cudaEventCreate(&ev_stop));
+  const char* pattern_names[2] = {"gemm_s2", "attention"};
+  const char* dep_names[4] = {"free", "dep", "noload", "nocompute"};
+
+  auto time_ms = [&](auto launch, bool flush) {
+    if (flush) l2_read_cg_kernel<<<sm_count * 4, 512>>>(d_flush, d_sink_u4, flush_vec4, 1);
+    CUDA_CHECK(cudaEventRecord(ev_start));
+    launch();
+    CUDA_CHECK(cudaEventRecord(ev_stop));
+    CUDA_CHECK(cudaEventSynchronize(ev_stop));
+    float ms = 0.0f;
+    CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
+    return static_cast<double>(ms);
+  };
+
+  std::printf("{\n  \"samples\": %d,\n  \"sync_loop_overlap\": [", samples);
+  bool first = true;
+  auto run_point = [&](auto pat_c, auto dep_c, auto sb_c, auto w_c, auto mi_c) {
+    constexpr int PAT = decltype(pat_c)::value, DEP = decltype(dep_c)::value;
+    constexpr int SB = decltype(sb_c)::value, W = decltype(w_c)::value, MI = decltype(mi_c)::value;
+    auto kernel = ovl_kernel<PAT, DEP, SB, W, MI>;
+    int max_blocks = 0;
+    CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, W * 32, SB));
+    for (int level = 0; level < 2; ++level) {
+      const bool is_dram = level == 1;
+      const uint4* buf = is_dram ? d_dram : d_l2;
+      const size_t mask = is_dram ? dram_mask : l2_mask;
+      for (int cps : {1, 2}) {
+        if (cps > max_blocks) continue;
+        const int grid = sm_count * cps;
+        auto launch_steps = [&](int st) { return [&, st]() { kernel<<<grid, W * 32, SB>>>(buf, d_sink_f, mask, st, d_cyc); }; };
+        double probe = time_ms(launch_steps(64), is_dram);
+        int steps = static_cast<int>(1.0 / std::max(probe / 64.0, 1e-5));
+        steps = std::min(65536, std::max(256, ((steps + 63) / 64) * 64));
+        for (int w = 0; w < warmup; ++w) time_ms(launch_steps(steps), is_dram);
+        std::vector<double> turn, cyc;
+        for (int s = 0; s < samples; ++s) {
+          double ms = time_ms(launch_steps(steps), is_dram);
+          double c = 0.0;
+          CUDA_CHECK(cudaMemcpy(&c, d_cyc, sizeof(double), cudaMemcpyDeviceToHost));
+          turn.push_back(ms * 1e6 / steps);
+          cyc.push_back(c);
+        }
+        if (!first) std::printf(",");
+        first = false;
+        std::printf("\n    {\"pattern\": \"%s\", \"dep\": \"%s\", \"mem_level\": \"%s\", \"ctas_per_sm\": %d, "
+                    "\"active_ctas\": %d, \"num_warps\": %d, \"stage_bytes\": %d, \"mma_per_warp_per_block\": %d, "
+                    "\"steps\": %d, \"turnaround_ns_samples\": [",
+                    pattern_names[PAT], dep_names[DEP], is_dram ? "dram" : "l2", cps, grid, W, SB, MI * 4, steps);
+        for (size_t i = 0; i < turn.size(); ++i) std::printf(i ? ", %.2f" : "%.2f", turn[i]);
+        std::printf("], \"cycles_per_step_samples\": [");
+        for (size_t i = 0; i < cyc.size(); ++i) std::printf(i ? ", %.1f" : "%.1f", cyc[i]);
+        std::printf("]}");
+      }
+    }
+  };
+  auto each_dep = [&](auto pat_c, auto sb_c, auto w_c, auto mi_c) {
+    run_point(pat_c, std::integral_constant<int, 0>{}, sb_c, w_c, mi_c);
+    run_point(pat_c, std::integral_constant<int, 1>{}, sb_c, w_c, mi_c);
+    run_point(pat_c, std::integral_constant<int, 2>{}, sb_c, w_c, mi_c);
+    run_point(pat_c, std::integral_constant<int, 3>{}, sb_c, w_c, mi_c);
+  };
+  auto each_mi = [&](auto pat_c, auto sb_c, auto w_c) {
+    each_dep(pat_c, sb_c, w_c, std::integral_constant<int, 2>{});
+    each_dep(pat_c, sb_c, w_c, std::integral_constant<int, 8>{});
+    each_dep(pat_c, sb_c, w_c, std::integral_constant<int, 32>{});
+  };
+  auto each_shape = [&](auto pat_c) {
+    each_mi(pat_c, std::integral_constant<int, 4096>{}, std::integral_constant<int, 4>{});
+    each_mi(pat_c, std::integral_constant<int, 4096>{}, std::integral_constant<int, 8>{});
+    each_mi(pat_c, std::integral_constant<int, 16384>{}, std::integral_constant<int, 4>{});
+    each_mi(pat_c, std::integral_constant<int, 16384>{}, std::integral_constant<int, 8>{});
+  };
+  each_shape(std::integral_constant<int, 0>{});
+  each_shape(std::integral_constant<int, 1>{});
+  std::printf("\n  ],\n  \"mma_drain\": [");
+
+  first = true;
+  auto drain = [&](auto w_c, auto mi_c) {
+    constexpr int W = decltype(w_c)::value, MI = decltype(mi_c)::value;
+    for (int cps : {1, 2}) {
+      double out[2] = {0.0, 0.0};
+      const int steps = 4096;
+      for (int w = 0; w < warmup; ++w) ovl_drain_kernel<W, MI><<<sm_count * cps, W * 32>>>(d_sink_f, steps, d_cyc);
+      std::vector<double> iss, drn;
+      for (int s = 0; s < samples; ++s) {
+        ovl_drain_kernel<W, MI><<<sm_count * cps, W * 32>>>(d_sink_f, steps, d_cyc);
+        CUDA_CHECK(cudaDeviceSynchronize());
+        CUDA_CHECK(cudaMemcpy(out, d_cyc, 2 * sizeof(double), cudaMemcpyDeviceToHost));
+        iss.push_back(out[0]);
+        drn.push_back(out[1]);
+      }
+      if (!first) std::printf(",");
+      first = false;
+      std::printf("\n    {\"ctas_per_sm\": %d, \"num_warps\": %d, \"mma_per_warp\": %d, \"issue_cycles_samples\": [", cps, W, MI * 4);
+      for (size_t i = 0; i < iss.size(); ++i) std::printf(i ? ", %.1f" : "%.1f", iss[i]);
+      std::printf("], \"drain_cycles_samples\": [");
+      for (size_t i = 0; i < drn.size(); ++i) std::printf(i ? ", %.1f" : "%.1f", drn[i]);
+      std::printf("]}");
+    }
+  };
+  drain(std::integral_constant<int, 4>{}, std::integral_constant<int, 2>{});
+  drain(std::integral_constant<int, 4>{}, std::integral_constant<int, 8>{});
+  drain(std::integral_constant<int, 4>{}, std::integral_constant<int, 32>{});
+  drain(std::integral_constant<int, 8>{}, std::integral_constant<int, 2>{});
+  drain(std::integral_constant<int, 8>{}, std::integral_constant<int, 8>{});
+  drain(std::integral_constant<int, 8>{}, std::integral_constant<int, 32>{});
+  std::printf("\n  ]\n}\n");
+  CUDA_CHECK(cudaFree(d_dram)); CUDA_CHECK(cudaFree(d_flush)); CUDA_CHECK(cudaFree(d_l2));
+  CUDA_CHECK(cudaFree(d_sink_u4)); CUDA_CHECK(cudaFree(d_sink_f)); CUDA_CHECK(cudaFree(d_cyc));
+  return 0;
+}
