@@ -6672,6 +6672,10 @@ static int run_sync_loop_free(int device, int samples, int warmup) {
   CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
   const int sm_count = prop.multiProcessorCount;
   constexpr int STEPS = 1024;
+  // The same number of groups at every G (three, or fewer on GPUs with under 48 SMs), so every group
+  // size puts the same cold traffic on DRAM.
+  const int GROUPS = std::min(3, sm_count / 16);
+  if (GROUPS == 0) { std::fprintf(stderr, "sync-loop-free: needs at least 16 SMs\n"); return 1; }
   constexpr int BINS = 256, BIN_NS = 32;
   const size_t cold_bytes = 256ULL * 1024ULL * 1024ULL;
   const size_t cold_mask = cold_bytes / sizeof(uint4) - 1, warm_mask = 4ULL * 1024ULL * 1024ULL / sizeof(uint4) - 1;
@@ -6687,15 +6691,15 @@ static int run_sync_loop_free(int device, int samples, int warmup) {
   CUDA_CHECK(cudaMalloc(&d_latency, sm_count * sizeof(double)));
   CUDA_CHECK(cudaMemset(d_src, 0x3c, cold_bytes));
   size_t cold_start = 0;
-  std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"steps\": %d,\n  \"offset_bin_ns\": %d,\n  \"sync_loop_free\": [",
-              samples, sm_count, STEPS, BIN_NS);
+  std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"groups\": %d,\n  \"steps\": %d,\n  \"offset_bin_ns\": %d,\n  \"sync_loop_free\": [",
+              samples, sm_count, GROUPS, STEPS, BIN_NS);
   bool first = true;
   auto run_point = [&](auto sb_c, auto w_c, auto mi_c, auto g_c, auto stamp_c, bool warm) {
     constexpr int SB = decltype(sb_c)::value, W = decltype(w_c)::value, MI = decltype(mi_c)::value;
     constexpr int G = decltype(g_c)::value;
     constexpr bool STAMP = decltype(stamp_c)::value;
     constexpr int SMEM = SB > 53248 ? SB : 53248;
-    const int grid = sm_count / G * G;
+    const int grid = GROUPS * G;
     auto kernel = free_kernel<SB, W, MI, G, STAMP>;
     CUDA_CHECK(cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
     int max_blocks = 0;
