@@ -143,6 +143,34 @@ def judge(label, points):
     print(f"{label}: winner {winners[0] if winners else 'none'}")
 
 
+def quantile(v, p):
+    s = sorted(v)
+    k = (len(s) - 1) * p
+    f = int(k)
+    c = min(f + 1, len(s) - 1)
+    return s[f] + (s[c] - s[f]) * (k - f)
+
+
+def acquisition(runs):
+    """The acquisition rules of 2026-11-27: lists with IQR over median above 10% at most 5%; lists with
+    max over min above 1.5 at most 15%; points whose process medians span more than 10% at most 5%."""
+    lists = [row["kernel_ns_samples"] for rows in runs for row in rows]
+    by_point = {}
+    for rows in runs:
+        for row in rows:
+            by_point.setdefault(name_of(row), []).append(st.median(row["kernel_ns_samples"]))
+    r1 = sum((quantile(v, 0.75) - quantile(v, 0.25)) / st.median(v) > 0.10 for v in lists) / len(
+        lists
+    )
+    r2 = sum(max(v) / min(v) > 1.5 for v in lists) / len(lists)
+    r3 = sum((max(v) - min(v)) / st.median(v) > 0.10 for v in by_point.values()) / len(by_point)
+    ok = r1 <= 0.05 and r2 <= 0.15 and r3 <= 0.05
+    print(
+        f"acquisition: IQR {r1 * 100:.1f}% (<=5)  max/min {r2 * 100:.1f}% (<=15)  cross-process {r3 * 100:.1f}% (<=5): {'passed' if ok else 'failed'}"
+    )
+    return ok
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("profile")
@@ -151,6 +179,9 @@ def main():
     args = ap.parse_args()
     r = rates(args.profile)
     runs = [json.load(open(p))["rows"] for p in args.runs]
+    if not acquisition(runs):
+        print("the run is void under the acquisition rules: archive it as invalid and repeat")
+        return
     points = {"attention": {}, "gemm": {}}
     base = {}
     for rows in zip(*runs):
