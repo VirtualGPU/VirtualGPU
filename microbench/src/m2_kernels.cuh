@@ -6419,6 +6419,15 @@ __global__ void delta_kernel(const uint4* __restrict__ cold, float* __restrict__
 }
 #undef DELTA_MMA
 
+// Smallest observed %globaltimer increments, one thread.
+__global__ void delta_timer_step_kernel(unsigned long long* out, int count) {
+  unsigned long long prev = read_globaltimer();
+  for (int n = 0; n < count;) {
+    const unsigned long long t = read_globaltimer();
+    if (t != prev) { out[n++] = t - prev; prev = t; }
+  }
+}
+
 // Flag ping-pong between two CTAs on different SMs: block 0 records the cycles of `rounds` round trips.
 __global__ void delta_pingpong_kernel(unsigned* flags, int rounds, unsigned long long* out) {
   if (threadIdx.x != 0) return;
@@ -6479,8 +6488,17 @@ static int run_sync_loop_delta(int device, int samples, int warmup, bool flag_on
     CUDA_CHECK(cudaMemcpy(&cycles, d_clock, sizeof(cycles), cudaMemcpyDeviceToHost));
     pingpong.push_back(static_cast<double>(cycles) / ROUNDS / 2.0);
   }
-  std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"grid\": %d,\n  \"group\": %d,\n  \"lead_ns\": %llu,\n  \"flag_one_way_cycles_samples\": [",
-              samples, sm_count, grid, G, LEAD_NS);
+  constexpr int TICKS = 64;
+  unsigned long long* d_ticks = nullptr;
+  CUDA_CHECK(cudaMalloc(&d_ticks, TICKS * sizeof(unsigned long long)));
+  delta_timer_step_kernel<<<1, 1>>>(d_ticks, TICKS);
+  std::vector<unsigned long long> ticks(TICKS);
+  CUDA_CHECK(cudaMemcpy(ticks.data(), d_ticks, TICKS * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
+  CUDA_CHECK(cudaFree(d_ticks));
+  std::sort(ticks.begin(), ticks.end());
+  std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"grid\": %d,\n  \"group\": %d,\n  \"lead_ns\": %llu,\n"
+              "  \"globaltimer_step_ns\": {\"min\": %llu, \"median\": %llu, \"max\": %llu},\n  \"flag_one_way_cycles_samples\": [",
+              samples, sm_count, grid, G, LEAD_NS, ticks[0], ticks[TICKS / 2], ticks[TICKS - 1]);
   for (size_t i = 0; i < pingpong.size(); ++i) std::printf(i ? ", %.1f" : "%.1f", pingpong[i]);
   std::printf("],\n  \"sync_loop_delta\": [");
   if (flag_only) {
@@ -6553,7 +6571,17 @@ static int run_sync_loop_delta(int device, int samples, int warmup, bool flag_on
   // Warm L2 baselines (no cold miss) first: the shared calibration point is warm, 16 KiB, delay 0.
   run_point(std::integral_constant<int, 16384>{}, 0, true);
   run_point(std::integral_constant<int, 32768>{}, 0, true);
-  const int deltas[] = {0, 50, 100, 150, 200, 250, 300, 400, 700, 1500};
+  // The delay grid comes from VGPU_DELTA_NS (comma separated ns) when set; the default is the GB10 grid.
+  std::vector<int> deltas = {0, 50, 100, 150, 200, 250, 300, 400, 700, 1500};
+  if (const char* env = std::getenv("VGPU_DELTA_NS")) {
+    deltas.clear();
+    for (const char* c = env; *c;) {
+      char* end = nullptr;
+      deltas.push_back(static_cast<int>(std::strtol(c, &end, 10)));
+      if (end == c) { std::fprintf(stderr, "sync-loop-delta: bad VGPU_DELTA_NS\n"); return 1; }
+      c = *end == ',' ? end + 1 : end;
+    }
+  }
   for (int d : deltas) run_point(std::integral_constant<int, 16384>{}, d, false);
   for (int d : deltas) run_point(std::integral_constant<int, 32768>{}, d, false);
   std::printf("\n  ]\n}\n");
