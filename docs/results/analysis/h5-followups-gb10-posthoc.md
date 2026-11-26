@@ -121,6 +121,21 @@ MAPE over the 192 pure-load DRAM points is 27.1% (current model 33.8%, p90 72.7%
 
 Post-hoc and from the void capture only, the 1 B points suggest why: on the RTX 4070 their request rate is not capped. It falls as each thread keeps more rows in flight, from up to 12.4 warp requests per ns at 4 loads per thread to 3.3 to 3.7 at 24, and the calibration point (16 per thread) sits on the slow side. Rows in flight per CTA set how many DRAM pages are open at once, so on this GPU the narrow DRAM cost follows access locality rather than a GPU-wide request rate. If a clean capture confirms this, the form's request limit is a GB10 observation that does not carry over.
 
+## Last register staging round: K1 does not pass
+
+K1 is b1 + b2 unchanged, with no new constant. Frozen in [validation/h5-staging-k1-frozen.json](../../../validation/h5-staging-k1-frozen.json) (SHA-256 `908c0d4302abac1423884134d3063e51184fb809c7b3ac1ee194609bb63b2475`) by [validation/h5_staging_k1.py](../../../validation/h5_staging_k1.py) before measurement, with the same pass rule and 8-MMA rule as before, and with the MAPE and width medians over the points without MMA registered as a descriptive result. Q and tau come from the same two calibration points, each the median of 5 independent processes run before the 5 repeats. The 96 new points are 4 warps, 6 and 10 KiB stages, 2 and 4 CTAs per SM, 1 to 16 B, the three variants, chains of 0 and 8 MMAs; four 10 KiB points with loads and stores were excluded before measurement because, with the Spark's own `ptxas`, they need more than 128 registers per thread, and exactly those four ran at 3 CTAs per SM instead of 4.
+
+Captured on GB10 under the lock (thermal gate 51.4 / 51.7 C, 2496 / 2509 MHz; 51 to 60 C, 2424 to 2528 MHz, no throttle reason). Raw capture `stage-narrow-k1-1.json` (SHA-256 `57495a47...`) in `h5-k1-captures.tar.gz` (`5661dc1539a276c48736777cfb30a6bcab42af64870952450ddd77fee16ca9de`), in both places. Scores: [h5-staging-k1-gb10-posthoc.json](h5-staging-k1-gb10-posthoc.json).
+
+- Calibration: 86.3 to 86.5 us and 446.8 to 449.0 us over the 5 runs; Q = 1.39 warp stores per ns per SM, tau = 6.76 ns per load.
+- The current model's median error on the 16 B 8-MMA points is -11.1%, so the 8-MMA points are reported and not judged. 46 points without MMA are judged.
+- K1: MAPE 16.9% (current model 25.7%); median error 1 B +3.6%, 2 B -3.8%, 4 B +8.8%, 16 B -1.4%. Every width is within 10%, but the MAPE is above 15%, so K1 does not pass.
+- Post-hoc: stores alone are now predicted 17% to 18% slow at both 2 and 4 CTAs per SM (Q was calibrated with 16 KiB stages and 3 CTAs), and loads alone 8% to 10% slow at 2 CTAs; the 8-MMA points, not judged, add the MMA chain miss (2 B -17%).
+
+H5 register staging stops here: b1 + b2 points the right way and lowers the MAPE from 28.7% to 10.7% (second round) and from 25.7% to 16.9% (this round), but it did not meet the pass rule and does not go into the core ([design.md section 9.5](../../design.md#95-narrow-register-staged-loads-h5)).
+
+**Sample dispersion of the GB10 captures.** The dispersion rule adopted for RTX 4070 captures (more than 10% of sample lists with largest over smallest above 1.3) is not applied to GB10, but by it the GB10 captures of H5 would read 15.2% (`gmem-narrow-validate-1`), 14.6% (`-2`), 11.4% (`stage-narrow-validate-1`) and 12.0% (`stage-narrow-k1-1`). On GB10 these are single high samples in otherwise tight lists, at random positions, not two groups; every point uses the median over repeats of per-repeat medians, which these samples do not move.
+
 ## Open item outside H5
 
 **Hot L2 with few loads in flight is predicted too slow.** `gmem-narrow-validate`, hot L2, `.cg`: 1 B loads with 4 in flight per thread are predicted 3.2 to 3.7 times as slow as measured at 1 CTA per SM and 1.2 to 2.8 times at 3 CTAs, aligned or not; other widths at 4 in flight up to 1.3 times; at 12 and 24 in flight the MAPE is 9% to 11%. The point values are in [h5-dram-form-gb10-posthoc.json](h5-dram-form-gb10-posthoc.json) (`gmem_l2_regression`). Not investigated.
@@ -128,4 +143,4 @@ Post-hoc and from the void capture only, the 1 B points suggest why: on the RTX 
 ## Next steps
 
 - DRAM-side form: repeat the RTX 4070 test with the same frozen file in a quiet desktop window (GPU engine utilization under 5% for 60 s before the capture, dispersion check after it). It does not go into the core in any case before that test passes.
-- Register staging: one last round. Without MMA, b1 + b2 already tracks the width dependence; the proposed single candidate is b1 + b2 unchanged, recalibrated in a new session and validated on points not measured before, with the same pass rule. If it fails, H5 register staging is closed as a known limit.
+- Register staging: closed as a known limit (section above).
