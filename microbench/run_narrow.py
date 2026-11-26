@@ -18,6 +18,7 @@ from shutil import which
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from repeat_mlp import (  # noqa: E402
+    WINDOWS_SMI,
     command,
     host_snapshot,
     require_quiet,
@@ -30,6 +31,16 @@ from repeat_mlp import (  # noqa: E402
 # GB10 shares its memory with the CPU: a large CPU process competes for it.
 MAX_FOREIGN_RSS_KIB = 8 << 20
 MIN_AVAILABLE_KIB = 16 << 20
+
+# RTX 4070 under WSL: the Windows desktop shares the GPU. Wait for GPU
+# utilization under 5% for 60 s before a capture, and void a capture whose
+# sample lists are dispersed (largest over smallest above 1.3) in more than
+# 10% of cases.
+QUIET_UTILIZATION = 5
+QUIET_SECONDS = 60
+QUIET_TIMEOUT_SECONDS = 30 * 60
+DISPERSION_RATIO = 1.3
+DISPERSION_MAX_SHARE = 0.10
 
 MODES = {
     "gmem-narrow": "gmem_load_narrow",
@@ -61,6 +72,47 @@ def require_memory(snapshot):
         pid, rss, name = line.split(None, 2)
         if int(rss) > MAX_FOREIGN_RSS_KIB:
             raise RuntimeError(f"Large CPU process holds unified memory: {pid} {name} {rss} KiB")
+
+
+def wait_for_quiet_desktop():
+    if not WINDOWS_SMI.is_file():
+        return None
+    start = time.monotonic()
+    trace, quiet_since = [], None
+    while True:
+        util = int(
+            command(
+                str(WINDOWS_SMI), "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"
+            ).splitlines()[0]
+        )
+        now = time.monotonic() - start
+        trace.append({"utc": utc(), "utilization_gpu": util})
+        quiet_since = (
+            (quiet_since if quiet_since is not None else now) if util < QUIET_UTILIZATION else None
+        )
+        if quiet_since is not None and now - quiet_since >= QUIET_SECONDS:
+            return trace
+        if now > QUIET_TIMEOUT_SECONDS:
+            raise RuntimeError("The Windows desktop did not stay quiet for 60 s within 30 minutes")
+        time.sleep(1)
+
+
+def dispersion(record):
+    lists = [
+        row["elapsed_ns"]
+        for run in record["repeats"] + record["calibration_runs"]
+        for row in run["result"]
+    ]
+    over = sum(max(v) / min(v) > DISPERSION_RATIO for v in lists)
+    share = over / len(lists) if lists else 0.0
+    return {
+        "sample_lists": len(lists),
+        "over_ratio": over,
+        "share": share,
+        "ratio": DISPERSION_RATIO,
+        "max_share": DISPERSION_MAX_SHARE,
+        "status": "failed" if share > DISPERSION_MAX_SHARE else "passed",
+    }
 
 
 def run_once(smi, binary, mode):
@@ -124,6 +176,7 @@ def main():
     smi = which("nvidia-smi") or "/usr/lib/wsl/lib/nvidia-smi"
     before = host_snapshot(smi)
     require_quiet(before)
+    quiet = wait_for_quiet_desktop()
     query = json.loads(command(str(args.binary), "--mode", "query", "--device", "0"))
     warm, stable = warm_device(
         smi,
@@ -136,9 +189,13 @@ def main():
         if args.calibration_mode:
             calibration.append(run_once(smi, args.binary, args.calibration_mode))
         repeats.append(run_once(smi, args.binary, args.mode))
+    record = {"repeats": repeats, "calibration_runs": calibration}
+    check = dispersion(record)
     write_json(
         args.output,
         {
+            "desktop_quiet_trace": quiet,
+            "dispersion_check": check,
             "mode": args.mode,
             "samples": SAMPLES,
             "warmup": WARMUP,
@@ -152,6 +209,10 @@ def main():
             "host_after": host_snapshot(smi),
         },
     )
+
+    # Under WSL the desktop can perturb the GPU unseen: a dispersed capture is void.
+    if quiet is not None and check["status"] != "passed":
+        raise SystemExit(f"Dispersion check failed, capture void: {check}")
 
 
 if __name__ == "__main__":
