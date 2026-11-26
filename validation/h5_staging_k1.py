@@ -6,7 +6,9 @@ come from the same two calibration points, each the median of 5 independent
 processes (`vgpu_bench --mode stage-narrow-k1-calibrate`, one before each of
 the 5 repeats). The new points (`--mode stage-narrow-k1`) were not measured
 before: 4 warps, 6 and 10 KiB stages, 2 and 4 CTAs per SM, 1 to 16 B, the
-three variants, MMA chains of 0 and 8.
+three variants, MMA chains of 0 and 8. Every sample moves 9 GiB so that each
+launch runs well over 1 ms; the first capture (256 MiB per sample) failed
+the sample dispersion rule and is void.
 
 Pass rule, as before: MAPE under 15% and every width's median error within
 10%; 8-MMA points count only if the current model's median error on the 16 B
@@ -24,6 +26,9 @@ from validation import h5_candidates as h5
 from validation import h5_staging_forms as sf
 
 CALIBRATION_RUNS = 5
+# Bytes each sample moves, at every point and both calibration points, so that
+# every launch runs well over 1 ms (the shortest predicted at about 1.5 ms).
+K1_L2_BYTES = 9 << 30
 # More than 128 registers per thread with the Spark's CUDA 13.0 ptxas
 # (sm_121a), so 4 CTAs of 4 warps do not fit; excluded before measurement.
 EXCLUDED = (
@@ -51,30 +56,50 @@ def excluded(p):
     return (p["variant"], p["width_bytes"], p["stage_bytes"], p["mma_per_warp"], p["ctas_per_sm"]) in EXCLUDED
 
 
+def geometry(p, specs):
+    """`h5.geometry` with K1_L2_BYTES per sample instead of 256 MiB."""
+    g = h5.geometry(sf.as_sync_loop(p), specs)
+    steps = max(1, K1_L2_BYTES // (g["grid"] * p["stage_bytes"]))
+    return {**g, "sweeps": max(1, steps // g["iters"])}
+
+
+def run_extrapolated(p, specs, g, base, store_bytes=None):
+    """Core time at the full sweep count, from runs at 8 and 16 sweeps.
+
+    Hot-L2 sweeps repeat identical tiles, so the core's time is linear in the
+    sweep count (checked to display precision at 64 sweeps); running all of
+    them would mean IR with over 100 000 access-map entries per point.
+    """
+    t8, t16 = (h5.run(sf.kernel_ir(p, specs, store_bytes, {**g, "sweeps": s}), base, "l2")
+               for s in (8, 16))
+    if t8["ctas_per_sm"] != p["ctas_per_sm"]:
+        raise RuntimeError(f"{sf.key(p)}: core places {t8['ctas_per_sm']} CTAs per SM")
+    slope = (t16["time_ns"] - t8["time_ns"]) / 8
+    return t8["time_ns"] + slope * (g["sweeps"] - 8)
+
+
 def freeze(output):
     raw = h5.PROFILE.read_bytes()
     profile = json.loads(raw)
     specs = profile["specs"]
     smem_bw = profile["measured"]["memory"]["smem_bw_per_sm_gbps"]["value"]
     base = h5.profile_text("base", None)
-    frozen = {"status": "frozen before measurement", "profile_revision": profile["provenance"]["profile_revision"],
+    frozen = {"status": "frozen before measurement", "l2_bytes_per_sample": K1_L2_BYTES, "profile_revision": profile["provenance"]["profile_revision"],
               "profile_sha256": hashlib.sha256(raw).hexdigest(), "calibration_b1": sf.CAL_B1,
               "calibration_b2": sf.CAL_B2, "calibration_runs": CALIBRATION_RUNS, "q_grid": sf.Q_GRID,
               "smem_bw_gbps": smem_bw, "excluded": [list(e) for e in EXCLUDED], "order": [], "points": {}}
     for p in [sf.CAL_B1, sf.CAL_B2] + points():
-        g = h5.geometry(sf.as_sync_loop(p), specs)
-        r = h5.run(sf.kernel_ir(p, specs), base, "l2")
-        if r["ctas_per_sm"] != p["ctas_per_sm"]:
-            raise RuntimeError(f"{sf.key(p)}: core places {r['ctas_per_sm']} CTAs per SM")
+        g = geometry(p, specs)
+        t_core = run_extrapolated(p, specs, g, base)
         steps = g["iters"] * g["sweeps"]
         stores = p["stage_bytes"] // (32 * p["width_bytes"]) if p["variant"] != "load_only" else 0
         loads = p["stage_bytes"] // (p["num_warps"] * 32 * p["width_bytes"]) if p["variant"] != "store_only" else 0
-        b1 = [r["time_ns"]] * len(sf.Q_GRID)
+        b1 = [t_core] * len(sf.Q_GRID)
         if stores:
-            b1 = [h5.run(sf.kernel_ir(p, specs, max(p["stage_bytes"], round(stores * smem_bw / q))),
-                         base, "l2")["time_ns"] for q in sf.Q_GRID]
+            b1 = [run_extrapolated(p, specs, g, base, max(p["stage_bytes"], round(stores * smem_bw / q)))
+                  for q in sf.Q_GRID]
         frozen["order"].append(sf.key(p))
-        frozen["points"][sf.key(p)] = {"geometry": g, "c0_current": r["time_ns"], "b1_grid": b1,
+        frozen["points"][sf.key(p)] = {"geometry": g, "c0_current": t_core, "b1_grid": b1,
                                        "l2_load_steps_x_loads_per_thread": steps * loads}
     output.write_text(json.dumps(frozen, separators=(",", ":")) + "\n")
 

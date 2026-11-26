@@ -75,9 +75,9 @@ def as_sync_loop(p):
             "stage_bytes": p["stage_bytes"], "mma_per_warp": p["mma_per_warp"]}
 
 
-def kernel_ir(p, specs, store_bytes=None):
+def kernel_ir(p, specs, store_bytes=None, g=None):
     q = as_sync_loop(p)
-    ir = h5.kernel_ir(q, specs)
+    ir = h5.kernel_ir(q, specs, g=g)
     ops = ir["body"]["pipeline_loop"]["ops"]
     if p["variant"] == "load_only":
         ops[:] = [o for o in ops if o["kind"] != "smem_store"]

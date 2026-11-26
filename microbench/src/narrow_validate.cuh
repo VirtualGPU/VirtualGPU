@@ -312,7 +312,7 @@ __global__ void stage_batched_kernel(const uint8_t* __restrict__ src, float* __r
 
 template <int VARIANT, int W, int ROWS, int MMA_ITERS, int WARPS = 4>
 void stage_batched_point(const cudaDeviceProp& prop, Timer& timer, const Buffers& b, int cps,
-                         int samples, int warmup, bool& first) {
+                         int samples, int warmup, bool& first, size_t l2_bytes = kL2Bytes) {
   constexpr int STAGE_BYTES = ROWS * 128;
   auto kernel = stage_batched_kernel<VARIANT, W, ROWS, MMA_ITERS, WARPS>;
   const int smem = std::max(STAGE_BYTES, pad_bytes(prop, cps));
@@ -321,7 +321,7 @@ void stage_batched_point(const cudaDeviceProp& prop, Timer& timer, const Buffers
   CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&fit, kernel, WARPS * 32, smem));
   const int grid = prop.multiProcessorCount * cps;
   const int distinct = static_cast<int>(std::max<size_t>(1, kL2Set / (static_cast<size_t>(grid) * STAGE_BYTES)));
-  int steps = static_cast<int>(std::max<size_t>(1, kL2Bytes / (static_cast<size_t>(grid) * STAGE_BYTES)));
+  int steps = static_cast<int>(std::max<size_t>(1, l2_bytes / (static_cast<size_t>(grid) * STAGE_BYTES)));
   steps = std::max(1, steps / distinct) * distinct;
   const size_t pitch = round_up(static_cast<size_t>(distinct) * 128, 128);
   auto launch = [&]() { kernel<<<grid, WARPS * 32, smem>>>(b.data, b.fsink, pitch, steps, distinct, 0u); };
@@ -506,12 +506,15 @@ static int run_stage_narrow_batched(int device, int samples, int warmup) {
 namespace narrow {
 
 // Last H5 staging round: new points for b1 + b2 (4 warps, 6 and 10 KiB
-// stages, 2 and 4 CTAs per SM, 1 to 16 B, MMA chains of 0 and 8).
+// stages, 2 and 4 CTAs per SM, 1 to 16 B, MMA chains of 0 and 8). Each sample
+// moves kK1Bytes so that every launch runs well over 1 ms.
+constexpr size_t kK1Bytes = 9ULL << 30;
 template <int VARIANT, int W, int ROWS, int MMA_ITERS>
 void staging_k1_point(const cudaDeviceProp& prop, Timer& timer, const Buffers& b, int samples,
                       int warmup, bool& first) {
   for (int cps : {2, 4})
-    stage_batched_point<VARIANT, W, ROWS, MMA_ITERS, 4>(prop, timer, b, cps, samples, warmup, first);
+    stage_batched_point<VARIANT, W, ROWS, MMA_ITERS, 4>(prop, timer, b, cps, samples, warmup, first,
+                                                        kK1Bytes);
 }
 
 template <int VARIANT, int W>
@@ -558,8 +561,8 @@ static int run_stage_narrow_k1_calibrate(int device, int samples, int warmup) {
   Timer timer;
   bool first = true;
   std::printf("{\n  \"samples\": %d,\n  \"stage_narrow\": [", samples);
-  stage_batched_point<kStoreOnly, 2, 128, 0>(prop, timer, b, 3, samples, warmup, first);
-  stage_batched_point<kLoadOnly, 2, 32, 0>(prop, timer, b, 1, samples, warmup, first);
+  stage_batched_point<kStoreOnly, 2, 128, 0>(prop, timer, b, 3, samples, warmup, first, kK1Bytes);
+  stage_batched_point<kLoadOnly, 2, 32, 0>(prop, timer, b, 1, samples, warmup, first, kK1Bytes);
   std::printf("\n  ]\n}\n");
   return 0;
 }
