@@ -608,6 +608,9 @@ int main(int argc, char** argv) {
   if (mode == "stage-narrow") {
     return run_stage_narrow(device, samples, warmup);
   }
+  if (mode == "stage-narrow-batched") {
+    return run_stage_narrow_batched(device, samples, warmup);
+  }
   std::fprintf(stderr, "Unknown mode: %s\n", mode.c_str());
   return 2;
 }
