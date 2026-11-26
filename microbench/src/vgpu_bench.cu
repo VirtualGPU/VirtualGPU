@@ -450,6 +450,7 @@ static int run_cta_dispatch(int device, int repeats) {
 
 #include "m2_kernels.cuh"
 #include "narrow_kernels.cuh"
+#include "narrow_validate.cuh"
 
 int main(int argc, char** argv) {
   std::string mode = "query";
@@ -575,6 +576,15 @@ int main(int argc, char** argv) {
   }
   if (mode == "sync-loop-narrow") {
     return run_sync_loop_narrow(device, samples, warmup);
+  }
+  if (mode == "gmem-narrow-validate") {
+    return run_gmem_narrow_validate(device, samples, warmup);
+  }
+  if (mode == "sync-loop-narrow-validate") {
+    return run_sync_loop_narrow_validate(device, samples, warmup);
+  }
+  if (mode == "stage-narrow") {
+    return run_stage_narrow(device, samples, warmup);
   }
   std::fprintf(stderr, "Unknown mode: %s\n", mode.c_str());
   return 2;

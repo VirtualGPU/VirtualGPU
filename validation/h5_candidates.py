@@ -190,8 +190,8 @@ def mean_sectors(p, g):
     return total / n
 
 
-def kernel_ir(p, specs, alu_per_warp=0, byte_scale=1.0):
-    g = geometry(p, specs)
+def kernel_ir(p, specs, alu_per_warp=0, byte_scale=1.0, g=None):
+    g = g or geometry(p, specs)
     w = p["width_bytes"]
     entries = []
     for cta in range(g["grid"]):
