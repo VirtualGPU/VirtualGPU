@@ -611,6 +611,9 @@ int main(int argc, char** argv) {
   if (mode == "gmem-narrow-validate") {
     return run_gmem_narrow_validate(device, samples, warmup);
   }
+  if (mode == "gmem-narrow-calibrate") {
+    return run_gmem_narrow_calibrate(device, samples, warmup);
+  }
   if (mode == "sync-loop-narrow-validate") {
     return run_sync_loop_narrow_validate(device, samples, warmup);
   }

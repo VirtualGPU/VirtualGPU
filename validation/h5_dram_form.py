@@ -30,6 +30,12 @@ CALIBRATION = {"bench": "gmem-narrow", "width_bytes": 1, "mask": "none", "aligne
                "cache": "cg", "level": "dram", "ctas_per_sm": 2, "num_warps": 8,
                "loads_in_flight": 16, "share": 1, "column_step_bytes": 32,
                "dram_request_bytes": DEFAULT_DRAM_BYTES}
+# Cross-GPU protocol (fixed before the RTX 4070 capture): the calibration
+# point runs as its own process (`gmem-narrow-calibrate`) before each of the
+# 5 repeats of the validation sweep, and R uses the median of those 5 runs'
+# medians. Captures without calibration runs (the GB10 sessions) use the
+# calibration point inside the sweep.
+CALIBRATION_RUNS = 5
 PASS_MAPE = 0.15
 PASS_GROUP_MEDIAN = 0.10
 
@@ -94,18 +100,22 @@ def strided_128_bw(profile):
                if q["segment_bytes"] == 128)
 
 
-def freeze(output):
-    raw = h5.PROFILE.read_bytes()
+def freeze(output, profile_path=h5.PROFILE):
+    raw = profile_path.read_bytes()
     profile = json.loads(raw)
     specs = profile["specs"]
-    base = h5.profile_text("base", None)
+    base = raw.decode()
     points = gmem_points() + sync_points()
     frozen = {"status": "frozen before measurement", "profile_revision": profile["provenance"]["profile_revision"],
               "profile_sha256": hashlib.sha256(raw).hexdigest(), "calibration": CALIBRATION,
+              "arch": profile["identity"]["arch"],
+              "calibration_runs": CALIBRATION_RUNS if profile_path != h5.PROFILE else None,
               "bw_strided_128_gbps": strided_128_bw(profile), "order": [], "points": {}}
     for p in points:
         g = geometry(p, specs)
-        r = h5.run(h5.kernel_ir(p, specs, g=g), base, p["level"])
+        ir = h5.kernel_ir(p, specs, g=g)
+        ir["metadata"]["target_arch"] = profile["identity"]["arch"]
+        r = h5.run(ir, base, p["level"])
         if r["ctas_per_sm"] != p["ctas_per_sm"]:
             raise RuntimeError(f"{h5.point_key(p)}: core places {r['ctas_per_sm']} CTAs per SM")
         n = dram_requests(p, g)
@@ -118,6 +128,12 @@ def freeze(output):
 
 def predict(pred, bw_gbps, rate):
     return max(pred["t_core_ns"], pred["dram_sector_bytes"] / bw_gbps, pred["dram_requests"] / rate)
+
+
+def calibration_runs(captures):
+    """Per-run medians of the dedicated calibration processes, if any."""
+    return [statistics.median(row["elapsed_ns"]) for capture in captures
+            for run in capture.get("calibration_runs") or [] for row in run["result"]]
 
 
 def measured_points(captures, frozen):
@@ -147,14 +163,19 @@ def group_summary(errors, by):
     return {str(k): {"points": len(v), "median_error": statistics.median(v)} for k, v in sorted(groups.items())}
 
 
-def score(frozen, measured):
+def score(frozen, measured, cal_runs=None):
     preds, bw = frozen["points"], frozen["bw_strided_128_gbps"]
     cal = h5.point_key(frozen["calibration"])
     c = preds[cal]
+    if frozen.get("calibration_runs"):
+        if len(cal_runs or []) != frozen["calibration_runs"]:
+            raise ValueError(f"expected {frozen['calibration_runs']} calibration runs, got {len(cal_runs or [])}")
+        measured = {**measured, cal: statistics.median(cal_runs)}
     floor = max(c["t_core_ns"], c["dram_sector_bytes"] / bw)
     identifiable = measured[cal] > floor
     rate = c["dram_requests"] / measured[cal] if identifiable else None
-    out = {"calibration_measured_ns": measured[cal], "calibration_floor_ns": floor,
+    out = {"calibration_measured_ns": measured[cal], "calibration_run_ns": cal_runs or None,
+           "calibration_floor_ns": floor,
            "identifiable": identifiable, "rate_warp_requests_per_ns": rate, "groups": {}}
     groups = {
         "gmem_dram": lambda p: p["bench"] == "gmem-narrow" and p["level"] == "dram",
@@ -190,18 +211,20 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     f = sub.add_parser("freeze")
     f.add_argument("output", type=Path)
+    f.add_argument("--profile", type=Path, default=h5.PROFILE)
     s = sub.add_parser("score")
     s.add_argument("frozen", type=Path)
     s.add_argument("output", type=Path)
     s.add_argument("captures", type=Path, nargs="+")
     args = parser.parse_args()
     if args.command == "freeze":
-        freeze(args.output)
+        freeze(args.output, args.profile)
         return
     frozen_raw = args.frozen.read_bytes()
     frozen = json.loads(frozen_raw)
     raws = [path.read_bytes() for path in args.captures]
-    result = score(frozen, measured_points([json.loads(r) for r in raws], frozen))
+    captures = [json.loads(r) for r in raws]
+    result = score(frozen, measured_points(captures, frozen), calibration_runs(captures))
     result = {"status": "post-hoc", "frozen_sha256": hashlib.sha256(frozen_raw).hexdigest(),
               "captures": {p.name: hashlib.sha256(r).hexdigest() for p, r in zip(args.captures, raws)},
               **result}
