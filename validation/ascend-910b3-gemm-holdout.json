@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "device": "ascend910b3",
+  "target": "ascend910b3",
+  "kernel": "dense_gemm",
+  "input_dtype": "float16",
+  "output_dtype": "float16",
+  "accumulator_dtype": "float32",
+  "input_seed": 17,
+  "excluded_dev_axes": [2048, 4096],
+  "configs": [
+    {"config_id": "m16n64k32-g1-mb1", "tile": [16, 64, 32], "group_m": 1, "multibuffer": true, "num_stages": 2, "num_warps": 1},
+    {"config_id": "m32n64k32-g1-mb1", "tile": [32, 64, 32], "group_m": 1, "multibuffer": true, "num_stages": 2, "num_warps": 1},
+    {"config_id": "m64n64k32-g1-mb1", "tile": [64, 64, 32], "group_m": 1, "multibuffer": true, "num_stages": 2, "num_warps": 1},
+    {"config_id": "m64n64k32-g8-mb0", "tile": [64, 64, 32], "group_m": 8, "multibuffer": false, "num_stages": 1, "num_warps": 1},
+    {"config_id": "m64n64k64-g8-mb1", "tile": [64, 64, 64], "group_m": 8, "multibuffer": true, "num_stages": 2, "num_warps": 1},
+    {"config_id": "m64n128k32-g1-mb1", "tile": [64, 128, 32], "group_m": 1, "multibuffer": true, "num_stages": 2, "num_warps": 1},
+    {"config_id": "m64n128k64-g8-mb1", "tile": [64, 128, 64], "group_m": 8, "multibuffer": true, "num_stages": 2, "num_warps": 1},
+    {"config_id": "m64n128k64-g8-mb0", "tile": [64, 128, 64], "group_m": 8, "multibuffer": false, "num_stages": 1, "num_warps": 1},
+    {"config_id": "m128n64k64-g8-mb1", "tile": [128, 64, 64], "group_m": 8, "multibuffer": true, "num_stages": 2, "num_warps": 1},
+    {"config_id": "m128n128k32-g8-mb1", "tile": [128, 128, 32], "group_m": 8, "multibuffer": true, "num_stages": 2, "num_warps": 1},
+    {"config_id": "m128n128k64-g1-mb1", "tile": [128, 128, 64], "group_m": 1, "multibuffer": true, "num_stages": 2, "num_warps": 1},
+    {"config_id": "m128n128k64-g8-mb1", "tile": [128, 128, 64], "group_m": 8, "multibuffer": true, "num_stages": 2, "num_warps": 1},
+    {"config_id": "m128n128k64-g8-mb0", "tile": [128, 128, 64], "group_m": 8, "multibuffer": false, "num_stages": 1, "num_warps": 1},
+    {"config_id": "m128n128k128-g8-mb1", "tile": [128, 128, 128], "group_m": 8, "multibuffer": true, "num_stages": 2, "num_warps": 1},
+    {"config_id": "m128n256k64-g8-mb1", "tile": [128, 256, 64], "group_m": 8, "multibuffer": true, "num_stages": 2, "num_warps": 1},
+    {"config_id": "m128n256k64-g8-mb0", "tile": [128, 256, 64], "group_m": 8, "multibuffer": false, "num_stages": 1, "num_warps": 1}
+  ],
+  "cases": [
+    {
+      "case_id": "ascend-decode-16",
+      "split": "holdout",
+      "shape": [16, 3584, 3072],
+      "config_ids": [
+        "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
+        "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",
+        "m128n64k64-g8-mb1", "m128n128k32-g8-mb1", "m128n128k64-g1-mb1", "m128n128k64-g8-mb1",
+        "m128n128k64-g8-mb0", "m128n128k128-g8-mb1", "m128n256k64-g8-mb1", "m128n256k64-g8-mb0"
+      ]
+    },
+    {
+      "case_id": "ascend-decode-64",
+      "split": "holdout",
+      "shape": [64, 5120, 3584],
+      "config_ids": [
+        "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
+        "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",
+        "m128n64k64-g8-mb1", "m128n128k32-g8-mb1", "m128n128k64-g1-mb1", "m128n128k64-g8-mb1",
+        "m128n128k64-g8-mb0", "m128n128k128-g8-mb1", "m128n256k64-g8-mb1", "m128n256k64-g8-mb0"
+      ]
+    },
+    {
+      "case_id": "ascend-wave-below",
+      "split": "holdout",
+      "shape": [128, 2432, 3072],
+      "reference_ctas": 19,
+      "config_ids": [
+        "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
+        "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",
+        "m128n64k64-g8-mb1", "m128n128k32-g8-mb1", "m128n128k64-g1-mb1", "m128n128k64-g8-mb1",
+        "m128n128k64-g8-mb0", "m128n128k128-g8-mb1", "m128n256k64-g8-mb1", "m128n256k64-g8-mb0"
+      ]
+    },
+    {
+      "case_id": "ascend-wave-exact",
+      "split": "holdout",
+      "shape": [128, 2560, 3072],
+      "reference_ctas": 20,
+      "config_ids": [
+        "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
+        "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",
+        "m128n64k64-g8-mb1", "m128n128k32-g8-mb1", "m128n128k64-g1-mb1", "m128n128k64-g8-mb1",
+        "m128n128k64-g8-mb0", "m128n128k128-g8-mb1", "m128n256k64-g8-mb1", "m128n256k64-g8-mb0"
+      ]
+    },
+    {
+      "case_id": "ascend-wave-above",
+      "split": "holdout",
+      "shape": [128, 2688, 3072],
+      "reference_ctas": 21,
+      "config_ids": [
+        "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
+        "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",
+        "m128n64k64-g8-mb1", "m128n128k32-g8-mb1", "m128n128k64-g1-mb1", "m128n128k64-g8-mb1",
+        "m128n128k64-g8-mb0", "m128n128k128-g8-mb1", "m128n256k64-g8-mb1", "m128n256k64-g8-mb0"
+      ]
+    },
+    {
+      "case_id": "ascend-prefill-med",
+      "split": "holdout",
+      "shape": [1024, 3584, 3072],
+      "config_ids": [
+        "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
+        "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",
+        "m128n64k64-g8-mb1", "m128n128k32-g8-mb1", "m128n128k64-g1-mb1", "m128n128k64-g8-mb1",
+        "m128n128k64-g8-mb0", "m128n128k128-g8-mb1", "m128n256k64-g8-mb1", "m128n256k64-g8-mb0"
+      ]
+    },
+    {
+      "case_id": "ascend-prefill-large",
+      "split": "holdout",
+      "shape": [3072, 3584, 3072],
+      "config_ids": [
+        "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
+        "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",
+        "m128n64k64-g8-mb1", "m128n128k32-g8-mb1", "m128n128k64-g1-mb1", "m128n128k64-g8-mb1",
+        "m128n128k64-g8-mb0", "m128n128k128-g8-mb1", "m128n256k64-g8-mb1", "m128n256k64-g8-mb0"
+      ]
+    },
+    {
+      "case_id": "ascend-mask-odd",
+      "split": "holdout",
+      "shape": [1537, 2945, 2497],
+      "config_ids": [
+        "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
+        "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",
+        "m128n64k64-g8-mb1", "m128n128k32-g8-mb1", "m128n128k64-g1-mb1", "m128n128k64-g8-mb1",
+        "m128n128k64-g8-mb0", "m128n128k128-g8-mb1", "m128n256k64-g8-mb1", "m128n256k64-g8-mb0"
+      ]
+    }
+  ]
+}

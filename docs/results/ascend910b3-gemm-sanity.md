@@ -1,6 +1,6 @@
 # Ascend 910B3 FP16 GEMM and Attention Sanity Check (Unvalidated)
 
-> **Status: Informal dev sanity check, not a sealed holdout.** Ascend 910B3 has not gone through VirtualGPU's preregistered holdout protocol (`validation/`). Every Ascend prediction is automatically tagged with `unvalidated_feature` and `unvalidated_target_ascend`.
+> **Status: Informal dev sanity check, not a sealed holdout.** For the preregistered multi-shape sealed holdout evaluation and formal verdict (Attention warm/cold Pass, GEMM warm/cold Fail), see [`ascend910b3-holdout.md`](ascend910b3-holdout.md). Every Ascend prediction remains tagged with `unvalidated_feature` and `unvalidated_target_ascend`.
 
 ## Setup
 
