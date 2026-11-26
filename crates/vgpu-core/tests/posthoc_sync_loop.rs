@@ -230,7 +230,7 @@ fn sync_loop_miss() {
 }
 
 /// Lines: ir_path variant merged dram time_ns. For each KernelIR in IRS (comma separated, warm L2):
-/// the model as is (`ir`), without the loop's loads (`noload`), and with a fixed split of every load
+/// the model as is (`ir`, with its merged and DRAM bytes over load bytes; DRAM includes stores), without the loop's loads (`noload`), and with a fixed split of every load
 /// into resident, merged and DRAM fractions (`split`).
 #[test]
 #[ignore = "post-hoc analysis, needs PROFILE, IRS and OUT"]
@@ -249,7 +249,7 @@ fn attention_split() {
         out += &format!(
             "{path} ir {:.4} {:.4} {:.1}\n",
             base.merged_bytes / base.load_bytes,
-            0.0,
+            base.dram_bytes / base.load_bytes,
             base.time_ns
         );
         let mut nl = k.clone();
