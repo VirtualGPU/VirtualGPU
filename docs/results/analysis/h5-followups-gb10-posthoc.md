@@ -75,6 +75,29 @@ Captured on the same day under the lock (thermal gate 51.7 / 52.2 C, 2515 / 2522
    The load gap shrinks as CTAs per SM grow (a cost on each CTA's chain); stores-only time hardly changes with CTAs per SM (a shared pipe). The current model predicts the same time for every width; its errors for 2 B loads and stores are -39% to -49% at 1 CTA per SM, -0% to -19% for 16 B.
 3. **A width-independent miss.** With 32 dependent MMAs per warp and 1 CTA per SM, every width is predicted 28% to 48% fast, loads only or stores only. This is the MMA chain, not narrow loads, and is left out of H5.
 
+## Second session: register staging forms and a repeat of the DRAM-side form
+
+Captured under the lock on the same day: `stage-narrow-validate` (thermal gate 51.2 / 51.7 C, 2509 / 2515 MHz; 51 to 60 C and 2411 to 2522 MHz during capture) and a repeat of `gmem-narrow-validate` (52.9 / 53.3 C, 2515 / 2515 MHz; 53 to 62 C, 2405 to 2541 MHz), no throttle reason. Raw captures in `h5-followup2-captures.tar.gz` (SHA-256 `666492765d113467c9d2b66a7f73af25113a1124e8cf213001fa6c74f4acf851`; `stage-narrow-validate-1.json` `74f9e32d...`, `gmem-narrow-validate-2.json` `7ffc646d...`), in the same two places.
+
+**The DRAM-side form misses its group rule on the repeat.** Scored with the same frozen file ([h5-dram-form-gb10-repeat-posthoc.json](h5-dram-form-gb10-repeat-posthoc.json)): the calibration point measured 2397.0 us against 2468.7 us in the first session, so R = 3.50 instead of 3.39 warp requests per ns. The 192 pure-load DRAM points give MAPE 10.8% (current model 27.5%), but the median error of aligned 2 B loads is -10.9%, beyond the 10% group limit (first session -8.3%); the other seven groups stay within -6.6% to -0.2%. A 2.9% drift of the single calibration point between sessions is enough to cross the limit, so the form passes one session of two and the RTX 4070 test should calibrate R from the median of repeated calibration measurements.
+
+**The register staging forms do not pass.** Frozen in [validation/h5-staging-forms-frozen.json](../../../validation/h5-staging-forms-frozen.json) (SHA-256 `952cc5edb72eb49acaf448c3f221814b5490751f0335d1bc6d83bb1cec77b0c3`) by [validation/h5_staging_forms.py](../../../validation/h5_staging_forms.py) before measurement:
+
+- b1: shared memory stores charged per warp instruction on the shared memory pipe, Q warp stores per ns per SM, calibrated where stores alone fill the pipe (stores only, 2 B, 16 KiB, 3 CTAs per SM): Q = 1.39.
+- b2: a fixed time per load served from L2 on each CTA's chain, calibrated where loads alone bound one CTA (loads only, 2 B, 4 KiB, 1 CTA per SM): tau = 6.72 ns per load per thread. Loads from DRAM get nothing.
+- b1 + b2: both constants as calibrated.
+
+The new points are 8 warps, 8 and 12 KiB stages, 1 to 16 B, chains of 0 and 8 MMAs, 1 and 3 CTAs per SM, for all three variants. The pass rule (MAPE under 15%, every width's median error within 10%) used the 8-MMA points only if the current model's median error on the 16 B 8-MMA points was within 10%; it was -9.7%, so they count. Points whose kernel did not fit 3 CTAs per SM were to be excluded. The list frozen with the predictions came from the workstation's `nvcc` 13.5; the Spark's CUDA 13.0 allocates more registers, so seven points ran at fewer CTAs than set (three of them not on the frozen list) and one frozen-excluded point did fit. The scoring drops every point that did not fit, as measured, and every frozen exclusion: 88 points are judged ([h5-staging-forms-gb10-posthoc.json](h5-staging-forms-gb10-posthoc.json)).
+
+| Form | MAPE | Median error 1 / 2 / 4 / 16 B | Loads only / stores only / both |
+|---|---:|---|---|
+| Current model | 28.7% | -58% / -42% / -17% / -6% | -19% / -29% / -23% |
+| b1 | 18.6% | -32% / -26% / -9% / -6% | -19% / -8% / -18% |
+| b2 | 20.9% | -42% / -29% / -8% / -4% | -8% / -29% / -13% |
+| b1 + b2 | 10.7% | -15% / -15% / -3% / -4% | -8% / -8% / -8% |
+
+b1 + b2 meets the MAPE limit, but 1 and 2 B stay 15% fast, so no form passes. Each part removes about half of the narrow gap where it acts; the 1 and 2 B points need more than a per-instruction store cost and a per-load chain cost calibrated at 2 B.
+
 ## Open item outside H5
 
 **Hot L2 with few loads in flight is predicted too slow.** `gmem-narrow-validate`, hot L2, `.cg`: 1 B loads with 4 in flight per thread are predicted 3.2 to 3.7 times as slow as measured at 1 CTA per SM and 1.2 to 2.8 times at 3 CTAs, aligned or not; other widths at 4 in flight up to 1.3 times; at 12 and 24 in flight the MAPE is 9% to 11%. The point values are in [h5-dram-form-gb10-posthoc.json](h5-dram-form-gb10-posthoc.json) (`gmem_l2_regression`). Not investigated.
