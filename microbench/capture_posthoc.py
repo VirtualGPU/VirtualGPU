@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import subprocess
 import tempfile
@@ -31,7 +32,14 @@ from repeat_mlp import (
     write_json,
 )
 
-MODES = ("wave-rescan", "b-stream", "staged-mma")
+MODES = (
+    "wave-rescan",
+    "b-stream",
+    "staged-mma",
+    "sync-loop-delta",
+    "sync-loop-delta-flag",
+    "l2-paths",
+)
 
 
 def capture(args):
@@ -77,6 +85,7 @@ def capture(args):
         "device_query": query,
         "mode": args.mode,
         "command": run_args,
+        "environment": {k: v for k, v in os.environ.items() if k.startswith("VGPU_")},
         "host": platform.node(),
         "platform": platform.platform(),
         "started_utc": started,
