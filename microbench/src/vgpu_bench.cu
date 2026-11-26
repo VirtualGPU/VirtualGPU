@@ -581,6 +581,12 @@ int main(int argc, char** argv) {
   if (mode == "sync-loop-miss") {
     return run_sync_loop_miss(device, samples, warmup);
   }
+  if (mode == "sync-loop-delta") {
+    return run_sync_loop_delta(device, samples, warmup, false);
+  }
+  if (mode == "sync-loop-delta-flag") {
+    return run_sync_loop_delta(device, samples, warmup, true);
+  }
   std::fprintf(stderr, "Unknown mode: %s\n", mode.c_str());
   return 2;
 }

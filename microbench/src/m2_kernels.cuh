@@ -6305,3 +6305,258 @@ static int run_sync_loop_miss(int device, int samples, int warmup) {
   CUDA_CHECK(cudaFree(d_hot)); CUDA_CHECK(cudaFree(d_cold)); CUDA_CHECK(cudaFree(d_sink_f)); CUDA_CHECK(cudaFree(d_cyc));
   return 0;
 }
+
+// sync-loop-delta: groups of G CTAs read the same stage in a single-buffer loop. A flag between SMs takes
+// about one DRAM round trip on GB10, so the offset is scheduled on %globaltimer (32 ns steps) instead of
+// signalled: once all followers have finished the previous step, CTA 0 of a group (the lead) publishes a
+// start time `lead_ns` ahead, and issues its copies at that time; each follower issues the same copies
+// delay_ns later. Every CTA records its stage latency (cycles from a barrier before its copies to the
+// barrier after wait_group 0), its issue time after the start time (so the real offset is measured),
+// and how many steps the start time had already passed when it learned of it. The
+// region is addressed with `mask` from `start`: the host advances `start` after every launch on a
+// 256 MiB ring (cold), or passes a 4 MiB mask and start 0 (warm L2 baseline).
+#define DELTA_MMA(acc0, acc1, acc2, acc3)                                                         \
+  asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, " \
+               "{%8,%9}, {%0,%1,%2,%3};\n"                                                         \
+               : "+f"(acc0), "+f"(acc1), "+f"(acc2), "+f"(acc3)                                    \
+               : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1))
+
+static __device__ __forceinline__ void delta_publish(unsigned* flag, unsigned value) {
+  asm volatile("st.release.gpu.global.u32 [%0], %1;\n" :: "l"(flag), "r"(value) : "memory");
+}
+
+static __device__ __forceinline__ unsigned delta_observe(const unsigned* flag) {
+  unsigned value;
+  asm volatile("ld.acquire.gpu.global.u32 %0, [%1];\n" : "=r"(value) : "l"(flag) : "memory");
+  return value;
+}
+
+template <int STAGE_BYTES, int NUM_WARPS, int MI, int G>
+__global__ void delta_kernel(const uint4* __restrict__ cold, float* __restrict__ sink, size_t cold_mask,
+                             size_t cold_start, int steps, unsigned long long lead_ns, unsigned long long delay_ns,
+                             unsigned* __restrict__ progress, unsigned long long* __restrict__ start,
+                             unsigned* __restrict__ done, double* __restrict__ out_latency,
+                             double* __restrict__ out_issue_ns, unsigned* __restrict__ out_late,
+                             unsigned long long* __restrict__ out_clock) {
+  extern __shared__ uint4 smem[];
+  const uint32_t tid = threadIdx.x;
+  const uint32_t warp_id = tid >> 5;
+  const uint32_t lane = tid & 31u;
+  constexpr size_t STAGE_U4 = static_cast<size_t>(STAGE_BYTES) / sizeof(uint4);
+  constexpr int VECS = STAGE_BYTES / (NUM_WARPS * 32 * 16);
+  constexpr int LD_N = STAGE_BYTES / (NUM_WARPS * 512);
+  const size_t groups = gridDim.x / G;
+  const size_t group = blockIdx.x / G;
+  const bool lead = blockIdx.x % G == 0;
+  unsigned* flag = progress + group;
+  unsigned* group_done = done + group;
+  uint32_t a0 = 0x3c003c00u, a1 = 0x3c003c00u, a2 = 0x3c003c00u, a3 = 0x3c003c00u;
+  uint32_t b0 = 0x3c003c00u, b1 = 0x3c003c00u;
+  uint32_t live_acc = 0u;
+  float c00 = 0.f, c01 = 0.f, c02 = 0.f, c03 = 0.f, c10 = 0.f, c11 = 0.f, c12 = 0.f, c13 = 0.f;
+  float c20 = 0.f, c21 = 0.f, c22 = 0.f, c23 = 0.f, c30 = 0.f, c31 = 0.f, c32 = 0.f, c33 = 0.f;
+  long long latency = 0;
+  unsigned long long issue_ns = 0;
+  unsigned late = 0;
+  const unsigned long long g0 = read_globaltimer();
+  const long long k0 = clock64();
+  for (int step = 0; step < steps; ++step) {
+    unsigned long long when = 0;
+    if (tid == 0) {
+      if (lead) {
+        while (delta_observe(group_done) < static_cast<unsigned>(step * (G - 1))) {}
+        when = read_globaltimer() + lead_ns;
+        start[group] = when;
+        delta_publish(flag, static_cast<unsigned>(step + 1));
+      } else {
+        while (delta_observe(flag) < static_cast<unsigned>(step + 1)) {}
+        when = *reinterpret_cast<volatile unsigned long long*>(start + group) + delay_ns;
+      }
+      late += read_globaltimer() > when;
+      while (read_globaltimer() < when) {}
+    }
+    asm volatile("bar.sync 0;\n" ::: "memory");
+    const long long t0 = clock64();
+    if (tid == 0) issue_ns += read_globaltimer() - (lead ? when : when - delay_ns);
+    const size_t base = (cold_start + (static_cast<size_t>(step) * groups + group) * STAGE_U4) & cold_mask;
+    #pragma unroll
+    for (int v = 0; v < VECS; ++v) {
+      size_t off = static_cast<size_t>(v) * (NUM_WARPS * 32) + tid;
+      uint32_t saddr = static_cast<uint32_t>(__cvta_generic_to_shared(smem + off));
+      asm volatile("cp.async.cg.shared.global [%0], [%1], 16;\n" :: "r"(saddr), "l"(cold + ((base + off) & cold_mask)) : "memory");
+    }
+    asm volatile("cp.async.commit_group;\n" ::: "memory");
+    asm volatile("cp.async.wait_group 0;\n" ::: "memory");
+    asm volatile("bar.sync 0;\n" ::: "memory");
+    latency += clock64() - t0;
+    #pragma unroll
+    for (int r = 0; r < LD_N; ++r) {
+      size_t off_u4 = (static_cast<size_t>(r) * NUM_WARPS + warp_id) * 32ULL + lane;
+      uint32_t saddr = static_cast<uint32_t>(__cvta_generic_to_shared(smem + off_u4));
+      uint32_t r0, r1, r2, r3;
+      asm volatile("ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0,%1,%2,%3}, [%4];\n"
+                   : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "r"(saddr) : "memory");
+      live_acc ^= (r0 ^ r1 ^ r2 ^ r3);
+      if (r == LD_N - 1) { a0 = r0; a1 = r1; a2 = r2; a3 = r3; b0 = r0; b1 = r1; }
+    }
+    #pragma unroll
+    for (int m = 0; m < MI; ++m) { DELTA_MMA(c00, c01, c02, c03); DELTA_MMA(c10, c11, c12, c13); DELTA_MMA(c20, c21, c22, c23); DELTA_MMA(c30, c31, c32, c33); }
+    asm volatile("bar.sync 0;\n" ::: "memory");
+    if (!lead && tid == 0) atomicAdd(group_done, 1u);
+  }
+  if (tid == 0) {
+    out_latency[blockIdx.x] = static_cast<double>(latency) / steps;
+    out_issue_ns[blockIdx.x] = static_cast<double>(issue_ns) / steps;
+    out_late[blockIdx.x] = late;
+    if (blockIdx.x == 0) {
+      out_clock[0] = static_cast<unsigned long long>(clock64() - k0);
+      out_clock[1] = read_globaltimer() - g0;
+    }
+  }
+  float sum = c00 + c01 + c02 + c03 + c10 + c11 + c12 + c13 + c20 + c21 + c22 + c23 + c30 + c31 + c32 + c33 +
+              static_cast<float>(live_acc & 1u);
+  if (sum == -999999.0f) sink[blockIdx.x * blockDim.x + tid] = sum;
+}
+#undef DELTA_MMA
+
+// Flag ping-pong between two CTAs on different SMs: block 0 records the cycles of `rounds` round trips.
+__global__ void delta_pingpong_kernel(unsigned* flags, int rounds, unsigned long long* out) {
+  if (threadIdx.x != 0) return;
+  if (blockIdx.x == 0) {
+    const long long t0 = clock64();
+    for (int i = 1; i <= rounds; ++i) {
+      delta_publish(flags, static_cast<unsigned>(i));
+      while (delta_observe(flags + 1) < static_cast<unsigned>(i)) {}
+    }
+    out[0] = static_cast<unsigned long long>(clock64() - t0);
+  } else {
+    for (int i = 1; i <= rounds; ++i) {
+      while (delta_observe(flags) < static_cast<unsigned>(i)) {}
+      delta_publish(flags + 1, static_cast<unsigned>(i));
+    }
+  }
+}
+
+static int run_sync_loop_delta(int device, int samples, int warmup, bool flag_only) {
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  const int sm_count = prop.multiProcessorCount;
+  constexpr int G = 16;
+  if (sm_count % G != 0) { std::fprintf(stderr, "sync-loop-delta: %d SMs is not a multiple of %d\n", sm_count, G); return 1; }
+  const size_t cold_bytes = 256ULL * 1024ULL * 1024ULL;
+  const size_t cold_mask = cold_bytes / sizeof(uint4) - 1;
+  uint4* d_cold = nullptr;
+  float* d_sink = nullptr;
+  unsigned *d_progress = nullptr, *d_done = nullptr, *d_late = nullptr;
+  double *d_latency = nullptr, *d_issue = nullptr;
+  unsigned long long* d_start = nullptr;
+  unsigned long long* d_clock = nullptr;
+  CUDA_CHECK(cudaMalloc(&d_cold, cold_bytes));
+  CUDA_CHECK(cudaMalloc(&d_sink, static_cast<size_t>(sm_count) * 256 * sizeof(float)));
+  CUDA_CHECK(cudaMalloc(&d_progress, 64 * sizeof(unsigned)));
+  CUDA_CHECK(cudaMalloc(&d_done, 64 * sizeof(unsigned)));
+  CUDA_CHECK(cudaMalloc(&d_late, sm_count * sizeof(unsigned)));
+  CUDA_CHECK(cudaMalloc(&d_latency, sm_count * sizeof(double)));
+  CUDA_CHECK(cudaMalloc(&d_issue, sm_count * sizeof(double)));
+  CUDA_CHECK(cudaMalloc(&d_start, 64 * sizeof(unsigned long long)));
+  CUDA_CHECK(cudaMalloc(&d_clock, 2 * sizeof(unsigned long long)));
+  CUDA_CHECK(cudaMemset(d_cold, 0x3c, cold_bytes));
+  size_t cold_start = 0;
+  // The lead schedules each start this far ahead; the flag takes about 400 ns on GB10.
+  constexpr unsigned long long LEAD_NS = 1000;
+
+  // Flag latency: half a ping-pong round trip, in cycles of block 0's SM. Shared memory forces two SMs.
+  constexpr int ROUNDS = 1000;
+  CUDA_CHECK(cudaFuncSetAttribute(delta_pingpong_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, 65536));
+  std::vector<double> pingpong;
+  for (int s = 0; s < samples; ++s) {
+    CUDA_CHECK(cudaMemset(d_progress, 0, 64 * sizeof(unsigned)));
+    delta_pingpong_kernel<<<2, 32, 65536>>>(d_progress, ROUNDS, d_clock);
+    CUDA_CHECK(cudaDeviceSynchronize());
+    unsigned long long cycles = 0;
+    CUDA_CHECK(cudaMemcpy(&cycles, d_clock, sizeof(cycles), cudaMemcpyDeviceToHost));
+    pingpong.push_back(static_cast<double>(cycles) / ROUNDS / 2.0);
+  }
+  std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"group\": %d,\n  \"lead_ns\": %llu,\n  \"flag_one_way_cycles_samples\": [",
+              samples, sm_count, G, LEAD_NS);
+  for (size_t i = 0; i < pingpong.size(); ++i) std::printf(i ? ", %.1f" : "%.1f", pingpong[i]);
+  std::printf("],\n  \"sync_loop_delta\": [");
+  if (flag_only) {
+    std::printf("]\n}\n");
+    return 0;
+  }
+
+  bool first = true;
+  double ghz = 0.0;
+  const size_t warm_mask = 4ULL * 1024ULL * 1024ULL / sizeof(uint4) - 1;
+  auto run_point = [&](auto sb_c, int delta_ns, bool warm) {
+    constexpr int SB = decltype(sb_c)::value;
+    constexpr int SMEM = SB > 53248 ? SB : 53248;
+    auto kernel = delta_kernel<SB, 8, 8, G>;
+    CUDA_CHECK(cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
+    int max_blocks = 0;
+    CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, 256, SMEM));
+    if (max_blocks != 1) { std::fprintf(stderr, "delta_kernel: %d CTAs per SM\n", max_blocks); std::exit(1); }
+    std::vector<double> lat(sm_count), issue(sm_count);
+    std::vector<unsigned> late(sm_count);
+    unsigned long long clk[2] = {0, 0};
+    auto launch = [&](int steps) {
+      CUDA_CHECK(cudaMemset(d_progress, 0, 64 * sizeof(unsigned)));
+      CUDA_CHECK(cudaMemset(d_done, 0, 64 * sizeof(unsigned)));
+      kernel<<<sm_count, 256, SMEM>>>(d_cold, d_sink, warm ? warm_mask : cold_mask, warm ? 0 : cold_start, steps,
+                                      LEAD_NS, delta_ns, d_progress, d_start, d_done, d_latency, d_issue, d_late,
+                                      d_clock);
+      CUDA_CHECK(cudaDeviceSynchronize());
+      if (!warm) cold_start = (cold_start + static_cast<size_t>(steps) * (sm_count / G) * (SB / sizeof(uint4))) & cold_mask;
+      CUDA_CHECK(cudaMemcpy(lat.data(), d_latency, sm_count * sizeof(double), cudaMemcpyDeviceToHost));
+      CUDA_CHECK(cudaMemcpy(issue.data(), d_issue, sm_count * sizeof(double), cudaMemcpyDeviceToHost));
+      CUDA_CHECK(cudaMemcpy(late.data(), d_late, sm_count * sizeof(unsigned), cudaMemcpyDeviceToHost));
+      CUDA_CHECK(cudaMemcpy(clk, d_clock, sizeof(clk), cudaMemcpyDeviceToHost));
+      ghz = static_cast<double>(clk[0]) / static_cast<double>(clk[1]);
+    };
+    launch(64);
+    const double step_ns = static_cast<double>(clk[1]) / 64.0;
+    int steps = static_cast<int>(1e6 / std::max(step_ns, 1.0));
+    steps = std::min(65536, std::max(256, ((steps + 63) / 64) * 64));
+    for (int w = 0; w < warmup; ++w) launch(steps);
+    std::vector<double> lead_s, follow_s, offset_s, ghz_s;
+    unsigned late_steps = 0;
+    const int leads = sm_count / G, followers = sm_count - leads;
+    for (int s = 0; s < samples; ++s) {
+      launch(steps);
+      double lead_sum = 0.0, follow_sum = 0.0, lead_issue = 0.0, follow_issue = 0.0;
+      for (int b = 0; b < sm_count; ++b) {
+        if (b % G == 0) { lead_sum += lat[b]; lead_issue += issue[b]; }
+        else { follow_sum += lat[b]; follow_issue += issue[b]; }
+        late_steps += late[b];
+      }
+      lead_s.push_back(lead_sum / leads);
+      follow_s.push_back(follow_sum / followers);
+      offset_s.push_back(follow_issue / followers - lead_issue / leads);
+      ghz_s.push_back(ghz);
+    }
+    if (!first) std::printf(",");
+    first = false;
+    std::printf("\n    {\"region\": \"%s\", \"stage_bytes\": %d, \"delta_ns\": %d, \"num_warps\": 8, \"steps\": %d, "
+                "\"late_steps\": %u, \"follower_latency_cycles_samples\": [", warm ? "warm" : "cold", SB, delta_ns, steps, late_steps);
+    for (size_t i = 0; i < follow_s.size(); ++i) std::printf(i ? ", %.1f" : "%.1f", follow_s[i]);
+    std::printf("], \"lead_latency_cycles_samples\": [");
+    for (size_t i = 0; i < lead_s.size(); ++i) std::printf(i ? ", %.1f" : "%.1f", lead_s[i]);
+    std::printf("], \"measured_offset_ns_samples\": [");
+    for (size_t i = 0; i < offset_s.size(); ++i) std::printf(i ? ", %.1f" : "%.1f", offset_s[i]);
+    std::printf("], \"sm_ghz_samples\": [");
+    for (size_t i = 0; i < ghz_s.size(); ++i) std::printf(i ? ", %.4f" : "%.4f", ghz_s[i]);
+    std::printf("]}");
+  };
+  // Warm L2 baselines (no cold miss) first: the shared calibration point is warm, 16 KiB, delay 0.
+  run_point(std::integral_constant<int, 16384>{}, 0, true);
+  run_point(std::integral_constant<int, 32768>{}, 0, true);
+  const int deltas[] = {0, 50, 100, 150, 200, 250, 300, 400, 700, 1500};
+  for (int d : deltas) run_point(std::integral_constant<int, 16384>{}, d, false);
+  for (int d : deltas) run_point(std::integral_constant<int, 32768>{}, d, false);
+  std::printf("\n  ]\n}\n");
+  CUDA_CHECK(cudaFree(d_cold)); CUDA_CHECK(cudaFree(d_sink)); CUDA_CHECK(cudaFree(d_progress)); CUDA_CHECK(cudaFree(d_done));
+  CUDA_CHECK(cudaFree(d_late)); CUDA_CHECK(cudaFree(d_latency)); CUDA_CHECK(cudaFree(d_issue));
+  CUDA_CHECK(cudaFree(d_start)); CUDA_CHECK(cudaFree(d_clock));
+  return 0;
+}
