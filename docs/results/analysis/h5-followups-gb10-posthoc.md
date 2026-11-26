@@ -1,6 +1,6 @@
 # H5 follow-ups on GB10: DRAM-side narrow request form and register staging
 
-**Status (2026-11-27): every capture in this document is void, and its conclusions are provisional.** Checked with the capture dispersion rule adopted for all post-hoc microbenchmarks on 2026-11-27 (a capture is void if more than 5% of its sample lists have an interquartile range above 10% of the median, more than 15% have largest over smallest above 1.5, or, across processes, more than 5% of its points have per-process medians spreading more than 10%):
+**Status (2026-11-27): every capture in this document is void, and its conclusions are provisional, except the repeat of the last register staging round (`stage-narrow-k1-2`, at the end), which passes.** Checked with the capture dispersion rule adopted for all post-hoc microbenchmarks on 2026-11-27 (a capture is void if more than 5% of its sample lists have an interquartile range above 10% of the median, more than 15% have largest over smallest above 1.5, or, across processes, more than 5% of its points have per-process medians spreading more than 10%):
 
 | Capture | IQR above 10% | Largest over smallest above 1.5 | Points spreading over 10% across processes |
 |---|---:|---:|---:|
@@ -12,6 +12,7 @@
 | `gmem-narrow-validate-2` (GB10) | 11.3% | 3.5% | 13.1% |
 | `stage-narrow-k1-1` (GB10) | 7.6% | 4.7% | 4.2% |
 | `gmem-narrow-validate-1` (RTX 4070) | 6.6% | 54.4% | 0.7% |
+| `stage-narrow-k1-2` (GB10, launches over 1 ms) | 0.4% | 0.0% | 0.0% (passes) |
 
 The data stay archived and the scores below are kept as they were computed; none of the verdicts in this document stands until a capture that passes the rule repeats it. Post-hoc, on GB10 the dispersion sits in the launches shorter than about 1 ms and in the long narrow DRAM points (single samples up to 1.7 times the median), while hot-L2 launches over 1 ms are tight; one possible reason for the DRAM points, not tested, is CPU memory traffic on GB10's shared memory. The last register staging round is being repeated with every launch over 1 ms (`validation/h5_staging_k1.py`).
 
@@ -149,6 +150,20 @@ Captured on GB10 under the lock (thermal gate 51.4 / 51.7 C, 2496 / 2509 MHz; 51
 
 This capture is void under the dispersion rule (status above), so the verdict is withdrawn; K1 is frozen again with 9 GiB per sample, which puts the shortest predicted launch at 1.55 ms, and will be measured once more with the same points, calibration and pass rule. If that capture passes the rule and K1 fails, H5 register staging closes as a known limit ([design.md section 9.5](../../design.md#95-narrow-register-staged-loads-h5)).
 
+## Last register staging round, repeated with launches over 1 ms: K1 does not pass
+
+The first capture of H5 that passes the dispersion rule. K1 frozen again in [validation/h5-staging-k1-frozen.json](../../../validation/h5-staging-k1-frozen.json) (SHA-256 `201eebf42e41f745bda9d940feebf716998357dfaeadd45f5c11bcc7614f69c7`) with 9 GiB per sample, and nothing else changed: the same 96 points and four exclusions, the same two calibration points (5 independent processes each), the same pass rule and 8-MMA rule. The core's time at 768 to 819 sweeps per point is extrapolated from runs at 8 and 16 sweeps, which is exact for these repeated hot-L2 tiles (checked at 64 sweeps).
+
+Captured on GB10 under the lock, 2026-11-26 22:57 to 23:00 UTC (thermal gate 55.3 / 55.1 C, 2502 / 2502 MHz; 54 to 78 C and 2411 to 2515 MHz during capture, no throttle reason; load average 1.2 before and 1.4 after). Launches took 1.37 to 14.3 ms. Dispersion: 0.4% of lists with an interquartile range above 10%, none with largest over smallest above 1.5, no point spreading more than 10% across processes. The four excluded points ran at 3 CTAs per SM, as predicted from the Spark's `ptxas`. Raw capture `stage-narrow-k1-2.json` (SHA-256 `aa3d2c4e...`) in `h5-k1-2-captures.tar.gz` (`643f25c867a84c4ef0e1dc22dfe61a261851ee2790254e5d6217daf132401592`), in both places. Scores: [h5-staging-k1-long-gb10-posthoc.json](h5-staging-k1-long-gb10-posthoc.json).
+
+- Calibration: 3.097 to 3.130 ms and 16.44 to 16.59 ms; Q = 1.44 warp stores per ns per SM, tau = 6.99 ns per load.
+- The current model's median error on the 16 B 8-MMA points is -9.7%, so all 92 points are judged.
+- K1: MAPE 15.7% (current model 26.8%), p90 37.7%; median error 1 B +2.1%, 2 B -9.8%, 4 B +4.9%, 16 B -0.9%. Every width is within 10%, but the MAPE is above 15%: K1 does not pass.
+- Registered descriptive result, points without MMA: MAPE 18.1% (current model 25.6%); median error 1 B +2.1%, 2 B -2.0%, 4 B +11.6%, 16 B -0.3%.
+- Post-hoc: without MMA, stores alone are predicted 22% slow and loads alone 11% slow; with 8 MMAs, loads and stores together are 11% fast (2 B 14% fast).
+
+H5 register staging stops here: on a qualified capture b1 + b2 lowers the MAPE from 26.8% to 15.7% and puts every width's median within 10%, but it misses the 15% MAPE limit and does not go into the core ([design.md section 9.5](../../design.md#95-narrow-register-staged-loads-h5)).
+
 ## Open item outside H5
 
 **Hot L2 with few loads in flight is predicted too slow.** `gmem-narrow-validate`, hot L2, `.cg`: 1 B loads with 4 in flight per thread are predicted 3.2 to 3.7 times as slow as measured at 1 CTA per SM and 1.2 to 2.8 times at 3 CTAs, aligned or not; other widths at 4 in flight up to 1.3 times; at 12 and 24 in flight the MAPE is 9% to 11%. The point values are in [h5-dram-form-gb10-posthoc.json](h5-dram-form-gb10-posthoc.json) (`gmem_l2_regression`). Not investigated.
@@ -156,4 +171,4 @@ This capture is void under the dispersion rule (status above), so the verdict is
 ## Next steps
 
 - DRAM-side form: repeat on GB10 and on the RTX 4070 with launches over 1 ms and captures that pass the dispersion rule; it stays out of the core until then.
-- Register staging: K1 again with launches over 1 ms (frozen), then close or not.
+- Register staging: closed as a known limit (last section above).
