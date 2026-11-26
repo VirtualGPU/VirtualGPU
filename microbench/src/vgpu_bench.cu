@@ -623,6 +623,9 @@ int main(int argc, char** argv) {
   if (mode == "stage-narrow-validate") {
     return run_stage_narrow_validate(device, samples, warmup);
   }
+  if (mode == "sync-loop-burst") {
+    return run_sync_loop_burst(device, samples, warmup);
+  }
   std::fprintf(stderr, "Unknown mode: %s\n", mode.c_str());
   return 2;
 }
