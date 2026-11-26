@@ -5,7 +5,7 @@ A copy of validation/attention.py's kernel with one compile-time switch. ABLATE:
 tile's load mask depends on the PV accumulator, 3 = the same reduction as 2 but kept
 off the loads. Shapes are development shapes only.
 
-  python -m microbench.attention_ablation check            # CPU: compile and count
+  python -m microbench.attention_ablation check --target sm_121  # CPU: compile and count
   python -m microbench.attention_ablation run --out x.json  # GPU: warm timings
 """
 
@@ -153,15 +153,28 @@ def specialize(config, ablate):
     return (*constants[:4], False, *constants[5:], ablate), options
 
 
-def ctas_per_sm(registers, smem, warps):
-    """Resident CTAs per SM on the RTX 4070 (profile specs) for one variant."""
-    per_warp = -(-registers * 32 // 256) * 256
-    by_regs = 65536 // (per_warp * warps)
-    by_smem = 102400 // (-(-smem // 128) * 128 + 1024)
-    return min(by_regs, by_smem, 48 // warps, 24)
+PROFILES = {"sm_89": "profiles/rtx4070.json", "sm_121": "profiles/gb10.json"}
 
 
-def check(target="sm_89"):
+def ctas_per_sm(registers, smem, warps, target):
+    """Resident CTAs per SM from the target's profile specs, for one variant."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    spec = json.loads((root / PROFILES[target]).read_text())["specs"]
+    unit = spec["register_alloc_unit_regs"]
+    per_warp = -(-registers * spec["warp_size"] // unit) * unit
+    gran = spec["shared_mem_alloc_granularity_bytes"]
+    footprint = -(-smem // gran) * gran + spec["reserved_shared_mem_per_cta_bytes"]
+    return min(
+        spec["registers_per_sm"] // (per_warp * warps),
+        spec["shared_mem_per_sm_bytes"] // footprint,
+        spec["max_warps_per_sm"] // warps,
+        spec["max_blocks_per_sm"],
+    )
+
+
+def check(target):
     """Compile every variant offline and report resources and loop instruction counts."""
     from virtualgpu.frontend.compiler import compile_triton_aot, specialize_triton_call
 
@@ -206,6 +219,7 @@ def check(target="sm_89"):
                             art.ptxas.registers_per_thread,
                             art.static_smem_bytes,
                             config["num_warps"],
+                            target,
                         ),
                         "ptx_counts": counts,
                     }
@@ -264,13 +278,14 @@ def run(samples, out):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("check")
+    c = sub.add_parser("check")
+    c.add_argument("--target", default="sm_89", choices=sorted(PROFILES))
     r = sub.add_parser("run")
     r.add_argument("--samples", type=int, default=15)
     r.add_argument("--out", required=True)
     args = parser.parse_args()
     if args.command == "check":
-        check()
+        check(args.target)
     else:
         run(args.samples, args.out)
 
