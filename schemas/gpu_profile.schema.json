@@ -275,6 +275,11 @@
               "minItems": 1,
               "items": { "$ref": "#/$defs/ActiveSmBwPoint" }
             },
+            "l2_bw_by_active_sms_cp_async": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/ActiveSmBwPoint" }
+            },
             "l2_bw_by_bytes_in_flight": {
               "type": "array",
               "minItems": 1,

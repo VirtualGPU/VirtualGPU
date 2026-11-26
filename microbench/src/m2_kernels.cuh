@@ -282,6 +282,47 @@ __global__ void l2_write_cg_kernel(uint4* __restrict__ dst,
   }
 }
 
+template <int STAGES, int SUB_PER_STAGE>
+__global__ void l2_read_cp_async_kernel(const uint4* __restrict__ src,
+                                        uint4* __restrict__ sink,
+                                        size_t vec4_mask,
+                                        int steps) {
+  extern __shared__ uint4 smem[];
+  uint32_t tid = threadIdx.x;
+  size_t idx = (static_cast<size_t>(blockIdx.x) * 256ULL + tid) & vec4_mask;
+  size_t stride = static_cast<size_t>(gridDim.x) * 256ULL;
+
+  auto issue_group = [&](int slot) {
+    #pragma unroll
+    for (int sub = 0; sub < SUB_PER_STAGE; ++sub) {
+      size_t smem_off = (static_cast<size_t>(slot) * SUB_PER_STAGE + sub) * 256ULL + tid;
+      uint32_t smem_addr = static_cast<uint32_t>(__cvta_generic_to_shared(&smem[smem_off]));
+      const void* gptr = src + idx;
+      asm volatile("cp.async.cg.shared.global [%0], [%1], 16;\n"
+                   :
+                   : "r"(smem_addr), "l"(gptr)
+                   : "memory");
+      idx = (idx + stride) & vec4_mask;
+    }
+    asm volatile("cp.async.commit_group;\n" ::: "memory");
+  };
+
+  #pragma unroll
+  for (int s = 0; s < STAGES; ++s) {
+    issue_group(s);
+  }
+  for (int step = STAGES; step < steps; ++step) {
+    asm volatile("cp.async.wait_group %0;\n" : : "n"(STAGES - 1));
+    issue_group(step % STAGES);
+  }
+  asm volatile("cp.async.wait_all;\n" ::);
+  __syncthreads();
+  uint4 v = smem[tid];
+  if (v.x == 0xdeadbeefu && v.y == 0xdeadbeefu) {
+    sink[tid] = v;
+  }
+}
+
 static int run_l2(int device, int samples, int warmup) {
   cudaDeviceProp prop{};
   CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
@@ -293,6 +334,13 @@ static int run_l2(int device, int samples, int warmup) {
                                         std::min<size_t>(12ULL * 1024ULL * 1024ULL, l2_bytes / 4));
   l2_ws_bytes = (l2_ws_bytes / (1024ULL * 1024ULL)) * (1024ULL * 1024ULL);
 
+  // Power-of-two warm L2 working set for cp.async active-SM sweep (< 0.35x L2 on all SKUs).
+  const size_t cp_ws_bytes = (l2_bytes >= 24ULL * 1024ULL * 1024ULL)
+                                 ? (8ULL * 1024ULL * 1024ULL)
+                                 : ((l2_bytes >= 12ULL * 1024ULL * 1024ULL)
+                                        ? (4ULL * 1024ULL * 1024ULL)
+                                        : (1ULL * 1024ULL * 1024ULL));
+
   // Sweep sizes from ~0.1x to ~2.5x L2 to locate the effective L2 capacity cliff.
   std::vector<size_t> sweep_bytes;
   for (double frac : {0.10, 0.25, 0.50, 0.65, 0.75, 0.85, 0.95, 1.05, 1.20, 1.50, 2.00, 2.50}) {
@@ -302,7 +350,7 @@ static int run_l2(int device, int samples, int warmup) {
       sweep_bytes.push_back(sz);
     }
   }
-  size_t max_bytes = std::max(l2_ws_bytes, sweep_bytes.back());
+  size_t max_bytes = std::max(std::max(l2_ws_bytes, cp_ws_bytes), sweep_bytes.back());
 
   uint4* d_buf = nullptr;
   uint4* d_sink = nullptr;
@@ -334,11 +382,12 @@ static int run_l2(int device, int samples, int warmup) {
   // 4 MiB power-of-two hot L2 buffer for ILP-8 L2 read ceiling sweep (fits in 24-36 MiB L2).
   const size_t ilp8_ws_bytes = 4ULL * 1024ULL * 1024ULL;
   const size_t ilp8_mask = (ilp8_ws_bytes / sizeof(uint4)) - 1ULL;
+  const size_t cp_mask = (cp_ws_bytes / sizeof(uint4)) - 1ULL;
 
   std::printf("{\n  \"l2_spec_bytes\": %zu,\n  \"l2_bw_ws_bytes\": %zu,\n  \"samples\": %d,\n",
               l2_bytes, l2_ws_bytes, samples);
 
-  // 1) L2 read BW ceiling vs active SMs (16 warps/SM, 16 B loads, ILP 8 => 64 KB/SM in flight).
+  // 1a) L2 read BW vs active SMs via register loads (16 warps/SM, 16 B ld.global.cg, ILP 8).
   std::printf("  \"read_curve\": [");
   for (size_t ti = 0; ti < targets.size(); ++ti) {
     int target_sms = targets[ti];
@@ -348,6 +397,7 @@ static int run_l2(int device, int samples, int warmup) {
     for (int w = 0; w < warmup; ++w) {
       l2_read_cg_ilp8_kernel<<<target_sms, threads>>>(d_buf, d_sink, ilp8_mask, iters);
     }
+    CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 
     std::vector<double> gbps;
@@ -355,6 +405,7 @@ static int run_l2(int device, int samples, int warmup) {
     for (int s = 0; s < samples; ++s) {
       CUDA_CHECK(cudaEventRecord(ev_start));
       l2_read_cg_ilp8_kernel<<<target_sms, threads>>>(d_buf, d_sink, ilp8_mask, iters);
+      CUDA_CHECK(cudaGetLastError());
       CUDA_CHECK(cudaEventRecord(ev_stop));
       CUDA_CHECK(cudaEventSynchronize(ev_stop));
       float ms = 0.0f;
@@ -369,6 +420,60 @@ static int run_l2(int device, int samples, int warmup) {
       std::printf("%.3f", gbps[k]);
     }
     std::printf("]}");
+  }
+  std::printf("\n  ],\n");
+
+  // 1b) L2 read BW vs active SMs via cp.async.cg (bypasses SM register scoreboard limits).
+  // Partial-SM points launch 1 CTA/SM (32 KiB in flight/SM); full-GPU launches 3 CTAs/SM
+  // (16 KiB/CTA = 48 KiB/SM across 24 warps/SM, fitting within <= 64 KiB SMEM on all arches).
+  std::printf("  \"read_curve_cp_async\": [");
+  if (prop.major >= 8) {
+    for (size_t ti = 0; ti < targets.size(); ++ti) {
+      int target_sms = targets[ti];
+      bool full_gpu = (target_sms == sm_count);
+      int grid = full_gpu ? (sm_count * 3) : target_sms;
+      int sub = full_gpu ? 1 : 2;
+      size_t dyn_smem = 4ULL * static_cast<size_t>(sub) * 4096ULL;
+      size_t step_bytes = static_cast<size_t>(grid) * static_cast<size_t>(sub) * 4096ULL;
+      size_t target_total = std::max<size_t>(32ULL * 1024ULL * 1024ULL, step_bytes * 2048ULL);
+      int steps = std::max(64, static_cast<int>(target_total / step_bytes));
+      double total_bytes = static_cast<double>(step_bytes) * static_cast<double>(steps);
+
+      auto launch_cp = [&]() {
+        if (full_gpu) {
+          l2_read_cp_async_kernel<4, 1><<<grid, 256, dyn_smem>>>(d_buf, d_sink, cp_mask, steps);
+        } else {
+          l2_read_cp_async_kernel<4, 2><<<grid, 256, dyn_smem>>>(d_buf, d_sink, cp_mask, steps);
+        }
+      };
+
+      for (int w = 0; w < warmup; ++w) {
+        launch_cp();
+      }
+      CUDA_CHECK(cudaGetLastError());
+      CUDA_CHECK(cudaDeviceSynchronize());
+
+      std::vector<double> gbps;
+      gbps.reserve(samples);
+      for (int s = 0; s < samples; ++s) {
+        CUDA_CHECK(cudaEventRecord(ev_start));
+        launch_cp();
+        CUDA_CHECK(cudaGetLastError());
+        CUDA_CHECK(cudaEventRecord(ev_stop));
+        CUDA_CHECK(cudaEventSynchronize(ev_stop));
+        float ms = 0.0f;
+        CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
+        gbps.push_back((total_bytes / 1e9) / (static_cast<double>(ms) / 1e3));
+      }
+
+      if (ti > 0) std::printf(",");
+      std::printf("\n    {\"target_sms\": %d, \"gbps_samples\": [", target_sms);
+      for (size_t k = 0; k < gbps.size(); ++k) {
+        if (k > 0) std::printf(", ");
+        std::printf("%.3f", gbps[k]);
+      }
+      std::printf("]}");
+    }
   }
   std::printf("\n  ],\n");
 

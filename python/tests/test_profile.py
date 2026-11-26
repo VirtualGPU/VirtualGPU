@@ -218,6 +218,26 @@ def test_rejects_active_sms_exceeding_sm_count() -> None:
         validate_profile(profile)
 
 
+def test_validates_optional_cp_async_l2_active_sms_curve() -> None:
+    profile = copy.deepcopy(load_profile(EXAMPLE_PROFILE))
+    mem = profile["measured"]["memory"]
+    mem["l2_bw_by_active_sms_cp_async"] = copy.deepcopy(mem["l2_bw_by_active_sms"])
+    validate_profile(profile)
+
+    bad_order = copy.deepcopy(profile)
+    cp_curve = bad_order["measured"]["memory"]["l2_bw_by_active_sms_cp_async"]
+    cp_curve[1]["active_sms"] = cp_curve[0]["active_sms"]
+    with pytest.raises(ProfileValidationError, match="l2_bw_by_active_sms_cp_async"):
+        validate_profile(bad_order)
+
+    bad_limit = copy.deepcopy(profile)
+    bad_limit["measured"]["memory"]["l2_bw_by_active_sms_cp_async"][-1]["active_sms"] = (
+        bad_limit["specs"]["sm_count"] + 1
+    )
+    with pytest.raises(ProfileValidationError, match="exceeds hardware limit"):
+        validate_profile(bad_limit)
+
+
 def test_rejects_dispatch_policy_not_in_candidates() -> None:
     profile = copy.deepcopy(load_profile(EXAMPLE_PROFILE))
     profile["measured"]["cta_dispatch"]["observed_policy"] = "grouped"

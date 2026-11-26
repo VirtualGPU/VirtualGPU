@@ -215,10 +215,15 @@ static int run_dram_bw(int device, int samples, int warmup, size_t buffer_mb) {
   CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
 
   const int sm_count = prop.multiProcessorCount;
-  const size_t bytes = buffer_mb * 1024ULL * 1024ULL;
+  const size_t raw_l2_bytes = (prop.l2CacheSize > 0)
+                                  ? static_cast<size_t>(prop.l2CacheSize)
+                                  : (32ULL * 1024ULL * 1024ULL);
+  // Scale streaming buffer to >= 16x physical L2 so large-L2 GPUs (e.g. 96-128 MiB L2)
+  // amortize trailing L2 write-allocate residency below 7%.
+  const size_t bytes = std::max<size_t>(buffer_mb * 1024ULL * 1024ULL, raw_l2_bytes * 16ULL);
   const size_t n_vec4 = bytes / sizeof(float4);
 
-  const size_t l2_bytes = std::max<size_t>(prop.l2CacheSize, 32ULL * 1024ULL * 1024ULL);
+  const size_t l2_bytes = std::max<size_t>(raw_l2_bytes, 32ULL * 1024ULL * 1024ULL);
   const size_t flush_bytes = std::max<size_t>(l2_bytes * 2ULL, 96ULL * 1024ULL * 1024ULL);
   const size_t flush_vec4 = flush_bytes / sizeof(uint4);
 
@@ -272,6 +277,7 @@ static int run_dram_bw(int device, int samples, int warmup, size_t buffer_mb) {
           dram_read_kernel<<<grid, threads>>>(d_buf, d_sink, n_vec4, d_sm_seen);
         }
       }
+      CUDA_CHECK(cudaGetLastError());
       CUDA_CHECK(cudaDeviceSynchronize());
 
       std::vector<double> gbps_samples;
@@ -287,6 +293,7 @@ static int run_dram_bw(int device, int samples, int warmup, size_t buffer_mb) {
         } else {
           dram_read_kernel<<<grid, threads>>>(d_buf, d_sink, n_vec4, d_sm_seen);
         }
+        CUDA_CHECK(cudaGetLastError());
         CUDA_CHECK(cudaEventRecord(ev_stop));
         CUDA_CHECK(cudaEventSynchronize(ev_stop));
         float ms = 0.0f;

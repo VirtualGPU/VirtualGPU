@@ -127,6 +127,14 @@ def _semantic_checks(profile: dict[str, Any]) -> list[str]:
         "measured.memory.l2_bw_by_active_sms",
         errors,
     )
+    if "l2_bw_by_active_sms_cp_async" in mem:
+        _check_monotonic_curve(
+            mem["l2_bw_by_active_sms_cp_async"],
+            "active_sms",
+            sm_count,
+            "measured.memory.l2_bw_by_active_sms_cp_async",
+            errors,
+        )
 
     for mlp_key, peak_key in (
         ("dram_bw_by_bytes_in_flight", "dram_bw_read_gbps"),

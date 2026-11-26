@@ -104,6 +104,8 @@ def run_bench_with_clock_polling(
         stdout = out_f.read()
         stderr = err_f.read()
         if proc.returncode != 0:
+            if stderr.strip():
+                print(stderr.strip(), file=sys.stderr)
             raise subprocess.CalledProcessError(proc.returncode, cmd, output=stdout, stderr=stderr)
     if not samples:
         snap = sample_nvidia_smi(device)
@@ -253,6 +255,25 @@ def arch_carveout_options(major: int, minor: int, smem_per_sm: int) -> list[int]
     return sorted({0, smem_per_sm // 4, smem_per_sm // 2, smem_per_sm})
 
 
+def arch_unified_l1_bytes(major: int, minor: int, smem_per_sm: int) -> int:
+    """Physical unified L1/Tex + shared memory bytes per SM, including reserved L1."""
+    by_sm = {
+        (7, 5): 98304,
+        (8, 0): 196608,
+        (8, 6): 131072,
+        (8, 7): 196608,
+        (8, 9): 131072,
+        (9, 0): 262144,
+    }
+    if (major, minor) in by_sm:
+        return by_sm[(major, minor)]
+    if major == 10:
+        return 262144
+    if major == 12:
+        return 131072
+    return smem_per_sm
+
+
 def estimate_l2_knee(sweep: list[dict[str, Any]], l2_spec_bytes: int) -> tuple[float, float]:
     """Locate the effective L2 capacity where bandwidth first drops below 85% of the L2 plateau."""
     if len(sweep) < 3:
@@ -370,7 +391,7 @@ def build_profile(
         throttle_events=throttle_events,
     )
 
-    # Build measured L2 read curve, write BW, and effective capacity knee.
+    # Build measured L2 read curves (ld.global.cg and cp.async.cg), write BW, and capacity knee.
     l2_curve_points: list[dict[str, Any]] = []
     seen_l2_sms: set[int] = set()
     for pt in l2_raw["read_curve"]:
@@ -389,7 +410,32 @@ def build_profile(
         )
         l2_curve_points.append({"active_sms": active, "bw_gbps": mv})
     l2_curve_points.sort(key=lambda x: x["active_sms"])
+
+    l2_cp_async_curve_points: list[dict[str, Any]] = []
+    seen_l2_cp_sms: set[int] = set()
+    for pt in l2_raw.get("read_curve_cp_async", []):
+        active = int(pt["target_sms"])
+        if active in seen_l2_cp_sms:
+            continue
+        seen_l2_cp_sms.add(active)
+        mv = make_measured(
+            pt["gbps_samples"],
+            unit="GB/s",
+            method="cuda_l2_cp_async_cg_read_warm",
+            perturb_group="l2_bw",
+            clock_range=sm_range,
+            locked=False,
+            throttle_events=throttle_events,
+        )
+        l2_cp_async_curve_points.append({"active_sms": active, "bw_gbps": mv})
+    l2_cp_async_curve_points.sort(key=lambda x: x["active_sms"])
+
     full_l2_read_mv = l2_curve_points[-1]["bw_gbps"]
+    if (
+        l2_cp_async_curve_points
+        and l2_cp_async_curve_points[-1]["bw_gbps"]["value"] > full_l2_read_mv["value"]
+    ):
+        full_l2_read_mv = l2_cp_async_curve_points[-1]["bw_gbps"]
     full_l2_write_mv = make_measured(
         l2_raw["write_full_gbps_samples"],
         unit="GB/s",
@@ -1327,11 +1373,47 @@ def build_profile(
         else (query["clock_khz"] / 1e6 if query["clock_khz"] > 0 else 2.4)
     )
 
-    l1_unified = 131072 if (major == 8 and minor == 9) or major == 12 else smem_per_sm
+    l1_unified = arch_unified_l1_bytes(major, minor, smem_per_sm)
     tma_supported = major >= 9
 
     now_utc = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     run_id = f"cal-{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{arch}"
+
+    memory_measured: dict[str, Any] = {
+        "dram_bw_read_gbps": full_read_mv,
+        "dram_bw_write_gbps": full_write_mv,
+        "dram_bw_by_active_sms": read_curve_points,
+        "dram_bw_by_bytes_in_flight": dram_mlp_curve,
+        "dram_bw_by_bytes_in_flight_strided": dram_strided_mlp,
+        "dram_closed_loop": dram_closed_loop,
+        "dram_closed_loop_mma": dram_closed_loop_mma,
+        "l2_bw_read_gbps": full_l2_read_mv,
+        "l2_bw_write_gbps": full_l2_write_mv,
+        "l2_bw_by_active_sms": l2_curve_points,
+    }
+    if l2_cp_async_curve_points:
+        memory_measured["l2_bw_by_active_sms_cp_async"] = l2_cp_async_curve_points
+    memory_measured.update(
+        {
+            "l2_bw_by_bytes_in_flight": l2_mlp_curve,
+            "l2_closed_loop": l2_closed_loop,
+            "l2_merge_by_sharing": l2_merge_by_sharing,
+            "l2_effective_capacity_bytes": l2_eff_mv,
+            "smem_bw_per_sm_gbps": smem_bw_mv,
+            "dram_latency_ns": dram_lat_mv,
+            "dram_latency_loaded_ns": dram_lat_loaded_mv,
+            "dram_latency_by_bw": dram_lat_curve,
+            "l2_latency_ns": l2_lat_mv,
+            "l2_latency_loaded_ns": l2_lat_loaded_mv,
+            "l2_latency_by_bw": l2_lat_curve,
+            "l2_rescan_hit_rate_by_working_set": l2_rescan_curve,
+            "smem_latency_ns": smem_lat_mv,
+            "gmem_load_issue_per_sm": gmem_load_issue_per_sm,
+            "gmem_load_issue_controlled": gmem_load_issue_controlled,
+            "spill_reload_latency_by_count": reload_latency_by_count,
+            "l1_to_l2_spill_threshold_by_carveout": l1_to_l2_spill_threshold_by_carveout,
+        }
+    )
 
     profile: dict[str, Any] = {
         "schema_version": "0.1",
@@ -1424,35 +1506,7 @@ def build_profile(
             ],
         },
         "measured": {
-            "memory": {
-                "dram_bw_read_gbps": full_read_mv,
-                "dram_bw_write_gbps": full_write_mv,
-                "dram_bw_by_active_sms": read_curve_points,
-                "dram_bw_by_bytes_in_flight": dram_mlp_curve,
-                "dram_bw_by_bytes_in_flight_strided": dram_strided_mlp,
-                "dram_closed_loop": dram_closed_loop,
-                "dram_closed_loop_mma": dram_closed_loop_mma,
-                "l2_bw_read_gbps": full_l2_read_mv,
-                "l2_bw_write_gbps": full_l2_write_mv,
-                "l2_bw_by_active_sms": l2_curve_points,
-                "l2_bw_by_bytes_in_flight": l2_mlp_curve,
-                "l2_closed_loop": l2_closed_loop,
-                "l2_merge_by_sharing": l2_merge_by_sharing,
-                "l2_effective_capacity_bytes": l2_eff_mv,
-                "smem_bw_per_sm_gbps": smem_bw_mv,
-                "dram_latency_ns": dram_lat_mv,
-                "dram_latency_loaded_ns": dram_lat_loaded_mv,
-                "dram_latency_by_bw": dram_lat_curve,
-                "l2_latency_ns": l2_lat_mv,
-                "l2_latency_loaded_ns": l2_lat_loaded_mv,
-                "l2_latency_by_bw": l2_lat_curve,
-                "l2_rescan_hit_rate_by_working_set": l2_rescan_curve,
-                "smem_latency_ns": smem_lat_mv,
-                "gmem_load_issue_per_sm": gmem_load_issue_per_sm,
-                "gmem_load_issue_controlled": gmem_load_issue_controlled,
-                "spill_reload_latency_by_count": reload_latency_by_count,
-                "l1_to_l2_spill_threshold_by_carveout": l1_to_l2_spill_threshold_by_carveout,
-            },
+            "memory": memory_measured,
             "compute": {
                 "mma_tflops_per_sm_by_warps": mma_curves,
                 "non_mma_issue_rate_per_sm_gips": make_estimated(

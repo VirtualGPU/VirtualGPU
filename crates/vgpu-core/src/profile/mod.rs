@@ -142,6 +142,8 @@ pub struct Memory {
     pub gmem_load_issue_controlled: Vec<GmemIssuePoint>,
     pub dram_bw_by_active_sms: Vec<BwPoint>,
     pub l2_bw_by_active_sms: Vec<BwPoint>,
+    #[serde(default)]
+    pub l2_bw_by_active_sms_cp_async: Vec<BwPoint>,
     pub l2_effective_capacity_bytes: MeasuredValue,
     #[serde(default)]
     pub l2_rescan_hit_rate_by_working_set: Vec<L2RescanPoint>,

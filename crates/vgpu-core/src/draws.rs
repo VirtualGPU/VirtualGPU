@@ -241,4 +241,32 @@ mod tests {
             assert_eq!(d.profile.specs.l2_size_bytes, 37748736);
         }
     }
+
+    #[test]
+    fn cp_async_l2_curve_shares_l2_bw_group_without_shifting_draws() {
+        let base_draws = draws(PROFILE, 8, 17).unwrap();
+        assert!(base_draws[0]
+            .profile
+            .measured
+            .memory
+            .l2_bw_by_active_sms_cp_async
+            .is_empty());
+
+        let mut v: Value = serde_json::from_str(PROFILE).unwrap();
+        let cp_curve = v["measured"]["memory"]["l2_bw_by_active_sms"].clone();
+        v["measured"]["memory"]["l2_bw_by_active_sms_cp_async"] = cp_curve;
+        let with_cp = draws(&v.to_string(), 8, 17).unwrap();
+
+        for (a, b) in base_draws.iter().zip(&with_cp) {
+            assert_eq!(dram_curve(&a.profile), dram_curve(&b.profile));
+            assert_eq!(a.assumed_spill_scale, b.assumed_spill_scale);
+            let l2_ld = &b.profile.measured.memory.l2_bw_by_active_sms;
+            let l2_cp = &b.profile.measured.memory.l2_bw_by_active_sms_cp_async;
+            assert_eq!(l2_ld.len(), l2_cp.len());
+            for (p, q) in l2_ld.iter().zip(l2_cp) {
+                assert_eq!(p.active_sms, q.active_sms);
+                assert!((p.bw_gbps.value - q.bw_gbps.value).abs() < 1e-12);
+            }
+        }
+    }
 }

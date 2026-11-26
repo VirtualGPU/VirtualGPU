@@ -126,6 +126,9 @@ Top-level structure (**note:** all GB10 numbers below, such as `sm_count`, `l2_s
       "l2_bw_by_active_sms": [
         { "active_sms": 1, "bw_gbps": { "...": "MeasuredValue" } }
       ],
+      "l2_bw_by_active_sms_cp_async": [
+        { "active_sms": 1, "bw_gbps": { "...": "MeasuredValue" } }
+      ],
       "l2_effective_capacity_bytes": { "...": "MeasuredValue" },
       "smem_bw_per_sm_gbps": { "...": "MeasuredValue" },
       "dram_latency_ns": { "...": "MeasuredValue" },
@@ -196,7 +199,7 @@ Fields sharing a `perturb_group` receive the same multiplicative draw per pertur
 | `perturb_group` | Fields Included | RTX 4070 (`sm_89`) | DGX Spark GB10 (`sm_121`) |
 |---|---|---|---|
 | `"dram_bw"` | `dram_bw_read_gbps`, `dram_bw_write_gbps`, `dram_bw_by_active_sms` | Shared GDDR6X memory controllers | Shared unified LPDDR5x bus |
-| `"l2_bw"` | `l2_bw_read_gbps`, `l2_bw_write_gbps`, `l2_bw_by_active_sms` | Shared L2 fabric | Shared L2 fabric |
+| `"l2_bw"` | `l2_bw_read_gbps`, `l2_bw_write_gbps`, `l2_bw_by_active_sms`, `l2_bw_by_active_sms_cp_async` | Shared L2 fabric | Shared L2 fabric |
 | `"mma_dense"` | `mma_tflops_per_sm_by_warps` for dense `f16`/`bf16`/`tf32`/`f8` `mma.sync` | Same SM tensor pipe | Same SM tensor pipe |
 | `"mma_block_scaled"` | `mma_tflops_per_sm_by_warps` for block-scaled `fp4`/`fp8` `mma.sync` | N/A | Separate group from dense MMA |
 | `"async_cp"` | `cp_async_bw_per_sm_gbps` | Independent async copy pipe | Independent async copy pipe |
@@ -229,7 +232,7 @@ Fields sharing a `perturb_group` receive the same multiplicative draw per pertur
 
 ### D4. Compact scaling curves for DRAM/L2 concurrency, MMA warps, and L2 working set
 - **Alternatives:** Single peak DRAM/L2/MMA scalars and raw spec L2 size.
-- **Decision:** Measure `dram_bw_by_active_sms` and `l2_bw_by_active_sms` at 4 to 6 SM counts (1, 2, 4, 25%, 50%, 100% SMs), sweep working-set size across `0.25x` to `4x` spec L2 to locate `l2_effective_capacity_bytes`, and measure `mma_tflops_per_sm_by_warps` across `1, 2, 4, 8+` issuing warps per SM. Tail waves with few active SMs do not achieve peak bandwidth, `num_warps` enters the model through the per-SM MMA curve, and GB10's unified LPDDR5x + Ada's large L2 make effective L2 capacity decisive for ranking.
+- **Decision:** Measure `dram_bw_by_active_sms` and `l2_bw_by_active_sms` at 4 to 6 SM counts (1, 2, 4, 25%, 50%, 100% SMs), emit optional `l2_bw_by_active_sms_cp_async` on `sm_80+` GPUs so `cp.async.cg` L2 scaling is recorded separately when register scoreboard limits cap `ld.global.cg`, sweep working-set size across `0.25x` to `4x` spec L2 to locate `l2_effective_capacity_bytes`, and measure `mma_tflops_per_sm_by_warps` across `1, 2, 4, 8+` issuing warps per SM. Tail waves with few active SMs do not achieve peak bandwidth, `num_warps` enters the model through the per-SM MMA curve, and GB10's unified LPDDR5x + Ada's large L2 make effective L2 capacity decisive for ranking.
 
 ### D5. Dedicated register-spill microbenchmark
 - **Alternatives:** Model register pressure purely via occupancy reduction.
