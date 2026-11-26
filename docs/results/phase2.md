@@ -19,9 +19,9 @@ devices and workloads.
 - The prediction archive was published before GB10 GEMM timing. Before
   scoring, all 57 sealed report digests and the frozen prediction archive
   were verified. All configurations passed AOT/JIT matching. The primary
-  cohort alone determines the decision under [design section 8](design.md#8-validation).
-  [Preregistration](../validation/phase2-preregistration.md),
-  [formal report](../validation/phase2-gb10-report.md).
+  cohort alone determines the decision under [design section 8](../design.md#8-validation).
+  [Preregistration](../../validation/phase2-preregistration.md),
+  [formal report](../../validation/phase2-gb10-report.md).
 
 ### Thermal stability amendments
 
@@ -38,15 +38,15 @@ devices and workloads.
    a steady level. Its first pair of adjacent 30-second windows within
    0.5 C of one another ended at second 94. The trace contained temperature
    only, so it cannot establish clock stability or the absence of clock
-   events. [Timeout audit](../validation/phase2-thermal-audit.json),
-   [stop record](../validation/phase2-thermal-stop.md),
-   [temperature trace](../validation/phase2-thermal-prefill-1024.json).
+   events. [Timeout audit](../../validation/phase2-thermal-audit.json),
+   [stop record](../../validation/phase2-thermal-stop.md),
+   [temperature trace](../../validation/phase2-thermal-prefill-1024.json).
 3. Commit `fd5c947` kept the minimum warm-up and 20-minute timeout. It
    required the means of adjacent 30-second temperature windows to differ
    by at most 0.5 C, their SM clock medians to differ by at most 1%, and
    both windows to be clear of thermal or power slowdown. The remaining
    47 case-sessions used this gate. The first ten retained their original
-   eligibility. [Trend-gate audit](../validation/phase2-thermal-trend-audit.json).
+   eligibility. [Trend-gate audit](../../validation/phase2-thermal-trend-audit.json).
 
 Both amendments were published before resumed measurements. Their timed
 labels remained sealed throughout the amendments. The changes governed
@@ -70,7 +70,7 @@ secondary and TMA results are descriptive and have no effect on this decision.
 The three TMA configurations passed AOT/JIT checks in all sessions. For
 requested stages 2, 3, and 4, the hardware medians were 20.29, 20.35, and
 22.26 us warm and 24.42, 22.34, and 22.34 us clean-cold.
-[Per-case scores and TMA predictions](../validation/phase2-gb10-report.md).
+[Per-case scores and TMA predictions](../../validation/phase2-gb10-report.md).
 
 ## Do pairwise verdicts agree with the hardware?
 

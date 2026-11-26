@@ -89,9 +89,7 @@ _RE_TTGIR_MMA_LAYOUT = re.compile(r"#ttg\.nvidia_mma<[^>]*instrShape\s*=\s*\[(\d
 _RE_TT_DOT = re.compile(
     r"tt\.dot\s+[^:]+:\s*tensor<(\d+)x(\d+)x([a-zA-Z0-9_]+),\s*(?:<[^>]*>|[^>])+>\s*\*\s*tensor<(\d+)x(\d+)x([a-zA-Z0-9_]+),\s*(?:<[^>]*>|[^>])+>\s*->\s*tensor<(\d+)x(\d+)x([a-zA-Z0-9_]+)"
 )
-_RE_LOCAL_LOAD = re.compile(
-    r"ttg\.local_load\b[^:]*:\s*!ttg\.memdesc<(\d+)x(\d+)x([a-zA-Z0-9_]+)"
-)
+_RE_LOCAL_LOAD = re.compile(r"ttg\.local_load\b[^:]*:\s*!ttg\.memdesc<(\d+)x(\d+)x([a-zA-Z0-9_]+)")
 _RE_PROLOGUE_LOCAL_ALLOC_VAL = re.compile(
     r"ttg\.local_alloc\s+%[A-Za-z0-9_]+\s*:\s*\([^)]+\)\s*->\s*!ttg\.memdesc<(\d+)x(\d+)x([a-zA-Z0-9_]+)"
 )
@@ -210,7 +208,8 @@ def _extract_ptx_loop_body(ptx: str) -> str:
                 cur_has_async = "cp.async." in cur_text
                 best_has_async = "cp.async." in best_text
                 if (cur_has_async and not best_has_async) or (
-                    cur_has_async == best_has_async and (idx - start) > (best_range[1] - best_range[0])
+                    cur_has_async == best_has_async
+                    and (idx - start) > (best_range[1] - best_range[0])
                 ):
                     best_range = span
     if best_range is None:
@@ -316,7 +315,12 @@ def _derive_tma_prefetch_distance(
         prologue_tma = prologue.count("ttng.async_tma_copy_global_to_local")
         loop_tma = ttgir_loop_body.count("ttng.async_tma_copy_global_to_local")
         wait_pos = ttgir_loop_body.find("ttng.wait_barrier")
-        if wait_pos != -1 and loop_tma > 0 and prologue_tma >= loop_tma and (prologue_tma % loop_tma) == 0:
+        if (
+            wait_pos != -1
+            and loop_tma > 0
+            and prologue_tma >= loop_tma
+            and (prologue_tma % loop_tma) == 0
+        ):
             after_wait_ir = ttgir_loop_body[wait_pos:]
             m_dot = _RE_TTGIR_ANY_DOT.search(after_wait_ir)
             first_tma_pos = after_wait_ir.find("ttng.async_tma_copy_global_to_local")
@@ -527,7 +531,9 @@ def _extract_all_dots(
                         return dots, override_diag
             if len(dots) == 1:
                 if total_ptx != analytical_total:
-                    override_diag = f"mma_count_ptx_override:ptx={total_ptx},tile={analytical_total}"
+                    override_diag = (
+                        f"mma_count_ptx_override:ptx={total_ptx},tile={analytical_total}"
+                    )
                 dots[0] = MmaDotInfo(
                     op_class=dots[0].op_class,
                     tile_mnk=dots[0].tile_mnk,
@@ -609,11 +615,15 @@ def parse_ttgir_summary(
         buf_depth = max(buf_depths)
         num_stages = buf_depth
         if async_copy == "async_element":
-            prefetch_distance, pf_diags, pf_unsup = _derive_cp_async_prefetch_distance(ptx, loop_body)
+            prefetch_distance, pf_diags, pf_unsup = _derive_cp_async_prefetch_distance(
+                ptx, loop_body
+            )
             diagnostics.extend(pf_diags)
             unsupported.extend(pf_unsup)
         else:
-            prefetch_distance, pf_diags, pf_unsup = _derive_tma_prefetch_distance(ptx, ttgir, loop_body)
+            prefetch_distance, pf_diags, pf_unsup = _derive_tma_prefetch_distance(
+                ptx, ttgir, loop_body
+            )
             diagnostics.extend(pf_diags)
             unsupported.extend(pf_unsup)
     else:
@@ -634,7 +644,9 @@ def parse_ttgir_summary(
         transfer_width_bytes = max(1, min(16, max(contigs) * element_bytes))
     else:
         transfer_width_bytes = 16
-    store_transfer_width_bytes = ptx_store_width if ptx_store_width is not None else transfer_width_bytes
+    store_transfer_width_bytes = (
+        ptx_store_width if ptx_store_width is not None else transfer_width_bytes
+    )
 
     smem_load_bytes = 0
     for m in _RE_LOCAL_LOAD.finditer(loop_body):
@@ -659,12 +671,14 @@ def parse_ttgir_summary(
         loop_barriers = 1
 
     mma = _extract_mma(ttgir, ptx)
-    mma_dots, mma_override_diag = _extract_all_dots(loop_body, ttgir, ptx, ptx_loop=ptx_loop, num_warps=num_warps)
+    mma_dots, mma_override_diag = _extract_all_dots(
+        loop_body, ttgir, ptx, ptx_loop=ptx_loop, num_warps=num_warps
+    )
     if mma_override_diag is not None:
         diagnostics.append(mma_override_diag)
     loop_alu_per_warp, loop_sfu_per_warp, loop_shfl_per_warp = _count_ptx_loop_scalar_ops(ptx_loop)
-    loop_ptx_barriers, loop_ptx_st_shared_bytes, loop_ptx_ld_shared_bytes = _extract_ptx_loop_sync_and_smem(
-        ptx_loop, num_warps, warp_size
+    loop_ptx_barriers, loop_ptx_st_shared_bytes, loop_ptx_ld_shared_bytes = (
+        _extract_ptx_loop_sync_and_smem(ptx_loop, num_warps, warp_size)
     )
 
     return TtgirSummary(

@@ -1,4 +1,4 @@
-//! Profile perturbation draws (`docs/proposals/model-core.md`, section 4).
+//! Profile perturbation draws (`docs/components/model-core.md`, section 4).
 //!
 //! Draw 0 is the unperturbed profile. Draws 1 to N are a Latin hypercube over
 //! every perturbation dimension:

@@ -1,8 +1,6 @@
-# Proposal: Triton Frontend (`frontend.md`)
+# Triton frontend
 
-Owner: Agent 2  
-Status: Draft for architecture alignment (no code written)  
-Interface authority: Output conforms to Agent 3's Kernel IR (`docs/proposals/kernel-ir-and-l2.md`).
+How a Triton kernel becomes a `KernelIR` on a CPU, with no GPU. Code: `python/virtualgpu/frontend/`. The mechanisms the core runs today are listed in [design.md section 6.4](../design.md#64-mechanisms-in-the-core). If this file and the code disagree, the code is right and this file gets fixed.
 
 ## 1. Scope
 
@@ -15,7 +13,7 @@ Responsibilities:
 4. **Structural detection** of persistent kernels and warp specialization.
 5. **Backend resource and spill parsing** from `ptxas --verbose` (registers, shared memory, stack frame, spill stores/loads).
 
-Out of scope: L2 reuse modeling (Agent 3), event-driven performance simulation (Agent 4), functional tensor execution, non-Triton kernels (cuBLAS/CUTLASS/CUDA), and reverse engineering of vendor binaries or SASS.
+Out of scope: L2 reuse modeling (the L2 model), event-driven performance simulation (the model core), functional tensor execution, non-Triton kernels (cuBLAS/CUTLASS/CUDA), and reverse engineering of vendor binaries or SASS.
 
 ## 2. Inputs and Outputs
 
@@ -24,8 +22,8 @@ Out of scope: L2 reuse modeling (Agent 3), event-driven performance simulation (
 - **Concrete invocation**: Tensor shapes, strides, dtypes, `constexpr`/autotune config (`BLOCK_M/N/K`, `GROUP_SIZE_M`, `num_warps`, `num_stages`, `maxnreg`), and grid dimensions (or grid lambda).
 - **Target spec** (subset of GPU profile): `backend` (`cuda` | `hip`), `arch` (e.g., `sm_89`, `sm_121`, `sm_90`), `warp_size`, and required toolchain version.
 
-### Outputs (aligned to Agent 3's `KernelIR` v0.1)
-Output conforms directly to `KernelIR` v0.1 in `docs/proposals/kernel-ir-and-l2.md`:
+### Outputs (aligned to the `KernelIR` v0.1)
+Output conforms directly to `KernelIR` v0.1 in `kernel-ir.md`:
 
 | `KernelIR` Section | Frontend Mapping |
 |---|---|
@@ -73,7 +71,7 @@ Output conforms directly to `KernelIR` v0.1 in `docs/proposals/kernel-ir-and-l2.
 ### D5. Register Spill Extraction and Attribution
 - **Decision**: Parse `ptxas --verbose` for `registers`, `smem`, `stack frame`, `spill stores` (bytes), and `spill loads` (bytes). When spills are non-zero, scan the emitted PTX (public ISA) for `ld.local`/`st.local` placement relative to the inner loop:
   - If visible in PTX, tag `spill_scope` as `inner_loop_confirmed` or `prologue_epilogue`.
-  - If `ptxas` reports spills not present in PTX (introduced during `ptxas` register allocation), conservatively tag `inner_loop_assumed` so Agent 4 models the worst-case per-iteration penalty with widened uncertainty.
+  - If `ptxas` reports spills not present in PTX (introduced during `ptxas` register allocation), conservatively tag `inner_loop_assumed` so the model core models the worst-case per-iteration penalty with widened uncertainty.
 - **Alternatives**:
   1. *Report total spill bytes only*: Rejected. A small prologue spill has negligible cost, whereas the same bytes spilled inside a K-loop scale with `K / BLOCK_K` and can flip config rankings.
 - **Trade-off**: Without SASS inspection we cannot know the exact instruction placement of `ptxas`-only spills; explicit `inner_loop_assumed` tagging avoids false precision.
@@ -84,26 +82,67 @@ Output conforms directly to `KernelIR` v0.1 in `docs/proposals/kernel-ir-and-l2.
   - **DGX Spark GB10 (`sm_121`, client/edge Blackwell)**: TMA (`cp.async.bulk.tensor` / `ttng.async_tma_copy_global_to_local`) + warp-level `mma.sync` (including Blackwell block-scaled formats where exposed by the toolchain). Per NVIDIA public architecture/PTX documentation, `sm_121` does **not** expose datacenter `sm_100` `tcgen05`/TMEM/DSMEM pipelines or Hopper `wgmma`; exact supported MMA shapes and TMA ops must follow official CUDA 12.9+/13.0+ docs and be verified on GB10.
 - Keep `sm_90` (`wgmma`) and AMD `gfx942` op mappings as extensible adapter tables, marked unvalidated until hardware is available.
 
-## 4. Response to Aggregated Risks
+## Fused attention
 
-| Risk | Frontend Mitigation |
-|---|---|
-| **R2 (Swizzle is plain `program_id` arithmetic)** | D3 scalar evaluator executes the exact `arith` slice per `pid` rather than pattern-matching `GROUP_SIZE_M`, recovering exact tile traversal order and byte offsets for Agent 3's L2 model. |
-| **R3 (Register spill penalty)** | D1 + D5 parse exact `spill stores`, `spill loads`, and `stack frame` bytes from `ptxas --verbose`, plus `spill_scope` attribution so Agent 4 can penalize hot-loop spills accurately. |
-| **R4 (Persistent kernels & warp specialization)** | D4 structurally detects outer persistent tile loops (emitting `execution_model = persistent` + outer loop trip count/stride + per-iteration tile sequence) and warp-specialization splits instead of assuming 1-CTA-1-tile. |
-| **R5 (Post-pipelining stage structure)** | D2 extracts strictly from post-`TritonGPUPipeline` TTGIR, capturing the *actual* materialized stage count, multi-buffered SMEM allocations, async copy/TMA ops, and `wait_group`/`mbarrier` sync points rather than the requested `num_stages` parameter. |
-| **R1 / R6 (Uncertainty propagation)** | Separates soft uncertainties (`diagnostics`: `ptxas_only_spill`, `unpipelined_fallback`) that widen indistinguishable bands from hard blockers (`unsupported_features`: `data_dependent_address`, `atomic_work_stealing`, `cluster_smem`) that return `unsupported`. |
+x
 
-## 5. What Must Be Measured / Verified Empirically
+### Scope
 
-1. **AOT toolchain matrix for `sm_121` and `sm_89`**: Verify exact Triton version and host `ptxas` version (CUDA 12.9+/13.0+) needed to compile `GPUTarget("cuda", 121, 32)` and `GPUTarget("cuda", 89, 32)` on CPU without an attached GPU.
-2. **Actual `sm_121` op emission**: Compile a representative GEMM autotune sweep for `sm_121` and inspect emitted TTGIR/PTX to confirm which MMA shapes, dtypes, and TMA vs `cp.async` paths Triton actually selects on GB10 (do not assume from `sm_90` or `sm_100`).
-3. **Effective vs. requested `num_stages`**: Verify across configs (including high `num_stages` near SMEM limits) that post-pass TTGIR cleanly exposes when `TritonGPUPipeline` clamps or drops stages.
-4. **AOT compile latency & caching**: Measure wall-clock time to compile 50-100 GEMM configs on CPU and confirm cache hit overhead is negligible compared to simulation time.
+This document analyzes how Triton's forward fused-attention kernel lowers on `sm_89` (RTX 4070) after software pipelining, how its tile structure maps to `KernelIR` v0.1 (`schemas/kernel_ir.schema.json`), and which minimal schema extensions are needed from the L2 model before implementing the extractor.
 
-## 6. Open Questions / TBD
+Not covered: backward pass, paged KV cache, FlashDecoding split-KV, and `sm_121` TMA validation (not validated yet).
 
-- **Implementation language boundary**: Driving `triton.compile` requires Python. If the core simulator (Agents 3 & 4) is written in Rust or C++, the frontend should serialize `KernelIR` to JSON/MessagePack (with optional binary sidecar for large `access_map` tables) at the process boundary; if Python, it can pass in-memory objects.
-- **AMD backend priority (depends on project goals)**: Extracting `registers_per_thread`/`spill_*` for AMD (`gfx942`) requires parsing AMDGPU ELF metadata / `amdgpu` assembler output instead of `ptxas`. Defer until Phase 1 scope and target priority are finalized.
-- **Triton version pinning**: Decide which Triton release line (e.g., 3.2/3.3+) to target first so TTGIR dialect adapters stay minimal.
-- **Data-dependent kernels (depends on project goals)**: For future MoE/paged-attention support, define how an external workload trace feeds into the scalar evaluator when `data_dependent_address` is encountered.
+### Post-pipelining structure (`sm_89`, Triton 3.9.0)
+
+We compiled the Triton 3.9 fused-attention forward kernel offline (`CUDA_VISIBLE_DEVICES=""`, `ptxas 12.9 V12.9.86`, `Z=4, H=32, N_CTX=2048`, `fp16` I/O, `fp32` accumulator) using `tl.make_tensor_descriptor` (`tl.make_block_ptr` was removed in Triton 3.9; on `sm_89`, tensor descriptors lower to `tt.addptr` + `cp.async`).
+
+| Variant (`D`, `BMxBN`, `w`, `req_s`) | `scf.for` | SMEM (B) | Regs | Spill S/L (B) | SMEM bufs (`K`, `V`) | Loop `wait_group` / `commit` | PTX `mma` / `ex2` / `shfl` (per warp/iter) |
+|---|---:|---:|---:|---:|---|---:|---:|
+| Non-causal `128`, `128x64`, `w=4`, `s=1` | 1 | 49152 | 255 | 1132 / 828 | none (`ld.global`) | none / 0 | 256 / 68 / 16 |
+| Non-causal `128`, `128x64`, `w=4`, `s=2` | 1 | 65536 | 255 | 248 / 228 | `1x64x128`, `1x64x128` | `0` / 2 | 256 / 68 / 16 |
+| Non-causal `128`, `128x64`, `w=4`, `s=3` | 1 | 98304 | 255 | 416 / 356 | `2x64x128`, `2x64x128` | `2` / 2 | 256 / 68 / 16 |
+| Non-causal `128`, `128x64`, `w=4`, `s=4` | 1 | 131072 | 255 | 416 / 356 | `3x64x128`, `3x64x128` | `4` / 2 | 256 / 68 / 16 |
+| Causal `128`, `128x64`, `w=4`, `s=3` | 2 | 98304 | 255 | 720 / 684 | 2 loops x (`2x64x128` x 2)* | `2` / 2 | 256 / 68 / 16 |
+| Non-causal `64`, `64x64`, `w=4`, `s=3` | 1 | 40960 | 144 | 0 / 0 | `2x64x64`, `2x64x64` | `2` / 2 | 64 / 34 / 8 |
+| Causal `128`, `64x64`, `w=4`, `s=3` | 2 | 90112 | 255 | 0 / 0 | 2 loops x (`2x64x128` x 2)* | `2` / 2 | 128 / 40 / 64 |
+
+*\*In causal mode, Triton emits two sequential `scf.for` loops with separate `ttg.local_alloc` ops, but reuses the same SMEM allocation across them (`98304 B`, not doubled).*
+
+#### Key structural findings vs. GEMM
+
+1. **Q is staged in SMEM and reloaded every KV iteration.**  
+   In the prologue, Q is loaded synchronously (`tt.load`) and immediately written to SMEM via `ttg.local_alloc %q` (`128x128xf16 = 32768 B`, accounting for the extra 32 KB in `98304 = 32768(Q) + 32768(2xK) + 32768(2xV)`). Inside the KV loop, `ttg.local_load %q_smem` reloads Q from SMEM on every iteration before `dot(Q, K^T)`. Thus per-iteration SMEM read volume is `Q + K + V` (`65536 B`), not just `K + V`.
+2. **K and V are co-pipelined into one stage on `sm_89`.**  
+   Even though `desc_v.load()` appears after online softmax in Python, `TritonGPUPipeline` hoists both K and V loads into the same pipeline stage:
+   - Prologue issues `async_copy(K) + commit`, `async_copy(V) + commit` per prefilled buffer.
+   - Loop body opens with a **single** `ttg.async_wait %k_tok, %v_tok {num = N}` (`cp.async.wait_group N`) waiting on both K and V together, then executes `dot(Q, K^T)` -> online softmax -> `dot(P, V)`, and finishes by issuing the next K and V async copies (2 commit groups per iteration).
+   - Therefore, our existing PTX ISA rule `prefetch_distance = wait_group_N // commits_per_stage` yields `0 / 0 / 1 / 2` for `req_stages = 1 / 2 / 3 / 4` with exact PTX/TTGIR agreement, identical to GEMM.
+   - **Caveat for future variants:** kernels with split K/V waits (one `wait_group` before `dot(Q, K^T)` and a second before `dot(P, V)`) will have two distinct `wait_group` counts inside one loop body; the extractor must detect multiple distinct waits rather than blindly taking `min()`.
+3. **Two distinct MMA ops + heavy SFU/shuffle softmax per iteration.**  
+   Each KV iteration executes:
+   - `mma_qk`: `tile_mnk = [BM, BN, D]`, `inst_mnk = [16, 8, 16]`, `count = (BM/16)*(BN/8)*(D/16)`.
+   - Online softmax: row-max `tt.reduce`, scale/sub, `math.exp2` (`64` `ex2.approx`/warp for `P`), row-sum `tt.reduce`, `math.exp2` (`4` `ex2.approx`/warp for `alpha`), `acc * alpha` rescaling, and `f32 -> f16` cast. At `BM=128, BN=64, w=4`, SFU (`68 ex2.approx`/warp) and warp shuffles (`16 shfl.sync`/warp; `64` at `64x64`) are first-order latency contributors alongside MMA.
+   - `mma_pv`: `tile_mnk = [BM, D, BN]`, `inst_mnk = [16, 8, 16]`, `count = (BM/16)*(D/8)*(BN/16)`.
+4. **Spill pressure is much sharper than in GEMM.**  
+   `BM=128, BN=64, D=128, w=4` hits 255 regs with `248 to 720 B` of `ptxas_only_spill` across all `num_stages`, whereas `BM=64, BN=64` has `0 B` spill. Accurate spill modeling directly governs config ranking.
+5. **Causal attention compiles to two sequential `scf.for` loops with per-CTA trip counts.**  
+   - Loop 1 (unmasked off-diagonal): `start_n in [0, start_m * BM)`, trip count `start_m * (BM // BN)` (varies linearly from `0` to `N_CTX/BN - BM/BN` across CTAs).
+   - Inter-loop drain (`ttg.async_wait {num = 0}`) and refill.
+   - Loop 2 (masked diagonal): `start_n in [start_m * BM, (start_m + 1) * BM)`, constant trip count `BM // BN` (e.g., `2`), adding causal comparison + `arith.select`.
+
+### Mapping attention to `KernelIR` v0.1
+
+Most of fused attention maps cleanly onto existing `KernelIR` v0.1 primitives:
+
+| Attention Component | `KernelIR` v0.1 Mapping | Notes |
+|---|---|---|
+| Grid `(cdiv(N_CTX, BM), Z*H, 1)` | `launch.grid = [grid_m, Z*H, 1]` | 2D grid already supported |
+| Tensors `Q, K, V, Out` | `tensors`: 4D `[Z, H, N_CTX, D]` | Arbitrary rank already supported in schema |
+| `Q` load + SMEM staging | `body.prologue.ops`: `gmem_load(Q)` + `smem_store(Q)` | Uses the non-pipelined prologue slot reserved by the L2 model and the model core |
+| KV loop `K, V` loads | `body.pipeline_loop.ops`: two `gmem_load` (`acc_K`, `acc_V`) | `stage_offset = prefetch_distance` |
+| `Q, K, V` SMEM reads | `body.pipeline_loop.ops`: `smem_load` (`Q + K + V` bytes/iter) | Must include Q reload bytes from `ttg.local_load` |
+| `Q*K^T` and `P*V` | Two `mma` ops (`mma_qk`, `mma_pv`) in `pipeline_loop.ops` | Schema `ops` array already allows multiple `mma` ops |
+| Online softmax `exp2` | `scalar_op` (`kind: "sfu"`, `dtype: "f32"`, `count: ex2_per_warp`) | Schema already defines `sfu` with `insts_per_warp_per_iter` |
+| Softmax ALU & reductions | `scalar_op` (`kind: "alu"`, `dtype: "f32"`, `count: ...`) | See Section 4 for warp-shuffle serialization gap |
+| Final `acc / l_i` + `Out` store | `body.epilogue.ops`: `alu`/`sfu` + `gmem_store(Out)` | Fits existing epilogue block |
+| Cross-Q-block K/V L2 reuse | `access_map`: `strided_2d_per_outer_tile` for `acc_Q/K/V/O` | CTAs with the same `off_hz` (or same KV head in GQA) emit identical `base_byte_offset` for `K`/`V`, so the L2 model's L2 model captures inter-CTA KV reuse without schema changes (`tile_coord_0 = start_m`, `tile_coord_1 = off_hz`) |

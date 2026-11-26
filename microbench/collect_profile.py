@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
-import os
 import platform
 import random
 import shutil
@@ -88,9 +87,10 @@ def run_bench_with_clock_polling(
     if extra_args:
         cmd.extend(extra_args)
     # Write stdout to a temp file so large JSON outputs (>64 KB) never deadlock the pipe.
-    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as out_f, tempfile.TemporaryFile(
-        mode="w+", encoding="utf-8"
-    ) as err_f:
+    with (
+        tempfile.TemporaryFile(mode="w+", encoding="utf-8") as out_f,
+        tempfile.TemporaryFile(mode="w+", encoding="utf-8") as err_f,
+    ):
         proc = subprocess.Popen(cmd, stdout=out_f, stderr=err_f, text=True)
         samples: list[dict[str, Any]] = []
         time.sleep(poll_interval_s)
@@ -112,7 +112,9 @@ def run_bench_with_clock_polling(
     return json.loads(stdout), samples
 
 
-def bootstrap_median_ci(samples: list[float], n_boot: int = 2000, seed: int = 42) -> tuple[float, float, float]:
+def bootstrap_median_ci(
+    samples: list[float], n_boot: int = 2000, seed: int = 42
+) -> tuple[float, float, float]:
     med = float(statistics.median(samples))
     if len(samples) < 2:
         return med, med, med
@@ -261,7 +263,10 @@ def estimate_l2_knee(sweep: list[dict[str, Any]], l2_spec_bytes: int) -> tuple[f
         return float(l2_spec_bytes) * 0.85, 0.20
     thresh = bw_l2 * 0.85
     for i in range(1, len(sweep)):
-        prev_ws, prev_bw = float(sweep[i - 1]["working_set_bytes"]), float(sweep[i - 1]["median_gbps"])
+        prev_ws, prev_bw = (
+            float(sweep[i - 1]["working_set_bytes"]),
+            float(sweep[i - 1]["median_gbps"]),
+        )
         cur_ws, cur_bw = float(sweep[i]["working_set_bytes"]), float(sweep[i]["median_gbps"])
         if cur_bw <= thresh <= prev_bw and prev_bw > cur_bw:
             frac = (prev_bw - thresh) / (prev_bw - cur_bw)
@@ -309,19 +314,26 @@ def build_profile(
     max_warps_per_sm = int(query["max_warps_per_sm"])
     l2_size = int(query["l2_size_bytes"])
     smem_per_sm = int(query["shared_mem_per_sm_bytes"])
-    max_smem_block = int(query["max_shared_mem_per_block_optin_bytes"] or query["shared_mem_per_block_bytes"])
+    max_smem_block = int(
+        query["max_shared_mem_per_block_optin_bytes"] or query["shared_mem_per_block_bytes"]
+    )
     reserved_smem = int(query["reserved_shared_mem_per_cta_bytes"])
 
     # Aggregate active-load clocks from nvidia-smi snapshots (exclude idle P8 transitions < 50% peak).
     raw_sm_clocks = [s["sm_clock_mhz"] for s in smi_samples if s.get("sm_clock_mhz")]
     raw_mem_clocks = [s["mem_clock_mhz"] for s in smi_samples if s.get("mem_clock_mhz")]
     sm_clocks = [c for c in raw_sm_clocks if c >= 0.5 * max(raw_sm_clocks)] if raw_sm_clocks else []
-    mem_clocks = [c for c in raw_mem_clocks if c >= 0.5 * max(raw_mem_clocks)] if raw_mem_clocks else []
+    mem_clocks = (
+        [c for c in raw_mem_clocks if c >= 0.5 * max(raw_mem_clocks)] if raw_mem_clocks else []
+    )
     sm_range = [min(sm_clocks), max(sm_clocks)] if sm_clocks else None
     mem_range = [min(mem_clocks), max(mem_clocks)] if mem_clocks else None
     throttle_events = sum(1 for s in smi_samples if s.get("throttled"))
 
-    driver_str = next((s["driver_version"] for s in smi_samples if s.get("driver_version")), str(query["driver_version"]))
+    driver_str = next(
+        (s["driver_version"] for s in smi_samples if s.get("driver_version")),
+        str(query["driver_version"]),
+    )
     power_limit = next((s["power_limit_w"] for s in smi_samples if s.get("power_limit_w")), None)
     runtime_ver = int(query["runtime_version"])
     toolkit_str = f"{runtime_ver // 1000}.{(runtime_ver % 1000) // 10}"
@@ -520,7 +532,9 @@ def build_profile(
     )
 
     # Build latency-vs-achieved-BW curves (DRAM & L2) for Little's Law concurrency model.
-    def build_lat_curve(raw_points: list[dict[str, Any]], method: str, clk_rng: list[float] | None) -> list[dict[str, Any]]:
+    def build_lat_curve(
+        raw_points: list[dict[str, Any]], method: str, clk_rng: list[float] | None
+    ) -> list[dict[str, Any]]:
         pts: list[dict[str, Any]] = []
         for pt in raw_points:
             bw_med = float(statistics.median(pt["achieved_bw_gbps_samples"]))
@@ -586,12 +600,14 @@ def build_profile(
             locked=False,
             throttle_events=throttle_events,
         )
-        l2_rescan_curve.append({
-            "working_set_bytes": int(pt["working_set_bytes"]),
-            "working_set_ratio_to_l2": round(float(pt["ratio_to_l2"]), 4),
-            "pass2_bw_gbps": p2_mv,
-            "estimated_hit_rate": hr_mv,
-        })
+        l2_rescan_curve.append(
+            {
+                "working_set_bytes": int(pt["working_set_bytes"]),
+                "working_set_ratio_to_l2": round(float(pt["ratio_to_l2"]), 4),
+                "pass2_bw_gbps": p2_mv,
+                "estimated_hit_rate": hr_mv,
+            }
+        )
 
     # Build MLP curves: delivered BW vs bytes in flight (cp_async & ld_global_v4).
     def build_mlp_curve(
@@ -612,13 +628,15 @@ def build_profile(
                 locked=False,
                 throttle_events=throttle_events,
             )
-            pts.append({
-                "issue_mode": mode,
-                "bytes_in_flight": int(pt["bytes_in_flight"]),
-                "active_ctas": int(pt["active_ctas"]),
-                "bytes_per_cta": int(pt["bytes_per_cta"]),
-                "bw_gbps": mv,
-            })
+            pts.append(
+                {
+                    "issue_mode": mode,
+                    "bytes_in_flight": int(pt["bytes_in_flight"]),
+                    "active_ctas": int(pt["active_ctas"]),
+                    "bytes_per_cta": int(pt["bytes_per_cta"]),
+                    "bw_gbps": mv,
+                }
+            )
         return pts
 
     dram_mlp_curve = build_mlp_curve(
@@ -663,15 +681,17 @@ def build_profile(
                 locked=False,
                 throttle_events=throttle_events,
             )
-            out.append({
-                "issue_mode": mode,
-                "tokens": int(pt["tokens"]),
-                "active_ctas": int(pt["active_ctas"]),
-                "stage_bytes": int(pt["stage_bytes"]),
-                "compute_ns": float(pt["compute_ns"]),
-                "delivered_bw_gbps": bw_mv,
-                "mean_stage_turnaround_ns": turn_mv,
-            })
+            out.append(
+                {
+                    "issue_mode": mode,
+                    "tokens": int(pt["tokens"]),
+                    "active_ctas": int(pt["active_ctas"]),
+                    "stage_bytes": int(pt["stage_bytes"]),
+                    "compute_ns": float(pt["compute_ns"]),
+                    "delivered_bw_gbps": bw_mv,
+                    "mean_stage_turnaround_ns": turn_mv,
+                }
+            )
         return out
 
     dram_closed_loop = build_closed_loop(
@@ -683,73 +703,79 @@ def build_profile(
 
     l2_merge_by_sharing: list[dict[str, Any]] = []
     for pt in l2_merge_raw["l2_merge_by_sharing"]:
-        l2_merge_by_sharing.append({
-            "active_ctas": int(pt["active_ctas"]),
-            "sharing": int(pt["sharing"]),
-            "bytes_per_cta": int(pt["bytes_per_cta"]),
-            "stagger_stages": int(pt["stagger_stages"]),
-            "turnaround_ns": make_measured(
-                pt["turnaround_ns_samples"],
-                unit="ns",
-                method="cuda_l2_merge_cp_async",
-                perturb_group=None,
-                clock_range=mem_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-            "dram_unique_bw_gbps": make_measured(
-                pt["dram_unique_bw_gbps_samples"],
-                unit="GB/s",
-                method="cuda_l2_merge_cp_async",
-                perturb_group="dram_bw",
-                clock_range=mem_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-            "l2_to_sm_bw_gbps": make_measured(
-                pt["l2_to_sm_bw_gbps_samples"],
-                unit="GB/s",
-                method="cuda_l2_merge_cp_async",
-                perturb_group="l2_bw",
-                clock_range=sm_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-        })
+        l2_merge_by_sharing.append(
+            {
+                "active_ctas": int(pt["active_ctas"]),
+                "sharing": int(pt["sharing"]),
+                "bytes_per_cta": int(pt["bytes_per_cta"]),
+                "stagger_stages": int(pt["stagger_stages"]),
+                "turnaround_ns": make_measured(
+                    pt["turnaround_ns_samples"],
+                    unit="ns",
+                    method="cuda_l2_merge_cp_async",
+                    perturb_group=None,
+                    clock_range=mem_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+                "dram_unique_bw_gbps": make_measured(
+                    pt["dram_unique_bw_gbps_samples"],
+                    unit="GB/s",
+                    method="cuda_l2_merge_cp_async",
+                    perturb_group="dram_bw",
+                    clock_range=mem_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+                "l2_to_sm_bw_gbps": make_measured(
+                    pt["l2_to_sm_bw_gbps_samples"],
+                    unit="GB/s",
+                    method="cuda_l2_merge_cp_async",
+                    perturb_group="l2_bw",
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+            }
+        )
 
     stage_sync_overhead_ns: list[dict[str, Any]] = []
     for pt in stage_oh_raw["stage_sync_overhead_ns"]:
         mode = pt["issue_mode"]
-        stage_sync_overhead_ns.append({
-            "issue_mode": mode,
-            "num_warps": int(pt["num_warps"]),
-            "tokens": int(pt["tokens"]),
-            "overhead_ns": make_measured(
-                pt["overhead_ns_samples"],
-                unit="ns",
-                method=f"cuda_stage_sync_overhead_{mode}",
-                perturb_group=None,
-                clock_range=sm_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-        })
+        stage_sync_overhead_ns.append(
+            {
+                "issue_mode": mode,
+                "num_warps": int(pt["num_warps"]),
+                "tokens": int(pt["tokens"]),
+                "overhead_ns": make_measured(
+                    pt["overhead_ns_samples"],
+                    unit="ns",
+                    method=f"cuda_stage_sync_overhead_{mode}",
+                    perturb_group=None,
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+            }
+        )
 
     fixed_sync_ns: list[dict[str, Any]] = []
     for pt in stage_oh_raw["fixed_sync_ns"]:
-        fixed_sync_ns.append({
-            "num_warps": int(pt["num_warps"]),
-            "tokens": int(pt["tokens"]),
-            "overhead_ns": make_measured(
-                pt["overhead_ns_samples"],
-                unit="ns",
-                method="cuda_empty_commit_wait_bar_sync",
-                perturb_group=None,
-                clock_range=sm_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-        })
+        fixed_sync_ns.append(
+            {
+                "num_warps": int(pt["num_warps"]),
+                "tokens": int(pt["tokens"]),
+                "overhead_ns": make_measured(
+                    pt["overhead_ns_samples"],
+                    unit="ns",
+                    method="cuda_empty_commit_wait_bar_sync",
+                    perturb_group=None,
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+            }
+        )
 
     min_async_rt_mv = make_measured(
         stage_oh_raw["min_async_roundtrip_ns_samples"],
@@ -763,52 +789,54 @@ def build_profile(
 
     dram_closed_loop_mma: list[dict[str, Any]] = []
     for pt in closed_loop_mma_raw["dram_closed_loop_mma"]:
-        dram_closed_loop_mma.append({
-            "ctas_per_sm": int(pt["ctas_per_sm"]),
-            "active_ctas": int(pt["active_ctas"]),
-            "tokens": int(pt["tokens"]),
-            "num_warps": int(pt["num_warps"]),
-            "stage_bytes": int(pt["stage_bytes"]),
-            "ldmatrix_bytes_per_stage": int(pt.get("ldmatrix_bytes_per_stage", 0)),
-            "mma_iters_per_stage": int(pt["mma_iters_per_stage"]),
-            "solo_compute_ns": float(pt["solo_compute_ns"]),
-            "delivered_bw_gbps": make_measured(
-                pt["bw_gbps_samples"],
-                unit="GB/s",
-                method="cuda_closed_loop_dram_mma_cp_async",
-                perturb_group="dram_bw",
-                clock_range=mem_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-            "mean_stage_turnaround_ns": make_measured(
-                pt["turnaround_ns_samples"],
-                unit="ns",
-                method="cuda_closed_loop_dram_mma_cp_async",
-                perturb_group=None,
-                clock_range=mem_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-            "achieved_mma_tflops_per_sm": make_measured(
-                pt["mma_tflops_per_sm_samples"],
-                unit="TFLOP/s",
-                method="cuda_closed_loop_dram_mma_cp_async",
-                perturb_group="mma_dense",
-                clock_range=sm_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-            "tensor_utilization": make_measured(
-                pt["tensor_util_samples"],
-                unit="ratio",
-                method="cuda_closed_loop_dram_mma_cp_async",
-                perturb_group=None,
-                clock_range=sm_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-        })
+        dram_closed_loop_mma.append(
+            {
+                "ctas_per_sm": int(pt["ctas_per_sm"]),
+                "active_ctas": int(pt["active_ctas"]),
+                "tokens": int(pt["tokens"]),
+                "num_warps": int(pt["num_warps"]),
+                "stage_bytes": int(pt["stage_bytes"]),
+                "ldmatrix_bytes_per_stage": int(pt.get("ldmatrix_bytes_per_stage", 0)),
+                "mma_iters_per_stage": int(pt["mma_iters_per_stage"]),
+                "solo_compute_ns": float(pt["solo_compute_ns"]),
+                "delivered_bw_gbps": make_measured(
+                    pt["bw_gbps_samples"],
+                    unit="GB/s",
+                    method="cuda_closed_loop_dram_mma_cp_async",
+                    perturb_group="dram_bw",
+                    clock_range=mem_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+                "mean_stage_turnaround_ns": make_measured(
+                    pt["turnaround_ns_samples"],
+                    unit="ns",
+                    method="cuda_closed_loop_dram_mma_cp_async",
+                    perturb_group=None,
+                    clock_range=mem_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+                "achieved_mma_tflops_per_sm": make_measured(
+                    pt["mma_tflops_per_sm_samples"],
+                    unit="TFLOP/s",
+                    method="cuda_closed_loop_dram_mma_cp_async",
+                    perturb_group="mma_dense",
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+                "tensor_utilization": make_measured(
+                    pt["tensor_util_samples"],
+                    unit="ratio",
+                    method="cuda_closed_loop_dram_mma_cp_async",
+                    perturb_group=None,
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+            }
+        )
 
     mma_chain_latency: list[dict[str, Any]] = []
     chain_groups: dict[tuple[str, int, int, int], list[tuple[int, list[float]]]] = {}
@@ -819,22 +847,24 @@ def build_profile(
         ld_n = int(pt["ldmatrix_x4_per_warp"])
         m_len = int(pt["mma_chain_len"])
         t_samples = [float(x) for x in pt["stage_time_ns_samples"]]
-        mma_chain_latency.append({
-            "variant": variant,
-            "num_warps": warps,
-            "tile_bytes": tb,
-            "ldmatrix_x4_per_warp": ld_n,
-            "mma_chain_len": m_len,
-            "stage_time_ns": make_measured(
-                t_samples,
-                unit="ns",
-                method=f"cuda_mma_chain_{variant}",
-                perturb_group="mma_dense",
-                clock_range=sm_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-        })
+        mma_chain_latency.append(
+            {
+                "variant": variant,
+                "num_warps": warps,
+                "tile_bytes": tb,
+                "ldmatrix_x4_per_warp": ld_n,
+                "mma_chain_len": m_len,
+                "stage_time_ns": make_measured(
+                    t_samples,
+                    unit="ns",
+                    method=f"cuda_mma_chain_{variant}",
+                    perturb_group="mma_dense",
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+            }
+        )
         chain_groups.setdefault((variant, warps, tb, ld_n), []).append((m_len, t_samples))
 
     serial_stage_overhead_ns: list[dict[str, Any]] = []
@@ -855,66 +885,72 @@ def build_profile(
             inter_samples.append(inter)
         med_ys = [float(statistics.median(p[1])) for p in pts]
         my_med = sum(med_ys) / len(med_ys)
-        sl_med = sum((x - mx) * (y - my_med) for x, y in zip(xs, med_ys)) / denom if denom > 0 else 0.0
+        sl_med = (
+            sum((x - mx) * (y - my_med) for x, y in zip(xs, med_ys)) / denom if denom > 0 else 0.0
+        )
         in_med = my_med - sl_med * mx
         ss_res = sum((y - (sl_med * x + in_med)) ** 2 for x, y in zip(xs, med_ys))
         ss_tot = sum((y - my_med) ** 2 for y in med_ys)
         r2 = max(0.0, min(1.0, 1.0 - ss_res / ss_tot)) if ss_tot > 0 else 1.0
-        serial_stage_overhead_ns.append({
-            "variant": variant,
-            "num_warps": warps,
-            "tile_bytes": tb,
-            "ldmatrix_x4_per_warp": ld_n,
-            "intercept_ns": make_measured(
-                inter_samples,
-                unit="ns",
-                method=f"cuda_mma_chain_ols_intercept_{variant}",
-                perturb_group=None,
-                clock_range=sm_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-            "slope_ns_per_mma": make_measured(
-                slope_samples,
-                unit="ns",
-                method=f"cuda_mma_chain_ols_slope_{variant}",
-                perturb_group="mma_dense",
-                clock_range=sm_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-            "r_squared": round(r2, 6),
-        })
+        serial_stage_overhead_ns.append(
+            {
+                "variant": variant,
+                "num_warps": warps,
+                "tile_bytes": tb,
+                "ldmatrix_x4_per_warp": ld_n,
+                "intercept_ns": make_measured(
+                    inter_samples,
+                    unit="ns",
+                    method=f"cuda_mma_chain_ols_intercept_{variant}",
+                    perturb_group=None,
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+                "slope_ns_per_mma": make_measured(
+                    slope_samples,
+                    unit="ns",
+                    method=f"cuda_mma_chain_ols_slope_{variant}",
+                    perturb_group="mma_dense",
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+                "r_squared": round(r2, 6),
+            }
+        )
 
     serial_stage_fill: list[dict[str, Any]] = []
     for pt in serial_fill_raw["serial_stage_fill"]:
         t_mode = str(pt["transfer_mode"])
         r_mode = str(pt["read_mode"])
-        serial_stage_fill.append({
-            "transfer_mode": t_mode,
-            "read_mode": r_mode,
-            "num_warps": int(pt["num_warps"]),
-            "stage_bytes": int(pt["stage_bytes"]),
-            "active_ctas": int(pt["active_ctas"]),
-            "stage_time_ns": make_measured(
-                [float(x) for x in pt["stage_time_ns_samples"]],
-                unit="ns",
-                method=f"cuda_serial_fill_{t_mode}_{r_mode}",
-                perturb_group="l2_bw",
-                clock_range=sm_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-            "effective_bytes_per_ns_per_cta": make_measured(
-                [float(x) for x in pt["effective_bytes_per_ns_samples"]],
-                unit="B/ns",
-                method=f"cuda_serial_fill_{t_mode}_{r_mode}",
-                perturb_group="l2_bw",
-                clock_range=sm_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-        })
+        serial_stage_fill.append(
+            {
+                "transfer_mode": t_mode,
+                "read_mode": r_mode,
+                "num_warps": int(pt["num_warps"]),
+                "stage_bytes": int(pt["stage_bytes"]),
+                "active_ctas": int(pt["active_ctas"]),
+                "stage_time_ns": make_measured(
+                    [float(x) for x in pt["stage_time_ns_samples"]],
+                    unit="ns",
+                    method=f"cuda_serial_fill_{t_mode}_{r_mode}",
+                    perturb_group="l2_bw",
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+                "effective_bytes_per_ns_per_cta": make_measured(
+                    [float(x) for x in pt["effective_bytes_per_ns_samples"]],
+                    unit="B/ns",
+                    method=f"cuda_serial_fill_{t_mode}_{r_mode}",
+                    perturb_group="l2_bw",
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+            }
+        )
 
     sync_stage_loop_map: dict[tuple[str, str, int, int, int, int], dict[str, Any]] = {}
     for pt in (
@@ -926,7 +962,14 @@ def build_profile(
         t_mode = str(pt["transfer_mode"])
         clk_rng = mem_range if level == "dram" else sm_range
         p_grp = "dram_bw" if level == "dram" else "l2_bw"
-        key = (level, t_mode, int(pt["ctas_per_sm"]), int(pt["num_warps"]), int(pt["stage_bytes"]), int(pt["mma_chain_len"]))
+        key = (
+            level,
+            t_mode,
+            int(pt["ctas_per_sm"]),
+            int(pt["num_warps"]),
+            int(pt["stage_bytes"]),
+            int(pt["mma_chain_len"]),
+        )
         sync_stage_loop_map[key] = {
             "mem_level": level,
             "transfer_mode": t_mode,
@@ -969,37 +1012,39 @@ def build_profile(
     gmem_load_issue_per_sm: list[dict[str, Any]] = []
     for pt in gmem_issue_raw["gmem_load_issue_per_sm"]:
         w_bytes = int(pt["load_width_bytes"])
-        gmem_load_issue_per_sm.append({
-            "active_sms": int(pt["active_sms"]),
-            "load_width_bytes": w_bytes,
-            "num_warps": int(pt["num_warps"]),
-            "issue_rate_gwarp_inst_per_sm": make_measured(
-                [float(x) for x in pt["issue_rate_gwarp_inst_per_sm_samples"]],
-                unit="Gwarp-inst/s",
-                method=f"cuda_gmem_cg_load_issue_{w_bytes}b",
-                perturb_group="l2_bw",
-                clock_range=sm_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-            "delivered_bw_per_sm_gbps": make_measured(
-                [float(x) for x in pt["delivered_bw_per_sm_gbps_samples"]],
-                unit="GB/s",
-                method=f"cuda_gmem_cg_load_issue_{w_bytes}b",
-                perturb_group="l2_bw",
-                clock_range=sm_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-        })
+        gmem_load_issue_per_sm.append(
+            {
+                "active_sms": int(pt["active_sms"]),
+                "load_width_bytes": w_bytes,
+                "num_warps": int(pt["num_warps"]),
+                "issue_rate_gwarp_inst_per_sm": make_measured(
+                    [float(x) for x in pt["issue_rate_gwarp_inst_per_sm_samples"]],
+                    unit="Gwarp-inst/s",
+                    method=f"cuda_gmem_cg_load_issue_{w_bytes}b",
+                    perturb_group="l2_bw",
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+                "delivered_bw_per_sm_gbps": make_measured(
+                    [float(x) for x in pt["delivered_bw_per_sm_gbps_samples"]],
+                    unit="GB/s",
+                    method=f"cuda_gmem_cg_load_issue_{w_bytes}b",
+                    perturb_group="l2_bw",
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+            }
+        )
 
     # Compute spill reload extra_ns_vs_zero and ns_per_reload relative to reload_count=0 baseline.
     spill_zero_med: dict[tuple[int, str], float] = {}
     for pt in spill_lat_raw["reload_latency_by_count"]:
         if int(pt["reload_count"]) == 0:
-            spill_zero_med[(int(pt.get("frame_bytes_per_thread", 0)), str(pt["dependency_mode"]))] = float(
-                statistics.median([float(x) for x in pt["iter_time_ns_samples"]])
-            )
+            spill_zero_med[
+                (int(pt.get("frame_bytes_per_thread", 0)), str(pt["dependency_mode"]))
+            ] = float(statistics.median([float(x) for x in pt["iter_time_ns_samples"]]))
 
     reload_latency_by_count: list[dict[str, Any]] = []
     for pt in spill_lat_raw["reload_latency_by_count"]:
@@ -1021,16 +1066,31 @@ def build_profile(
             "frame_bytes_per_thread": fb,
             "reload_count": rc,
             "iter_time_ns": make_measured(
-                raw_s, unit="ns", method=f"cuda_spill_reload_uniform_{regime}_{dep_mode}",
-                perturb_group=p_grp, clock_range=sm_range, locked=False, throttle_events=throttle_events,
+                raw_s,
+                unit="ns",
+                method=f"cuda_spill_reload_uniform_{regime}_{dep_mode}",
+                perturb_group=p_grp,
+                clock_range=sm_range,
+                locked=False,
+                throttle_events=throttle_events,
             ),
             "extra_ns_vs_zero": make_measured(
-                extra_s, unit="ns", method=f"cuda_spill_reload_uniform_{regime}_{dep_mode}",
-                perturb_group=p_grp, clock_range=sm_range, locked=False, throttle_events=throttle_events,
+                extra_s,
+                unit="ns",
+                method=f"cuda_spill_reload_uniform_{regime}_{dep_mode}",
+                perturb_group=p_grp,
+                clock_range=sm_range,
+                locked=False,
+                throttle_events=throttle_events,
             ),
             "ns_per_reload": make_measured(
-                per_r_s, unit="ns", method=f"cuda_spill_reload_uniform_{regime}_{dep_mode}",
-                perturb_group=p_grp, clock_range=sm_range, locked=False, throttle_events=throttle_events,
+                per_r_s,
+                unit="ns",
+                method=f"cuda_spill_reload_uniform_{regime}_{dep_mode}",
+                perturb_group=p_grp,
+                clock_range=sm_range,
+                locked=False,
+                throttle_events=throttle_events,
             ),
         }
         reload_latency_by_count.append(entry)
@@ -1039,45 +1099,57 @@ def build_profile(
     for pt in strided_mlp_raw["dram_bw_by_bytes_in_flight_strided"]:
         seg = int(pt["segment_bytes"])
         stride = int(pt["stride_bytes"])
-        dram_strided_mlp.append({
-            "segment_bytes": seg,
-            "stride_bytes": stride,
-            "bytes_in_flight": int(pt["bytes_in_flight"]),
-            "active_ctas": int(pt["active_ctas"]),
-            "bytes_per_cta": int(pt["bytes_per_cta"]),
-            "bw_gbps": make_measured(
-                [float(x) for x in pt["gbps_samples"]],
-                unit="GB/s",
-                method=f"cuda_strided_mlp_dram_seg{seg}_str{stride}",
-                perturb_group="dram_bw",
-                clock_range=mem_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-        })
+        dram_strided_mlp.append(
+            {
+                "segment_bytes": seg,
+                "stride_bytes": stride,
+                "bytes_in_flight": int(pt["bytes_in_flight"]),
+                "active_ctas": int(pt["active_ctas"]),
+                "bytes_per_cta": int(pt["bytes_per_cta"]),
+                "bw_gbps": make_measured(
+                    [float(x) for x in pt["gbps_samples"]],
+                    unit="GB/s",
+                    method=f"cuda_strided_mlp_dram_seg{seg}_str{stride}",
+                    perturb_group="dram_bw",
+                    clock_range=mem_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+            }
+        )
 
     def build_warp_issue_curve(raw_pts: list[dict[str, Any]], method: str) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         for pt in raw_pts:
-            out.append({
-                "warps_per_sm": int(pt["warps_per_sm"]),
-                "rate": make_measured(
-                    [float(x) for x in pt["rate_gwarp_inst_per_sm_samples"]],
-                    unit="Gwarp-inst/s",
-                    method=method,
-                    perturb_group=None,
-                    clock_range=sm_range,
-                    locked=False,
-                    throttle_events=throttle_events,
-                ),
-            })
+            out.append(
+                {
+                    "warps_per_sm": int(pt["warps_per_sm"]),
+                    "rate": make_measured(
+                        [float(x) for x in pt["rate_gwarp_inst_per_sm_samples"]],
+                        unit="Gwarp-inst/s",
+                        method=method,
+                        perturb_group=None,
+                        clock_range=sm_range,
+                        locked=False,
+                        throttle_events=throttle_events,
+                    ),
+                }
+            )
         out.sort(key=lambda x: x["warps_per_sm"])
         return out
 
-    sfu_issue_curve = build_warp_issue_curve(sfu_shfl_raw["sfu_issue_rate_per_sm_gips"], "cuda_ptx_ex2_approx_f32")
-    sfu_rcp_issue_curve = build_warp_issue_curve(sfu_shfl_raw["sfu_rcp_issue_rate_per_sm_gips"], "cuda_ptx_rcp_approx_f32")
-    shfl_issue_curve = build_warp_issue_curve(sfu_shfl_raw["shfl_issue_rate_per_sm_gips"], "cuda_ptx_shfl_sync_bfly_b32")
-    shfl_idx_issue_curve = build_warp_issue_curve(sfu_shfl_raw["shfl_idx_issue_rate_per_sm_gips"], "cuda_ptx_shfl_sync_idx_b32")
+    sfu_issue_curve = build_warp_issue_curve(
+        sfu_shfl_raw["sfu_issue_rate_per_sm_gips"], "cuda_ptx_ex2_approx_f32"
+    )
+    sfu_rcp_issue_curve = build_warp_issue_curve(
+        sfu_shfl_raw["sfu_rcp_issue_rate_per_sm_gips"], "cuda_ptx_rcp_approx_f32"
+    )
+    shfl_issue_curve = build_warp_issue_curve(
+        sfu_shfl_raw["shfl_issue_rate_per_sm_gips"], "cuda_ptx_shfl_sync_bfly_b32"
+    )
+    shfl_idx_issue_curve = build_warp_issue_curve(
+        sfu_shfl_raw["shfl_idx_issue_rate_per_sm_gips"], "cuda_ptx_shfl_sync_idx_b32"
+    )
     shfl_lat_mv = make_measured(
         [float(x) for x in sfu_shfl_raw["shfl_latency_ns_samples"]],
         unit="ns",
@@ -1087,9 +1159,15 @@ def build_profile(
         locked=False,
         throttle_events=throttle_events,
     )
-    peak_sfu_pt = max(sfu_shfl_raw["sfu_issue_rate_per_sm_gips"], key=lambda p: statistics.median(p["rate_gwarp_inst_per_sm_samples"]))
+    peak_sfu_pt = max(
+        sfu_shfl_raw["sfu_issue_rate_per_sm_gips"],
+        key=lambda p: statistics.median(p["rate_gwarp_inst_per_sm_samples"]),
+    )
     sfu_tflops_mv = make_measured(
-        [float(x) * sm_count * 32.0 / 1000.0 for x in peak_sfu_pt["rate_gwarp_inst_per_sm_samples"]],
+        [
+            float(x) * sm_count * 32.0 / 1000.0
+            for x in peak_sfu_pt["rate_gwarp_inst_per_sm_samples"]
+        ],
         unit="TFLOP/s",
         method="cuda_ptx_ex2_approx_f32",
         perturb_group=None,
@@ -1100,66 +1178,88 @@ def build_profile(
 
     mma_softmax_chain: list[dict[str, Any]] = []
     for pt in mma_sf_raw["mma_softmax_chain"]:
-        mma_softmax_chain.append({
-            "ctas_per_sm": int(pt["ctas_per_sm"]),
-            "num_warps": int(pt["num_warps"]),
-            "mma_per_half": int(pt["mma_per_half"]),
-            "softmax_ops": int(pt["softmax_ops"]),
-            "solo_mma_ns": float(pt["solo_mma_ns"]),
-            "solo_softmax_ns": float(pt["solo_softmax_ns"]),
-            "iter_time_ns": make_measured(
-                [float(x) for x in pt["iter_time_ns_samples"]],
-                unit="ns",
-                method="cuda_mma_softmax_chain",
-                perturb_group="mma_dense",
-                clock_range=sm_range,
-                locked=False,
-                throttle_events=throttle_events,
-            ),
-        })
+        mma_softmax_chain.append(
+            {
+                "ctas_per_sm": int(pt["ctas_per_sm"]),
+                "num_warps": int(pt["num_warps"]),
+                "mma_per_half": int(pt["mma_per_half"]),
+                "softmax_ops": int(pt["softmax_ops"]),
+                "solo_mma_ns": float(pt["solo_mma_ns"]),
+                "solo_softmax_ns": float(pt["solo_softmax_ns"]),
+                "iter_time_ns": make_measured(
+                    [float(x) for x in pt["iter_time_ns_samples"]],
+                    unit="ns",
+                    method="cuda_mma_softmax_chain",
+                    perturb_group="mma_dense",
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+            }
+        )
 
     sync_stage_loop_ablation: list[dict[str, Any]] = []
     for pt in sync_abl_raw["sync_stage_loop_ablation"]:
         v_name = str(pt["variant"])
-        sync_stage_loop_ablation.append({
-            "variant": v_name,
-            "ctas_per_sm": int(pt["ctas_per_sm"]),
-            "active_ctas": int(pt["active_ctas"]),
-            "num_warps": int(pt["num_warps"]),
-            "stage_bytes": int(pt["stage_bytes"]),
-            "mma_chain_len": int(pt["mma_chain_len"]),
-            "delivered_bw_gbps": make_measured(
-                [float(x) for x in pt["bw_gbps_samples"]],
-                unit="GB/s", method=f"cuda_sync_ablation_{v_name}",
-                perturb_group="dram_bw", clock_range=mem_range, locked=False, throttle_events=throttle_events,
-            ),
-            "mean_stage_turnaround_ns": make_measured(
-                [float(x) for x in pt["turnaround_ns_samples"]],
-                unit="ns", method=f"cuda_sync_ablation_{v_name}",
-                perturb_group=None, clock_range=mem_range, locked=False, throttle_events=throttle_events,
-            ),
-        })
+        sync_stage_loop_ablation.append(
+            {
+                "variant": v_name,
+                "ctas_per_sm": int(pt["ctas_per_sm"]),
+                "active_ctas": int(pt["active_ctas"]),
+                "num_warps": int(pt["num_warps"]),
+                "stage_bytes": int(pt["stage_bytes"]),
+                "mma_chain_len": int(pt["mma_chain_len"]),
+                "delivered_bw_gbps": make_measured(
+                    [float(x) for x in pt["bw_gbps_samples"]],
+                    unit="GB/s",
+                    method=f"cuda_sync_ablation_{v_name}",
+                    perturb_group="dram_bw",
+                    clock_range=mem_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+                "mean_stage_turnaround_ns": make_measured(
+                    [float(x) for x in pt["turnaround_ns_samples"]],
+                    unit="ns",
+                    method=f"cuda_sync_ablation_{v_name}",
+                    perturb_group=None,
+                    clock_range=mem_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+            }
+        )
 
     gmem_load_issue_controlled: list[dict[str, Any]] = []
     for pt in gmem_ctrl_raw["gmem_load_issue_controlled"]:
         w_b = int(pt["load_width_bytes"])
         bn = int(pt["batch_loads_per_thread"])
-        gmem_load_issue_controlled.append({
-            "load_width_bytes": w_b,
-            "batch_loads_per_thread": bn,
-            "num_warps": int(pt["num_warps"]),
-            "bytes_in_flight": int(pt["bytes_in_flight"]),
-            "issue_rate_gwarp_inst_per_sm": make_measured(
-                [float(x) for x in pt["issue_rate_gwarp_inst_per_sm_samples"]],
-                unit="Gwarp-inst/s", method=f"cuda_gmem_cg_load_ctrl_{w_b}b_n{bn}",
-                perturb_group="l2_bw", clock_range=sm_range, locked=False, throttle_events=throttle_events,
-            ),
-            "delivered_bw_per_sm_gbps": make_measured(
-                [float(x) for x in pt["delivered_bw_per_sm_gbps_samples"]],
-                unit="GB/s", method=f"cuda_gmem_cg_load_ctrl_{w_b}b_n{bn}",
-                perturb_group="l2_bw", clock_range=sm_range, locked=False, throttle_events=throttle_events,
-            ),
-        })
+        gmem_load_issue_controlled.append(
+            {
+                "load_width_bytes": w_b,
+                "batch_loads_per_thread": bn,
+                "num_warps": int(pt["num_warps"]),
+                "bytes_in_flight": int(pt["bytes_in_flight"]),
+                "issue_rate_gwarp_inst_per_sm": make_measured(
+                    [float(x) for x in pt["issue_rate_gwarp_inst_per_sm_samples"]],
+                    unit="Gwarp-inst/s",
+                    method=f"cuda_gmem_cg_load_ctrl_{w_b}b_n{bn}",
+                    perturb_group="l2_bw",
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+                "delivered_bw_per_sm_gbps": make_measured(
+                    [float(x) for x in pt["delivered_bw_per_sm_gbps_samples"]],
+                    unit="GB/s",
+                    method=f"cuda_gmem_cg_load_ctrl_{w_b}b_n{bn}",
+                    perturb_group="l2_bw",
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+            }
+        )
 
     l1_to_l2_spill_threshold_by_carveout: list[dict[str, Any]] = []
     for entry in l1_carve_raw["l1_carveout_sweep"]:
@@ -1203,14 +1303,21 @@ def build_profile(
             }
             for pi, p in enumerate(pts)
         ]
-        l1_to_l2_spill_threshold_by_carveout.append({
-            "smem_carveout_bytes": smem_b,
-            "threshold_bytes_per_sm": make_measured(
-                thresh_samples, unit="bytes", method="cuda_l1_ca_pchase_carveout_cliff",
-                perturb_group=None, clock_range=sm_range, locked=False, throttle_events=throttle_events,
-            ),
-            "miss_rate_by_working_set": miss_curve,
-        })
+        l1_to_l2_spill_threshold_by_carveout.append(
+            {
+                "smem_carveout_bytes": smem_b,
+                "threshold_bytes_per_sm": make_measured(
+                    thresh_samples,
+                    unit="bytes",
+                    method="cuda_l1_ca_pchase_carveout_cliff",
+                    perturb_group=None,
+                    clock_range=sm_range,
+                    locked=False,
+                    throttle_events=throttle_events,
+                ),
+                "miss_rate_by_working_set": miss_curve,
+            }
+        )
     l1_to_l2_spill_threshold_by_carveout.sort(key=lambda x: x["smem_carveout_bytes"])
     l1_spill_thresh_mv = l1_to_l2_spill_threshold_by_carveout[0]["threshold_bytes_per_sm"]
 
@@ -1250,8 +1357,16 @@ def build_profile(
                 "locked": False,
                 "sm_clock_locked": False,
                 "mem_clock_locked": False,
-                "sm_clock_mhz": round(statistics.median(sm_clocks), 1) if sm_clocks else (round(query["clock_khz"] / 1000.0, 1) if query["clock_khz"] > 0 else None),
-                "mem_clock_mhz": round(statistics.median(mem_clocks), 1) if mem_clocks else (round(query["mem_clock_khz"] / 1000.0, 1) if query["mem_clock_khz"] > 0 else None),
+                "sm_clock_mhz": round(statistics.median(sm_clocks), 1)
+                if sm_clocks
+                else (round(query["clock_khz"] / 1000.0, 1) if query["clock_khz"] > 0 else None),
+                "mem_clock_mhz": round(statistics.median(mem_clocks), 1)
+                if mem_clocks
+                else (
+                    round(query["mem_clock_khz"] / 1000.0, 1)
+                    if query["mem_clock_khz"] > 0
+                    else None
+                ),
                 "observed_sm_clock_range_mhz": sm_range,
                 "observed_mem_clock_range_mhz": mem_range,
                 "throttle_events": throttle_events,
@@ -1288,8 +1403,24 @@ def build_profile(
                 "cluster": major in (9, 10),
             },
             "mma_shapes": [
-                {"op_class": "mma.sync", "a_dtype": "f16", "b_dtype": "f16", "acc_dtype": "f32", "m": 16, "n": 8, "k": 16},
-                {"op_class": "mma.sync", "a_dtype": "bf16", "b_dtype": "bf16", "acc_dtype": "f32", "m": 16, "n": 8, "k": 16},
+                {
+                    "op_class": "mma.sync",
+                    "a_dtype": "f16",
+                    "b_dtype": "f16",
+                    "acc_dtype": "f32",
+                    "m": 16,
+                    "n": 8,
+                    "k": 16,
+                },
+                {
+                    "op_class": "mma.sync",
+                    "a_dtype": "bf16",
+                    "b_dtype": "bf16",
+                    "acc_dtype": "f32",
+                    "m": 16,
+                    "n": 8,
+                    "k": 16,
+                },
             ],
         },
         "measured": {
@@ -1324,7 +1455,9 @@ def build_profile(
             },
             "compute": {
                 "mma_tflops_per_sm_by_warps": mma_curves,
-                "non_mma_issue_rate_per_sm_gips": make_estimated(4.0 * sm_clock_ghz, "Ginst/s", "m2_estimated", None),
+                "non_mma_issue_rate_per_sm_gips": make_estimated(
+                    4.0 * sm_clock_ghz, "Ginst/s", "m2_estimated", None
+                ),
                 "fp32_fma_tflops": fp32_fma_mv,
                 "sfu_tflops": sfu_tflops_mv,
                 "mma_chain_latency": mma_chain_latency,
@@ -1341,8 +1474,12 @@ def build_profile(
             },
             "async_pipeline": {
                 "cp_async_bw_per_sm_gbps": cp_async_mv,
-                "tma_bw_per_sm_gbps": make_estimated(150.0, "GB/s", "m2_estimated", "async_tma") if tma_supported else None,
-                "tma_setup_ns": make_estimated(80.0, "ns", "m2_estimated", None) if tma_supported else None,
+                "tma_bw_per_sm_gbps": make_estimated(150.0, "GB/s", "m2_estimated", "async_tma")
+                if tma_supported
+                else None,
+                "tma_setup_ns": make_estimated(80.0, "ns", "m2_estimated", None)
+                if tma_supported
+                else None,
             },
             "pipeline": {
                 "stage_sync_overhead_ns": stage_sync_overhead_ns,
@@ -1353,10 +1490,18 @@ def build_profile(
                 "sync_stage_loop_ablation": sync_stage_loop_ablation,
             },
             "spill": {
-                "local_mem_l1_hit_bw_per_sm_gbps": make_estimated(150.0, "GB/s", "m2_estimated", "spill_l1"),
-                "local_mem_l1_miss_bw_per_sm_gbps": make_estimated(40.0, "GB/s", "m2_estimated", "spill_l2"),
-                "local_mem_l1_hit_latency_ns": make_estimated(25.0, "ns", "m2_estimated", "spill_l1"),
-                "local_mem_l1_miss_latency_ns": make_estimated(160.0, "ns", "m2_estimated", "spill_l2"),
+                "local_mem_l1_hit_bw_per_sm_gbps": make_estimated(
+                    150.0, "GB/s", "m2_estimated", "spill_l1"
+                ),
+                "local_mem_l1_miss_bw_per_sm_gbps": make_estimated(
+                    40.0, "GB/s", "m2_estimated", "spill_l2"
+                ),
+                "local_mem_l1_hit_latency_ns": make_estimated(
+                    25.0, "ns", "m2_estimated", "spill_l1"
+                ),
+                "local_mem_l1_miss_latency_ns": make_estimated(
+                    160.0, "ns", "m2_estimated", "spill_l2"
+                ),
                 "l1_to_l2_spill_threshold_bytes_per_sm": l1_spill_thresh_mv,
             },
             "overhead": {
@@ -1374,9 +1519,13 @@ def build_profile(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Collect M1 GPU profile via CUDA microbenchmarks.")
-    parser.add_argument("--binary", type=Path, default=DEFAULT_BIN, help="Path to compiled vgpu_bench binary.")
+    parser.add_argument(
+        "--binary", type=Path, default=DEFAULT_BIN, help="Path to compiled vgpu_bench binary."
+    )
     parser.add_argument("--device", type=int, default=0, help="CUDA device index.")
-    parser.add_argument("--samples", type=int, default=15, help="Timed iterations per DRAM BW point.")
+    parser.add_argument(
+        "--samples", type=int, default=15, help="Timed iterations per DRAM BW point."
+    )
     parser.add_argument("--repeats", type=int, default=5, help="Repeats per CTA dispatch probe.")
     parser.add_argument("--output", type=Path, required=True, help="Output profile JSON path.")
     args = parser.parse_args()
@@ -1416,7 +1565,10 @@ def main() -> int:
         args.binary, "l2-merge", args.device, ["--samples", "7", "--warmup", "1"]
     )
     stage_oh_raw, smi_so = run_bench_with_clock_polling(
-        args.binary, "stage-overhead", args.device, ["--samples", str(args.samples), "--warmup", "2"]
+        args.binary,
+        "stage-overhead",
+        args.device,
+        ["--samples", str(args.samples), "--warmup", "2"],
     )
     closed_loop_mma_raw, smi_clm = run_bench_with_clock_polling(
         args.binary, "closed-loop-mma", args.device, ["--samples", "5", "--warmup", "1"]
@@ -1464,17 +1616,65 @@ def main() -> int:
         args.binary, "cta-dispatch", args.device, ["--repeats", str(args.repeats)]
     )
     smi_samples = (
-        smi_dram + smi_mma + smi_l2 + smi_cp + smi_lat + smi_launch + smi_lc + smi_rs + smi_mlp + smi_cl + smi_mg + smi_so + smi_clm + smi_mc + smi_sf + smi_sl + smi_gi + smi_sp + smi_sm + smi_ss + smi_ms + smi_sa + smi_gc + smi_l1c + smi_slm + smi_slr + smi_disp
+        smi_dram
+        + smi_mma
+        + smi_l2
+        + smi_cp
+        + smi_lat
+        + smi_launch
+        + smi_lc
+        + smi_rs
+        + smi_mlp
+        + smi_cl
+        + smi_mg
+        + smi_so
+        + smi_clm
+        + smi_mc
+        + smi_sf
+        + smi_sl
+        + smi_gi
+        + smi_sp
+        + smi_sm
+        + smi_ss
+        + smi_ms
+        + smi_sa
+        + smi_gc
+        + smi_l1c
+        + smi_slm
+        + smi_slr
+        + smi_disp
     )
 
     profile = build_profile(
-        query, dram_raw, dispatch_raw, mma_raw, l2_raw, cp_async_raw,
-        latency_raw, launch_raw, lat_curve_raw, l2_rescan_raw, mlp_raw,
-        closed_loop_raw, l2_merge_raw, stage_oh_raw, closed_loop_mma_raw,
-        mma_chain_raw, serial_fill_raw, sync_loop_raw, gmem_issue_raw,
-        spill_lat_raw, strided_mlp_raw, sfu_shfl_raw, mma_sf_raw,
-        sync_abl_raw, gmem_ctrl_raw, l1_carve_raw, sync_multicta_raw,
-        sync_reconcile_raw, smi_samples
+        query,
+        dram_raw,
+        dispatch_raw,
+        mma_raw,
+        l2_raw,
+        cp_async_raw,
+        latency_raw,
+        launch_raw,
+        lat_curve_raw,
+        l2_rescan_raw,
+        mlp_raw,
+        closed_loop_raw,
+        l2_merge_raw,
+        stage_oh_raw,
+        closed_loop_mma_raw,
+        mma_chain_raw,
+        serial_fill_raw,
+        sync_loop_raw,
+        gmem_issue_raw,
+        spill_lat_raw,
+        strided_mlp_raw,
+        sfu_shfl_raw,
+        mma_sf_raw,
+        sync_abl_raw,
+        gmem_ctrl_raw,
+        l1_carve_raw,
+        sync_multicta_raw,
+        sync_reconcile_raw,
+        smi_samples,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", encoding="utf-8") as fh:
@@ -1486,7 +1686,7 @@ def main() -> int:
     disp = profile["measured"]["cta_dispatch"]
     print(
         f"Wrote {args.output}: {ident['sku']} ({ident['arch']}, {profile['specs']['sm_count']} SMs) | "
-        f"DRAM read={full_bw['value']:.1f} GB/s (±{full_bw['rel_uncertainty']*100:.1f}%) | "
+        f"DRAM read={full_bw['value']:.1f} GB/s (±{full_bw['rel_uncertainty'] * 100:.1f}%) | "
         f"dispatch={disp['observed_policy']} ({disp['confidence']})"
     )
     return 0

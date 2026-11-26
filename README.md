@@ -1,191 +1,164 @@
-# VirtualGPU
+<div align="center">
 
-A GPU simulator for testing and predicting the performance of LLM inference kernels — without needing the target GPU.
+<img src="./assets/icon.svg" width="120" height="120" alt="VirtualGPU Logo" />
 
-## Why
+<h1>VirtualGPU</h1>
 
-Tuning GEMM, attention and MoE kernels means trying hundreds of variants (tile shapes, pipeline depths, layouts) on real hardware. Real hardware is scarce, expensive, and often not the generation you are targeting. VirtualGPU aims to answer one question cheaply:
+<p>Predict which GPU kernel variant is faster, without the GPU</p>
 
-> **Which kernel variant is faster on GPU X?**
+<p>
+  <img src="https://img.shields.io/github/stars/VirtualGPU/VirtualGPU?style=flat&label=Stars&color=ffffff&labelColor=141513" />
+  <img src="https://img.shields.io/github/forks/VirtualGPU/VirtualGPU?style=flat&label=Forks&color=ffffff&labelColor=141513" />
+  <img src="https://img.shields.io/github/v/release/VirtualGPU/VirtualGPU?style=flat&label=Release&color=ffffff&labelColor=141513" />
+  <img src="https://img.shields.io/github/license/VirtualGPU/VirtualGPU?style=flat&label=License&color=ffffff&labelColor=141513" />
+</p>
 
-The goal is **relative speed**, not cycle-exact timing. Ranking variants correctly is what tuning needs; systematic errors that shift every variant equally don't matter. Real hardware stays the final judge — VirtualGPU narrows hundreds of candidates down to a handful.
+</div>
 
-## Principles
+<br />
 
-- **Built from public information and measurement.** The model uses public specifications, generic architectural structure (pipelines, caches, bandwidth), and parameters measured with our own microbenchmarks. No reverse engineering of vendor drivers, firmware or toolchains.
-- **Model what differentiates variants.** If an optimization changes a mechanism (occupancy, wave quantization, pipeline overlap, L2 reuse), the model must contain that mechanism; everything else can stay coarse.
-- **One model per architecture, one profile per SKU.** H100, H800, H200 and H20 share one sm_90 model with different JSON profiles.
+## Overview
+
+VirtualGPU is a free, open source performance model for GPU kernels that runs on a CPU. Give it a Triton kernel, its autotuning configs and a GPU profile, and it ranks the configs from fastest to slowest, says which ones it can't tell apart, and says what bounds each one.
+
+It does not predict how long a kernel takes. It predicts which of two kernels is faster. Errors that slow every variant by the same amount cancel out, so a ranking is much easier to get right than an exact time. Real hardware stays the final judge: VirtualGPU narrows hundreds of configs down to a few worth measuring.
+
+The model is built only from public specs and our own microbenchmarks. Nothing is reverse engineered and nothing is fitted to kernel timings.
+
+<br />
 
 ## How it works
 
 ```
-Triton kernel + autotuning configs
-      │
- compile ahead of time for the target (no GPU needed)
-      │  tile structure from Triton IR + resource usage
- tile-level, event-driven performance model
-      │  + GPU profile (JSON: public specs + measured parameters)
-      │
- output: ranking, indistinguishable groups, bounding resource per variant
+Triton kernel + autotune configs
+        |
+        |  compiled ahead of time for the target GPU, no GPU needed
+        v
+KernelIR: tiles, pipeline stages, memory footprints, registers and spills
+        |
+        |  + GPU profile (public specs and measured rates, one JSON file per GPU)
+        v
+Event-driven, tile-level performance model, run once per perturbed profile draw
+        |
+        v
+Ranking, configs it can't tell apart, and the bound resource for each config
 ```
 
-Triton comes first: tile shapes, layouts, `num_warps` and `num_stages` are explicit in its IR, the same frontend serves NVIDIA and AMD, and autotuning already lives there. The first application is GPU-free autotuning.
+- Frontend: compiles each config with Triton for the target architecture and reads the tile structure from the compiler's output. Code in `python/virtualgpu/frontend/`.
+- Kernel IR: one neutral format that any frontend can emit. Schema in `schemas/kernel_ir.schema.json`.
+- Model core: schedules CTAs onto SMs, shares compute, L2 and DRAM between them, and plays the kernel out. Written in Rust in `crates/vgpu-core/`.
+- GPU profiles: one JSON file per GPU, measured once by the [microbenchmark suite](microbench/README.md).
 
-See [docs/design.md](docs/design.md) for the full design. The Kernel IR is independent of language and vendor: Triton is the first frontend, and a PTX frontend follows. The model core is written in Rust with Python bindings.
+The model reruns every config on 32 slightly nudged copies of the profile. A pair is ordered only if one config is at least 5% faster in every copy. Otherwise it is reported as indistinguishable.
+
+More detail is in the [design](docs/design.md) and the [docs index](docs/README.md).
+
+<br />
 
 ## Installation
 
-Prebuilt Linux `abi3` wheels (`x86_64` and `aarch64`, Python 3.10–3.13) and source distributions are attached to [GitHub Releases](https://github.com/VirtualGPU/VirtualGPU/releases).
+Linux `abi3` wheels for `x86_64` and `aarch64` (Python 3.10 to 3.13) and a source archive are on [GitHub Releases](https://github.com/VirtualGPU/VirtualGPU/releases). It is not on PyPI yet.
 
 ```bash
-# Install a GitHub Release wheel with Triton 3.9 (not published to PyPI):
+# A release wheel, with the Triton extra for reading Triton kernels
 pip install "virtualgpu-0.2.0-cp310-abi3-manylinux_2_34_x86_64.whl[triton]"
 
-# Or build from source (requires Rust toolchain and maturin):
+# Or from source, with a Rust toolchain installed
 pip install ".[triton]"
 ```
 
-The base `virtualgpu` package includes the Rust performance model core (`virtualgpu._core`), embedded JSON schemas, and bundled GPU profiles (`rtx4070`, `gb10`). Add the `[triton]` extra when extracting or autotuning Triton kernels.
+The base package has the Rust model core, the JSON schemas and the bundled GPU profiles. Add the `[triton]` extra to extract or autotune Triton kernels. It pins Triton 3.9.0.
 
-## Quickstart
+<br />
 
-### 1. Choose a GPU profile
+## Usage
 
-Bundled profiles can be passed by short name (`rtx4070`, `gb10`) or by path to any valid profile JSON (see [profiles/README.md](profiles/README.md) to measure a new GPU):
+List the bundled GPU profiles. Any profile can be passed by name or by path to a JSON file:
 
 ```python
 import virtualgpu
 
-print(virtualgpu.list_profiles())          # ['gb10', 'rtx4070']
-print(virtualgpu.profile_path("rtx4070"))  # path to bundled rtx4070.json
+virtualgpu.list_profiles()  # ['gb10', 'l40s', 'rtx3070', 'rtx4070']
 ```
 
-### 2. Run GPU-free autotuning (CLI)
-
-Given a `@triton.autotune`-decorated GEMM kernel `my_module:matmul`, rank all configs on a CPU-only machine:
+Rank the configs of a `@triton.autotune` GEMM kernel on a CPU:
 
 ```bash
-virtualgpu autotune \
-    --kernel my_module:matmul \
-    --shape 2048 8192 4096 \
-    --profile rtx4070 \
-    --cache cold \
-    --top-k 5
+virtualgpu autotune --kernel my_module:matmul --shape 2048 8192 4096 \
+    --profile rtx4070 --cache cold --top-k 5
 ```
 
-Or use `@virtualgpu.autotune` in Python to prune a large search space down to `top_k=5` candidates before benchmarking on real hardware (set `VIRTUALGPU_PROFILE=rtx4070` or pass `profile="rtx4070"`):
+Or prune the search inside Triton, so only the top configs are benchmarked on the real GPU. Set `profile=` or `VIRTUALGPU_PROFILE`:
 
 ```python
-import virtualgpu
-
 @virtualgpu.autotune(configs=CONFIGS, key=["M", "N", "K"], profile="rtx4070", top_k=5)
+@triton.jit
 def matmul(...):
     ...
 ```
 
-### 3. Reading the output
+`virtualgpu autotune` prints a JSON report, or writes it with `--out report.json`:
 
-`virtualgpu autotune` prints the JSON report, or with `--out report.json` writes it there and prints a short summary:
+- `ranking`: configs from fastest to slowest by predicted time, with the time in every profile draw. Configs the model can't handle come last with `status: unsupported` and a reason.
+- `shortlist`: the top configs to measure on real hardware (`top_k`, 5 by default).
+- `indistinguishable_pairs`: pairs the model can't order. Treat them as tied.
+- `primary_bottleneck`: what bounds each config and for what share of its time, like `mma`, `l2_bandwidth` or `dram_latency`.
 
-- **`ranking`**: configs ordered by predicted runtime on the nominal profile (`nominal_latency_ns`), each with its predictions under the perturbed profile draws (`draws`). Lower is faster. Configs the model cannot handle come last, with `status: unsupported` and a reason.
-- **`shortlist`**: the top-k candidate configs recommended for final hardware verification (`top_k=5` by default; `top_k=1` skips hardware verification and explicitly marks the result as unverified).
-- **`indistinguishable_pairs`**: pairs the model cannot order: a pair is ordered only if every draw agrees on which is faster by at least 5%. Treat these as tied.
-- **`primary_bottleneck`**: per config, the cause that bounds the largest share of its time and that share (one of `mma`, `issue`, `smem`, `local`, `sfu`, `shfl`, `lsu`, `sync`, `l2_latency`, `dram_latency`, `l2_bandwidth`, `dram_bandwidth`, `launch`), explaining *why* one tile beats another.
+The full report format is in [docs/components/autotune.md](docs/components/autotune.md).
 
-### Limitations
+<br />
 
-VirtualGPU predicts relative performance using public specifications and microbenchmark profiles rather than cycle-accurate simulation. Known modeling limits — including register-spill L1 transition and reload latency (planned for v0.3), dynamic scheduling effects, and unmodeled kernel idioms — are documented in [Known limits (`docs/design.md`, section 9)](docs/design.md#9-known-limits). Any kernel construct the frontend or core cannot safely model is reported explicitly as `unsupported` rather than guessed.
+## What works now
 
-## Target architectures
+| Area | Status |
+| --- | --- |
+| Kernels | Triton GEMM and fused attention (causal, non-causal, GQA) |
+| Autotuning | GEMM shapes, offline from the CLI or Python, or online inside `@triton.autotune` |
+| GPUs | NVIDIA GPUs with a profile: `sm_86`, `sm_89` and `sm_121` today |
+| Platforms | Linux. Triton needs Linux, so on Windows use WSL2 |
 
-| Vendor | Architecture | Examples | Priority |
-|---|---|---|---|
-| NVIDIA | Hopper sm_90 | H100, H800, H200, H20 | 1 |
-| NVIDIA | Ampere sm_80 | A100, A800 | 1 |
-| NVIDIA | Blackwell sm_100 / sm_103 | B200, GB200 / B300, GB300 | 2 |
-| AMD | CDNA3 gfx942 | MI300X, MI325X | 2 |
-| NVIDIA | Ada sm_89 | L40S, L20, RTX 4090 | 3 |
-| NVIDIA | Blackwell sm_120 / sm_121 | RTX 5090, RTX PRO 6000 / GB10 | 3 |
-| AMD | CDNA4 gfx950 | MI350X, MI355X | 3 |
-| — | Rubin, CDNA5 | VR200, MI455X | when public details allow |
+Bundled profiles:
+
+| Profile | GPU | Arch | Validated on a sealed holdout |
+| --- | --- | --- | --- |
+| `gb10` | NVIDIA DGX Spark GB10 | `sm_121` | Yes |
+| `rtx4070` | NVIDIA GeForce RTX 4070 | `sm_89` | Yes |
+| `l4` | NVIDIA L4 | `sm_89` | No |
+| `l40s` | NVIDIA L40S | `sm_89` | No |
+| `rtx3070` | NVIDIA GeForce RTX 3070 | `sm_86` | No |
+| `rtxpro6000` | NVIDIA RTX PRO 6000 Blackwell Server Edition | `sm_120` | No |
+
+Latest results (v0.2, fresh sealed holdouts, no kernel timings used by the model):
+
+| Cohort | Kendall tau-b, warm / cold | Verdicts that agree with the GPU: VirtualGPU / baselines |
+| --- | ---: | ---: |
+| RTX 4070 GEMM | 0.748 / 0.693 | 93% to 94% / 54% to 73% |
+| RTX 4070 attention | 0.710 / 0.711 | 89% to 90% / 60% to 72% |
+| GB10 GEMM | 0.683 / 0.689 | 94% / 59% to 64% |
+| GB10 attention | 0.670 / 0.703 | 87% to 91% / 63% to 76% |
+
+When VirtualGPU orders two configs, the GPU agrees about 9 times out of 10. The shortlist still misses the 1% regret target on two cohorts, so both GPUs formally failed the v0.2 criteria. Full results are in [docs/results/v0.2.md](docs/results/v0.2.md) and known limits in [design.md section 9](docs/design.md#9-known-limits).
+
+<br />
 
 ## Roadmap
 
-See [docs/roadmap.html](docs/roadmap.html) for a plain-language overview.
+Everything planned up to the 1.0.0 release is in [ROADMAP.md](ROADMAP.md).
 
-0. **Design** (done) — [docs/design.md](docs/design.md) and the component designs in [docs/proposals/](docs/proposals/).
-1. **Prove it on one GPU** — rank the autotuning configs of a Triton GEMM on an RTX 4070 and beat two simple baselines.
-2. **Predict a GPU we did not tune on** — the same test on a DGX Spark, using only its profile.
-3. **Open the doors** — GPU-free autotuning for Triton, a shared library of GPU profiles, and a simple way to contribute one.
-4. **More kinds of kernels** — attention, mixture of experts, and whole-model bottleneck finding.
-5. **More languages, more GPUs** — a PTX frontend (CUDA, CUTLASS, TileLang, ...) and AMD support.
+<br />
 
-## Validation
+## Contributing
 
-Accuracy is measured by what tuning needs:
+See [CONTRIBUTING.md](CONTRIBUTING.md). The most useful thing you can send is a profile for a GPU we don't have yet: see [contributing a profile](docs/guides/contributing-a-profile.md).
 
-- **Rank correlation** (Kendall τ) between simulated and measured times across variants.
-- **Top-k hit rate** — does the simulator's top-k contain the truly fastest variant?
-- **Indistinguishable accuracy** — variants within a few percent on hardware should be reported as indistinguishable, not ordered.
-- Absolute error (MAPE) is tracked but secondary.
+<br />
 
-Every calibration and validation dataset records the GPU, driver, clocks and kernel source it came from.
+## Support
 
-## Related work
+Bugs and ideas go in this repo: [report a bug](https://github.com/VirtualGPU/VirtualGPU/issues/new?template=bug_report.yml) or [request a feature](https://github.com/VirtualGPU/VirtualGPU/issues/new?template=feature_request.yml). Add as much detail as you can, in English if possible. Security problems go through a private report, see [SECURITY.md](https://github.com/VirtualGPU/.github/blob/main/SECURITY.md).
 
-- [Accel-Sim](https://accel-sim.github.io/) — cycle-level, trace-driven NVIDIA simulator
-- [GPU-Tile-Sim](https://arxiv.org/abs/2607.11262) — tile-centric simulation for LLM kernels (MICRO 2026)
-- [NeuSight](https://arxiv.org/abs/2407.13853) — tile-based performance forecasting for unseen GPUs (ASPLOS 2025)
-- [KernelSight-LM](https://arxiv.org/abs/2606.28565) — kernel-level LLM inference simulator
-- [Sim-FA](https://arxiv.org/abs/2605.00555) — cycle-accurate FlashAttention-3 pipeline simulation
-- [Vidur](https://github.com/microsoft/vidur), [LLMServingSim](https://github.com/casys-kaist/LLMServingSim) — serving-level simulators
-
-## Status
-
-**Phase 1 (RTX 4070) is complete, and it formally failed its preregistered criteria.** The model was frozen as `phase1-final`, predictions were archived, and only then was the sealed workload holdout opened. Full results: [validation/phase1-holdout-report.md](validation/phase1-holdout-report.md).
-
-| Holdout (9 unseen shapes) | VirtualGPU | Learned baseline (NeuSight-style) | Roofline + wave |
-|---|---:|---:|---:|
-| Kendall tau-b, warm / cold | **0.787 / 0.750** | 0.387 / 0.476 | 0.512 / 0.514 |
-| Mean top-5 regret, warm / cold | 3.11% / 3.02% | **1.19% / 1.24%** | 9.30% / 9.25% |
-
-- When VirtualGPU says one config is faster than another, the GPU agrees about 95% of the time and disagrees about 2% of the time; the baselines are reversed about 20% of the time. See [docs/phase1-summary.md](docs/phase1-summary.md).
-- Ranking passed by a wide margin: the learned baseline, trained on RTX 4070 GEMM timings, did not generalize to new shapes; VirtualGPU uses no GEMM timings at all.
-- The shortlist criteria failed. Six of nine shapes have 0% top-5 regret; the mean is dominated by one shape with M, N and K all unaligned (24% warm, 22% cold). The cause is being investigated as a post-hoc analysis, which cannot change the Phase 1 decision. Known model limits are listed in [docs/design.md](docs/design.md) section 9.
-
-GPU-free autotuning works today:
-
-```
-virtualgpu autotune --kernel my_module:matmul --shape 2048 8192 4096 \
-    --profile profiles/rtx4070.json --cache cold
-```
-
-**Phase 2 (transfer to a DGX Spark GB10) is complete, and it also formally failed, by a narrow margin.** The same frozen `phase1-final` model received only a GB10 profile, measured in 24 seconds by the microbenchmark suite; it never saw a GB10 GEMM timing. Full results: [validation/phase2-gb10-report.md](validation/phase2-gb10-report.md).
-
-| GB10 | VirtualGPU | Learned baseline (trained on RTX 4070) | Roofline + wave |
-|---|---:|---:|---:|
-| Primary cohort tau-b, warm / cold | **0.446 / 0.597** | 0.311 / 0.501 | 0.213 / 0.247 |
-| Primary cohort top-5 regret, warm / cold | 1.10% / **0.16%** | 1.33% / 1.59% | 1.95% / 1.02% |
-| Unseen shapes on unseen GPU, tau-b warm / cold | **0.762 / 0.749** | 0.432 / -0.194 | 0.523 / 0.519 |
-| Unseen shapes on unseen GPU, top-5 regret warm / cold | **0.14% / 0.13%** | 36.8% / 45.2% | 4.1% / 3.9% |
-| Ordered verdicts that agree with GB10 | **95% to 98%** | 41% to 53% | 43% to 70% |
-
-- Cold passed every criterion. Warm missed the 1% absolute regret ceiling by 0.095 percentage points and passed everything else; the preregistration requires both.
-- On a GPU the model was not built on, when VirtualGPU says one config is faster, GB10 agrees 95% to 98% of the time and disagrees less than 1% of the time. The learned baseline, trained on RTX 4070 timings, is reversed 15% to 41% of the time.
-
-**v0.2 (frozen as `v0.2-final`) was evaluated on fresh sealed holdouts, GEMM and fused attention on both GPUs, and both device decisions formally failed.** The learned baselines were refit on all earlier published timings; VirtualGPU still used only the GPU profiles. Preregistration: [validation/v02-preregistration.md](validation/v02-preregistration.md). Full results: [validation/v02-holdout-report.md](validation/v02-holdout-report.md).
-
-| Cohort | Decision | VirtualGPU tau-b, warm / cold | VirtualGPU top-5 regret, warm / cold | Ordered verdicts that agree with hardware: VirtualGPU / baselines |
-|---|---|---:|---:|---:|
-| RTX 4070 GEMM | **Pass** | 0.748 / 0.693 | 0.82% / 0.73% | 93% to 94% / 54% to 73% |
-| RTX 4070 attention | Fail | 0.710 / 0.711 | 1.30% / 1.43% | 89% to 90% / 60% to 72% |
-| GB10 GEMM | Fail | 0.683 / 0.689 | 2.12% / 2.00% | 94% / 59% to 64% |
-| GB10 attention | Fail (warm) | 0.670 / 0.703 | 0.82% / 0.33% | 87% to 91% / 63% to 76% |
-
-- VirtualGPU ranked better than both baselines by the required margin in 7 of 8 cohort and cache combinations; the exception is GB10 attention warm, 0.048 above the learned baseline against a required 0.05.
-- The shortlist ceiling of 1% mean top-5 regret failed for RTX 4070 attention and GB10 GEMM. On GB10 GEMM cold the learned baseline's regret was also lower by more than the 0.5-point margin.
-- A device passes only if both kernel families pass in both cache regimes, so both devices fail.
+<br />
 
 ## License
 
-[Apache-2.0](LICENSE)
+Apache License 2.0. See [LICENSE](LICENSE).

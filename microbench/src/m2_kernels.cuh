@@ -814,7 +814,7 @@ static int run_launch(int device, int samples, int warmup) {
   const int large_grid = 4096;
 
   // Capture two CUDA Graphs (1-CTA and large-grid) to measure device-side launch overhead
-  // matching Agent 5's graph + event timing convention.
+  // matching the validation runner's graph and event timing.
   cudaGraph_t graph_small = nullptr, graph_large = nullptr;
   cudaGraphExec_t exec_small = nullptr, exec_large = nullptr;
 

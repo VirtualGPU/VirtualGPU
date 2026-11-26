@@ -40,30 +40,20 @@ _RE_MAKE_RANGE = re.compile(r"^tt\.make_range\s*\{[^}]*start\s*=\s*(-?\d+)")
 _RE_BINOP = re.compile(
     r"^arith\.(addi|subi|muli|divsi|divui|remsi|remui|minsi|maxsi|minui|maxui|andi|ori|xori|shli|shrsi|shrui)\s+(%[A-Za-z0-9_]+),\s*(%[A-Za-z0-9_]+)\b"
 )
-_RE_CMPI = re.compile(
-    r"^arith\.cmpi\s+([a-z]+),\s*(%[A-Za-z0-9_]+),\s*(%[A-Za-z0-9_]+)\b"
-)
+_RE_CMPI = re.compile(r"^arith\.cmpi\s+([a-z]+),\s*(%[A-Za-z0-9_]+),\s*(%[A-Za-z0-9_]+)\b")
 _RE_SELECT = re.compile(
     r"^arith\.select\s+(%[A-Za-z0-9_]+),\s*(%[A-Za-z0-9_]+),\s*(%[A-Za-z0-9_]+)\b"
 )
 _RE_UNARY_PASS = re.compile(
     r"^(?:arith\.(?:extsi|extui|trunci|index_cast)|tt\.(?:splat|expand_dims|broadcast|bitcast|reshape)|ttg\.convert_layout)\s+(%[A-Za-z0-9_]+)\b"
 )
-_RE_ADDPTR = re.compile(
-    r"^tt\.addptr\s+(%[A-Za-z0-9_]+),\s*(%[A-Za-z0-9_]+)\b"
-)
-_RE_TENSORMAP_CREATE = re.compile(
-    r"ttng\.tensormap_create\s+(%[A-Za-z0-9_]+),\s*(%[A-Za-z0-9_]+),"
-)
-_RE_REINTERPRET_DESC = re.compile(
-    r"^ttng\.reinterpret_tensor_descriptor\s+(%[A-Za-z0-9_]+)\b"
-)
+_RE_ADDPTR = re.compile(r"^tt\.addptr\s+(%[A-Za-z0-9_]+),\s*(%[A-Za-z0-9_]+)\b")
+_RE_TENSORMAP_CREATE = re.compile(r"ttng\.tensormap_create\s+(%[A-Za-z0-9_]+),\s*(%[A-Za-z0-9_]+),")
+_RE_REINTERPRET_DESC = re.compile(r"^ttng\.reinterpret_tensor_descriptor\s+(%[A-Za-z0-9_]+)\b")
 _RE_TMA_LOAD_STORE = re.compile(
     r"ttng\.async_tma_copy_(?:global_to_local|local_to_global)\s+(%[A-Za-z0-9_]+)\[(%[A-Za-z0-9_]+),\s*(%[A-Za-z0-9_]+)\]"
 )
-_RE_LOAD_USE = re.compile(
-    r"(?:ttg\.async_copy_global_to_local|tt\.load)\s+(%[A-Za-z0-9_]+)\b"
-)
+_RE_LOAD_USE = re.compile(r"(?:ttg\.async_copy_global_to_local|tt\.load)\s+(%[A-Za-z0-9_]+)\b")
 _RE_STORE_USE = re.compile(r"tt\.store\s+(%[A-Za-z0-9_]+)\b")
 _RE_SCF_FOR_IV = re.compile(r"scf\.for\s+(%[A-Za-z0-9_]+)\s*=\s*(%[A-Za-z0-9_]+)\b")
 _RE_SCF_FOR_BOUNDS = re.compile(
@@ -184,7 +174,9 @@ def _parse_scf_for_bounds(loop_headers: list[str]) -> list[tuple[str, str, str]]
     return bounds
 
 
-def _compile_instructions(lines: list[str]) -> tuple[
+def _compile_instructions(
+    lines: list[str],
+) -> tuple[
     list[tuple[str, ...]],
     dict[str, str],
     list[tuple[str, str, str]],
@@ -314,7 +306,11 @@ def evaluate_ttgir_cta_offsets(
             ptr_counter += 1
         else:
             name = ssa.lstrip("%")
-            if param_int_values is not None and idx < len(param_int_values) and param_int_values[idx] is not None:
+            if (
+                param_int_values is not None
+                and idx < len(param_int_values)
+                and param_int_values[idx] is not None
+            ):
                 param_values[sl] = int(param_int_values[idx])  # type: ignore[arg-type]
             elif name in runtime_int_args:
                 param_values[sl] = int(runtime_int_args[name])
@@ -501,7 +497,12 @@ def evaluate_ttgir_cta_offsets(
                     cta_trips = 0
                     for lb_sl, ub_sl, st_sl in loop_bound_slots:
                         lb_v, ub_v, st_v = slots[lb_sl], slots[ub_sl], slots[st_sl]
-                        if isinstance(lb_v, int) and isinstance(ub_v, int) and isinstance(st_v, int) and st_v > 0:
+                        if (
+                            isinstance(lb_v, int)
+                            and isinstance(ub_v, int)
+                            and isinstance(st_v, int)
+                            and st_v > 0
+                        ):
                             diff = ub_v - lb_v
                             cta_trips += (diff + st_v - 1) // st_v if diff > 0 else 0
                         else:

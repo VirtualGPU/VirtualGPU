@@ -6,9 +6,10 @@ import hashlib
 import json
 import math
 import os
-from pathlib import Path
 import tempfile
-from typing import Any, Sequence
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
 
 from virtualgpu.frontend.compiler import (
     ARTIFACT_HASH_VERSION,
@@ -195,45 +196,63 @@ def _build_access_maps_from_coords(
         n_masked = eff_n < block_n
 
         # A tile: [eff_m, block_k] stepping along K
-        entries_a.append([
-            pid_m,
-            pid_n,
-            base_a + row_start * stride_a_bytes,
-            eff_m,
-            min(block_k, K) * elem_bytes,
-            stride_a_bytes,
-            step_a_bytes,
-            m_masked or k_masked,
-        ])
+        entries_a.append(
+            [
+                pid_m,
+                pid_n,
+                base_a + row_start * stride_a_bytes,
+                eff_m,
+                min(block_k, K) * elem_bytes,
+                stride_a_bytes,
+                step_a_bytes,
+                m_masked or k_masked,
+            ]
+        )
 
         # B tile: [block_k, eff_n] stepping along K
-        entries_b.append([
-            pid_m,
-            pid_n,
-            base_b + col_start * elem_bytes,
-            min(block_k, K),
-            eff_n * elem_bytes,
-            stride_b_bytes,
-            step_b_bytes,
-            n_masked or k_masked,
-        ])
+        entries_b.append(
+            [
+                pid_m,
+                pid_n,
+                base_b + col_start * elem_bytes,
+                min(block_k, K),
+                eff_n * elem_bytes,
+                stride_b_bytes,
+                step_b_bytes,
+                n_masked or k_masked,
+            ]
+        )
 
         # C tile: [eff_m, eff_n] epilogue store (no K step)
-        entries_c.append([
-            pid_m,
-            pid_n,
-            base_c + row_start * stride_c_bytes + col_start * elem_bytes,
-            eff_m,
-            eff_n * elem_bytes,
-            stride_c_bytes,
-            0,
-            m_masked or n_masked,
-        ])
+        entries_c.append(
+            [
+                pid_m,
+                pid_n,
+                base_c + row_start * stride_c_bytes + col_start * elem_bytes,
+                eff_m,
+                eff_n * elem_bytes,
+                stride_c_bytes,
+                0,
+                m_masked or n_masked,
+            ]
+        )
 
     return {
-        "acc_A": {"encoding": "strided_2d_per_outer_tile", "sidecar_ref": None, "entries": entries_a},
-        "acc_B": {"encoding": "strided_2d_per_outer_tile", "sidecar_ref": None, "entries": entries_b},
-        "acc_C": {"encoding": "strided_2d_per_outer_tile", "sidecar_ref": None, "entries": entries_c},
+        "acc_A": {
+            "encoding": "strided_2d_per_outer_tile",
+            "sidecar_ref": None,
+            "entries": entries_a,
+        },
+        "acc_B": {
+            "encoding": "strided_2d_per_outer_tile",
+            "sidecar_ref": None,
+            "entries": entries_b,
+        },
+        "acc_C": {
+            "encoding": "strided_2d_per_outer_tile",
+            "sidecar_ref": None,
+            "entries": entries_c,
+        },
     }
 
 
@@ -279,7 +298,12 @@ def _recover_cta_tile_coords(
     # Case 1: Pointer offsets recovered for A (arg 0) and B (arg 1).
     offs_a = ev.ptr_elem_offsets.get(0)
     offs_b = ev.ptr_elem_offsets.get(1)
-    if offs_a is not None and offs_b is not None and len(offs_a) == total_ctas and len(offs_b) == total_ctas:
+    if (
+        offs_a is not None
+        and offs_b is not None
+        and len(offs_a) == total_ctas
+        and len(offs_b) == total_ctas
+    ):
         coords: list[tuple[int, int]] = []
         for oa, ob in zip(offs_a, offs_b):
             row_start = oa // stride_am if stride_am > 0 else 0
@@ -290,7 +314,12 @@ def _recover_cta_tile_coords(
     # Case 2: TMA 2D coordinates recovered for A (arg 0) and B (arg 1).
     tma_a = ev.tma_coords.get(0)
     tma_b = ev.tma_coords.get(1)
-    if tma_a is not None and tma_b is not None and len(tma_a) == total_ctas and len(tma_b) == total_ctas:
+    if (
+        tma_a is not None
+        and tma_b is not None
+        and len(tma_a) == total_ctas
+        and len(tma_b) == total_ctas
+    ):
         coords = [(ca[0] // block_m, cb[1] // block_n) for ca, cb in zip(tma_a, tma_b)]
         return coords, False, ev.data_dependent, ev.has_nested_loop
 
@@ -349,19 +378,21 @@ def _assemble_gemm_kernel_ir(
     stride_am = strides_a[0] if strides_a is not None else K
     stride_bk = strides_b[0] if strides_b is not None else N
 
-    cta_tile_coords, used_linear_fallback, data_dependent, has_nested_loop = _recover_cta_tile_coords(
-        artifacts.ttgir,
-        grid,
-        fn=fn,
-        call_args=call_args,
-        signature=signature,
-        M=M,
-        N=N,
-        K=K,
-        block_m=block_m,
-        block_n=block_n,
-        stride_am=stride_am,
-        stride_bk=stride_bk,
+    cta_tile_coords, used_linear_fallback, data_dependent, has_nested_loop = (
+        _recover_cta_tile_coords(
+            artifacts.ttgir,
+            grid,
+            fn=fn,
+            call_args=call_args,
+            signature=signature,
+            M=M,
+            N=N,
+            K=K,
+            block_m=block_m,
+            block_n=block_n,
+            stride_am=stride_am,
+            stride_bk=stride_bk,
+        )
     )
     if has_nested_loop:
         diagnostics.append("persistent_kernel_unmodeled")
@@ -375,7 +406,9 @@ def _assemble_gemm_kernel_ir(
     tile_bytes_c = block_m * block_n * elem_bytes
 
     prologue_ops: list[dict[str, Any]] = []
-    smem_load_bytes = (summary.smem_load_bytes_per_iter or (tile_bytes_a + tile_bytes_b)) + summary.loop_ptx_ld_shared_bytes
+    smem_load_bytes = (
+        summary.smem_load_bytes_per_iter or (tile_bytes_a + tile_bytes_b)
+    ) + summary.loop_ptx_ld_shared_bytes
     pipeline_ops: list[dict[str, Any]] = [
         {
             "op_id": "load_A",
@@ -406,44 +439,52 @@ def _assemble_gemm_kernel_ir(
         },
     ]
     if summary.loop_ptx_st_shared_bytes > 0:
-        pipeline_ops.append({
-            "op_id": "smem_store_AB",
-            "kind": "smem_store",
-            "warp_group_id": 0,
-            "stage_offset": 0,
-            "bytes_per_cta": summary.loop_ptx_st_shared_bytes,
-        })
+        pipeline_ops.append(
+            {
+                "op_id": "smem_store_AB",
+                "kind": "smem_store",
+                "warp_group_id": 0,
+                "stage_offset": 0,
+                "bytes_per_cta": summary.loop_ptx_st_shared_bytes,
+            }
+        )
 
     if summary.mma is not None:
         im, in_, ik = summary.mma.inst_mnk
         mma_count = (
             sum(d.count for d in summary.mma_dots)
             if summary.mma_dots
-            else max(1, math.ceil(block_m / im) * math.ceil(block_n / in_) * math.ceil(block_k / ik))
+            else max(
+                1, math.ceil(block_m / im) * math.ceil(block_n / in_) * math.ceil(block_k / ik)
+            )
         )
-        pipeline_ops.append({
-            "op_id": "mma_0",
-            "kind": "mma",
-            "warp_group_id": 0,
-            "stage_offset": 0,
-            "op_class": summary.mma.op_class,
-            "tile_mnk": [block_m, block_n, block_k],
-            "inst_mnk": [im, in_, ik],
-            "a_dtype": summary.mma.a_dtype,
-            "b_dtype": summary.mma.b_dtype,
-            "acc_dtype": summary.mma.acc_dtype,
-            "count": mma_count,
-        })
+        pipeline_ops.append(
+            {
+                "op_id": "mma_0",
+                "kind": "mma",
+                "warp_group_id": 0,
+                "stage_offset": 0,
+                "op_class": summary.mma.op_class,
+                "tile_mnk": [block_m, block_n, block_k],
+                "inst_mnk": [im, in_, ik],
+                "a_dtype": summary.mma.a_dtype,
+                "b_dtype": summary.mma.b_dtype,
+                "acc_dtype": summary.mma.acc_dtype,
+                "count": mma_count,
+            }
+        )
 
     barrier_count = summary.loop_ptx_barriers or summary.loop_barriers
     if barrier_count > 0:
-        pipeline_ops.append({
-            "op_id": "stage_sync",
-            "kind": "barrier",
-            "warp_group_id": 0,
-            "stage_offset": 0,
-            "count": barrier_count,
-        })
+        pipeline_ops.append(
+            {
+                "op_id": "stage_sync",
+                "kind": "barrier",
+                "warp_group_id": 0,
+                "stage_offset": 0,
+                "count": barrier_count,
+            }
+        )
 
     epilogue_ops: list[dict[str, Any]] = [
         {
@@ -461,7 +502,8 @@ def _assemble_gemm_kernel_ir(
             "stage_offset": 0,
             "tensor_id": "C",
             "nominal_bytes_per_cta": tile_bytes_c,
-            "transfer_width_bytes": summary.store_transfer_width_bytes or summary.transfer_width_bytes,
+            "transfer_width_bytes": summary.store_transfer_width_bytes
+            or summary.transfer_width_bytes,
             "access_ref": "acc_C",
         },
     ]
@@ -505,9 +547,7 @@ def _assemble_gemm_kernel_ir(
             "cluster_shape": list(summary.cluster_shape),
             "num_warps": summary.num_warps,
             "warp_size": summary.warp_size,
-            "warp_groups": [
-                {"id": 0, "role": "unified", "num_warps": summary.num_warps}
-            ],
+            "warp_groups": [{"id": 0, "role": "unified", "num_warps": summary.num_warps}],
             "dynamic_smem_bytes": 0,
         },
         "resources": {
@@ -795,14 +835,16 @@ def extract_gemm_kernel_ir_batch(
                 continue
 
         pending_indices.append(idx)
-        pending_specs.append({
-            "signature": signature,
-            "constexprs": constexprs,
-            "num_warps": num_warps,
-            "num_stages": num_stages,
-            "attrs": attrs,
-            "options": options_dict,
-        })
+        pending_specs.append(
+            {
+                "signature": signature,
+                "constexprs": constexprs,
+                "num_warps": num_warps,
+                "num_stages": num_stages,
+                "attrs": attrs,
+                "options": options_dict,
+            }
+        )
         pending_keys.append(ir_key)
         pending_sigs.append(signature)
 

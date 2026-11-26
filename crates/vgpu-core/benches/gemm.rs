@@ -1,4 +1,4 @@
-//! Performance budget from `docs/proposals/model-core.md` 3.1: a 4096-tile
+//! Performance budget from `docs/components/model-core.md` 3.1: a 4096-tile
 //! GEMM should simulate in about 1 ms.
 //!
 //! Run with `cargo bench -p vgpu-core --bench gemm`.

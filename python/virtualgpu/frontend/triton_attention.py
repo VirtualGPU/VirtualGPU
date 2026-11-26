@@ -163,12 +163,8 @@ def _evaluate_attention_access(
     runtime_ints.update(extra_ints)
     res = evaluate_ttgir_cta_offsets(ttgir, grid, runtime_ints, param_int_values=param_int_values)
     grid_size = grid[0] * grid[1] * grid[2]
-    all_ptrs_resolved = (
-        not res.has_nested_loop
-        and all(
-            len(res.ptr_elem_offsets.get(i, [])) == grid_size
-            for i in (0, 1, 2, 3)
-        )
+    all_ptrs_resolved = not res.has_nested_loop and all(
+        len(res.ptr_elem_offsets.get(i, [])) == grid_size for i in (0, 1, 2, 3)
     )
     return res, all_ptrs_resolved
 
@@ -233,15 +229,49 @@ def _build_attention_access_map(
                 v_base = base_v + v_offs[cta_idx] * elem_bytes
                 o_base = base_o + o_offs[cta_idx] * elem_bytes
             else:
-                q_base = base_q + (off_z * strides_q[0] + off_h * strides_q[1] + m_start * strides_q[2]) * elem_bytes
+                q_base = (
+                    base_q
+                    + (off_z * strides_q[0] + off_h * strides_q[1] + m_start * strides_q[2])
+                    * elem_bytes
+                )
                 k_base = base_k + (off_z * strides_k[0] + off_h_kv * strides_k[1]) * elem_bytes
                 v_base = base_v + (off_z * strides_v[0] + off_h_kv * strides_v[1]) * elem_bytes
-                o_base = base_o + (off_z * strides_o[0] + off_h * strides_o[1] + m_start * strides_o[2]) * elem_bytes
+                o_base = (
+                    base_o
+                    + (off_z * strides_o[0] + off_h * strides_o[1] + m_start * strides_o[2])
+                    * elem_bytes
+                )
 
-            entries_q.append([start_m, off_hz, q_base, q_rows, row_bytes, q_row_stride_b, 0, q_has_mask])
-            entries_k.append([start_m, off_hz, k_base, kv_rows, row_bytes, k_row_stride_b, k_step_delta_b, kv_has_mask])
-            entries_v.append([start_m, off_hz, v_base, kv_rows, row_bytes, v_row_stride_b, v_step_delta_b, kv_has_mask])
-            entries_o.append([start_m, off_hz, o_base, q_rows, row_bytes, o_row_stride_b, 0, q_has_mask])
+            entries_q.append(
+                [start_m, off_hz, q_base, q_rows, row_bytes, q_row_stride_b, 0, q_has_mask]
+            )
+            entries_k.append(
+                [
+                    start_m,
+                    off_hz,
+                    k_base,
+                    kv_rows,
+                    row_bytes,
+                    k_row_stride_b,
+                    k_step_delta_b,
+                    kv_has_mask,
+                ]
+            )
+            entries_v.append(
+                [
+                    start_m,
+                    off_hz,
+                    v_base,
+                    kv_rows,
+                    row_bytes,
+                    v_row_stride_b,
+                    v_step_delta_b,
+                    kv_has_mask,
+                ]
+            )
+            entries_o.append(
+                [start_m, off_hz, o_base, q_rows, row_bytes, o_row_stride_b, 0, q_has_mask]
+            )
             cta_idx += 1
 
     return {
@@ -360,7 +390,10 @@ def _assemble_attention_kernel_ir(
     # Determine pipeline_loop trip counts (uniform for non-causal; per_cta for causal).
     uniform_kv_trips = math.ceil(N_CTX / block_n)
     if causal:
-        if eval_res.loop_trip_counts is not None and len(eval_res.loop_trip_counts) == grid_m * grid_hz:
+        if (
+            eval_res.loop_trip_counts is not None
+            and len(eval_res.loop_trip_counts) == grid_m * grid_hz
+        ):
             per_cta_trips = list(eval_res.loop_trip_counts)
         else:
             per_cta_trips = [
@@ -403,9 +436,8 @@ def _assemble_attention_kernel_ir(
         )
 
     smem_load_bytes = (
-        (summary.smem_load_bytes_per_iter or (tile_bytes_q + tile_bytes_k + tile_bytes_v))
-        + summary.loop_ptx_ld_shared_bytes
-    )
+        summary.smem_load_bytes_per_iter or (tile_bytes_q + tile_bytes_k + tile_bytes_v)
+    ) + summary.loop_ptx_ld_shared_bytes
     pipeline_ops: list[dict[str, Any]] = [
         {
             "op_id": "load_K",
@@ -519,12 +551,15 @@ def _assemble_attention_kernel_ir(
             "stage_offset": 0,
             "tensor_id": "Out",
             "nominal_bytes_per_cta": tile_bytes_o,
-            "transfer_width_bytes": summary.store_transfer_width_bytes or summary.transfer_width_bytes,
+            "transfer_width_bytes": summary.store_transfer_width_bytes
+            or summary.transfer_width_bytes,
             "access_ref": "acc_O",
         }
     ]
 
-    kernel_name = getattr(fn, "__name__", None) or getattr(getattr(fn, "fn", None), "__name__", "triton_attention")
+    kernel_name = getattr(fn, "__name__", None) or getattr(
+        getattr(fn, "fn", None), "__name__", "triton_attention"
+    )
 
     return {
         "schema_version": "0.1",
@@ -559,9 +594,7 @@ def _assemble_attention_kernel_ir(
             "cluster_shape": list(summary.cluster_shape),
             "num_warps": summary.num_warps,
             "warp_size": summary.warp_size,
-            "warp_groups": [
-                {"id": 0, "role": "unified", "num_warps": summary.num_warps}
-            ],
+            "warp_groups": [{"id": 0, "role": "unified", "num_warps": summary.num_warps}],
             "dynamic_smem_bytes": 0,
         },
         "resources": {
@@ -683,9 +716,7 @@ def extract_attention_kernel_ir(
     )
 
     param_names = {p.name for p in fn.params}
-    call_kwargs: dict[str, Any] = {
-        k: v for k, v in config.items() if k in param_names
-    }
+    call_kwargs: dict[str, Any] = {k: v for k, v in config.items() if k in param_names}
     if "HEAD_DIM" in param_names and "HEAD_DIM" not in call_kwargs:
         call_kwargs["HEAD_DIM"] = D
     if "CAUSAL" in param_names and "CAUSAL" not in call_kwargs:

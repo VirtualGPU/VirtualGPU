@@ -1,6 +1,6 @@
-# Contributing a GPU Profile
+# Contributing a GPU profile
 
-VirtualGPU lets developers compare kernel variants for GPUs they do not own — as long as someone with that GPU has run the isolated microbenchmark suite once and submitted the resulting profile to `profiles/`.
+VirtualGPU lets developers compare kernel variants for GPUs they do not own, as long as someone with that GPU has run the isolated microbenchmark suite once and submitted the resulting profile to `profiles/`.
 
 This guide walks through building the microbenchmark binary, collecting a profile with `microbench/collect_profile.py`, running self-checks, and opening a pull request.
 
@@ -16,7 +16,7 @@ This guide walks through building the microbenchmark binary, collecting a profil
 - **Python:** Python `>= 3.10` and [`uv`](https://docs.astral.sh/uv/) (or standard `venv` + `pip`).
 - **CUDA Toolkit (`nvcc` + runtime):** Either a system CUDA installation on `PATH`, or pip-installed `nvidia-cuda-nvcc` and `nvidia-cuda-runtime` inside the project virtual environment. Use a toolkit version that supports your target GPU architecture (for example, CUDA 12.8+ for `sm_120`/`sm_121`).
 
-## Step 1: Set Up the Environment and Build `vgpu_bench`
+## Step 1: Set up the environment and build `vgpu_bench`
 
 From the repository root:
 
@@ -45,7 +45,7 @@ Common `--arch` values:
 
 This produces `microbench/build/vgpu_bench`.
 
-## Step 2: Prepare the GPU (Clock Locking & Isolation)
+## Step 2: Prepare the GPU (clock locking and isolation)
 
 Ensure no other GPU workloads are running. On a shared machine, wrap the run with `flock /tmp/virtualgpu-gpu.lock ...`.
 
@@ -69,7 +69,7 @@ sudo nvidia-smi -i 0 -rmc
 
 On **WSL2** or platforms where clock locking is unavailable, skip this step. `collect_profile.py` polls `nvidia-smi` under active load, sets `clock_policy.locked = false`, and widens `rel_uncertainty` automatically.
 
-## Step 3: Collect the Profile
+## Step 3: Collect the profile
 
 Choose a lowercase filename slug for your GPU under `profiles/` (for example `profiles/rtx4090.json`, `profiles/h100_sxm5.json`, or `profiles/gb10.json`), then run:
 
@@ -86,9 +86,9 @@ Useful CLI options:
 - `--samples`: Timed iterations per benchmark point (default: `15`).
 - `--repeats`: Repeats per CTA dispatch probe (default: `5`).
 
-**What it runs & measured runtime:** `collect_profile.py` runs 16 isolated microbenchmark modes (`query`, `dram-bw`, `mma`, `l2`, `cp-async`, `latency`, `launch`, `latency-curve`, `l2-rescan`, `mlp`, `closed-loop`, `l2-merge`, `stage-overhead`, `closed-loop-mma`, `mma-chain`, and `cta-dispatch`), polls `nvidia-smi` for active clocks and thermal throttling, computes bootstrap 95% confidence intervals, validates the result against `schemas/gpu_profile.schema.json`, and writes the JSON profile. On an NVIDIA GeForce RTX 4070 (`sm_89`) with default settings (`suite_version` `0.9.0`), a full end-to-end run measured **15.3 seconds** wall-clock (~11.7 s across the 16 `vgpu_bench` modes — led by `closed-loop` at 4.2 s, `mlp` at 1.1 s, and `latency-curve` at 1.0 s — plus ~3.6 s for `nvidia-smi` polling, bootstrap CIs, and schema validation). Runtime scales with GPU memory size and bandwidth.
+What it runs: `collect_profile.py` runs every `vgpu_bench` mode (memory, L2, MMA, pipeline, sync loop, SFU and shuffle, spill, launch and CTA dispatch), polls `nvidia-smi` for clocks and thermal throttling, computes bootstrap 95% confidence intervals, validates the result against `schemas/gpu_profile.schema.json` and writes the profile. Runtime depends on the GPU's memory size and bandwidth.
 
-## Step 4: Self-Check Before Opening a PR
+## Step 4: Check it before opening a PR
 
 Run all checks locally before committing:
 
@@ -115,17 +115,20 @@ Run all checks locally before committing:
    cargo test
    ```
 
-5. **English-only check:**
-   Ensure your commit, PR description, and any documentation edits contain only English text (no CJK characters).
+5. **Repo checks:**
+   ```bash
+   python scripts/check_profiles.py
+   python scripts/check_text.py
+   ```
 
-## Step 5: Open a Pull Request
+## Step 5: Open a pull request
 
-1. Add a row for your GPU to the table in [`profiles/README.md`](../profiles/README.md).
+1. Add a row for your GPU to the table in [`profiles/README.md`](../../profiles/README.md).
 2. Commit only your profile JSON and the `profiles/README.md` update:
    ```bash
    git add profiles/<gpu_slug>.json profiles/README.md
-   git commit -m "Add <GPU SKU> (<arch>) hardware profile" -- profiles/<gpu_slug>.json profiles/README.md
+   git commit -m "feat: add <GPU SKU> (<arch>) profile" -- profiles/<gpu_slug>.json profiles/README.md
    ```
 3. Open a pull request against `main` on `github.com/VirtualGPU/VirtualGPU`. In the PR description, note your GPU model, host OS (native Linux vs. WSL2), driver/CUDA versions, and whether clocks were locked.
 
-CI will automatically validate your profile against the JSON schema, all semantic invariants in `python/virtualgpu/profile.py`, `provenance` completeness, `source` honesty, and the English-only check.
+CI will automatically validate your profile against the JSON schema, all semantic invariants in `python/virtualgpu/profile.py`, `provenance` completeness, `source` honesty, and the text check.

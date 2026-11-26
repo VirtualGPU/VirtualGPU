@@ -1,21 +1,25 @@
-# VirtualGPU Hardware Profile Library
+# GPU profiles
 
-This directory stores versioned GPU hardware profiles conforming to [`schemas/gpu_profile.schema.json`](../schemas/gpu_profile.schema.json) (`schema_version: "0.1"`). Each profile captures one SKU's static architectural limits and isolated microbenchmark measurements, allowing VirtualGPU to simulate and rank kernels for that GPU on a CPU without owning the hardware.
+Each file here describes one GPU: its static limits from the CUDA runtime and the rates measured by the [microbenchmark suite](../microbench/README.md). VirtualGPU needs only this file to rank kernels for that GPU on a CPU. Files follow [`schemas/gpu_profile.schema.json`](../schemas/gpu_profile.schema.json) (`schema_version: "0.1"`) and ship inside the wheel, so `--profile rtx4070` works by name.
 
-To contribute a profile for a GPU you have access to, see [`docs/contributing-a-profile.md`](../docs/contributing-a-profile.md).
+To add your GPU, see [contributing a profile](../docs/guides/contributing-a-profile.md). How the format is built is in [docs/components/profiles.md](../docs/components/profiles.md).
 
-## Available Profiles
+## Available profiles
 
 | File | SKU | Arch | Memory | Revision | Source | Clocks | Driver / Toolkit |
-|---|---|---|---|---|---|---|---|
-| [`l40s.json`](l40s.json) | NVIDIA L40S | `sm_89` | Discrete (GDDR6) | `0.21.0-posthoc` | `partial` | Locked with `nvidia-smi` on native Linux (2100 MHz SM / 9001 MHz Mem). The collector still records `locked: false`. | `595.91.07` / `13.5` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| [`gb10.json`](gb10.json) | NVIDIA GB10 (DGX Spark) | `sm_121` | Unified (LPDDR5X) | `0.21.0-posthoc` | `partial` | Unlocked (2411 to 2561 MHz SM / 8533 MHz Mem) | `580.173.02` / `13.0` |
+| [`l4.json`](l4.json) | NVIDIA L4 | `sm_89` | Discrete (GDDR6) | `0.21.0-posthoc` | `partial` | Unlocked (Linux, 1845 to 2040 MHz SM / 6251 MHz Mem) | `580.82.07` / `13.0` |
+| [`l40s.json`](l40s.json) | NVIDIA L40S | `sm_89` | Discrete (GDDR6) | `0.21.0-posthoc` | `partial` | Locked with `nvidia-smi` on native Linux (2100 MHz SM / 9001 MHz Mem). The collector still records `locked: false` | `595.91.07` / `13.5` |
 | [`rtx3070.json`](rtx3070.json) | NVIDIA GeForce RTX 3070 | `sm_86` | Discrete (GDDR6) | `0.21.0-posthoc` | `partial` | Unlocked (WSL2, 1770 to 2025 MHz SM / 7001 to 7201 MHz Mem) | `610.88` / `13.5` |
-| [`rtx4070.json`](rtx4070.json) | NVIDIA GeForce RTX 4070 | `sm_89` | Discrete (GDDR6X) | `0.9.0-m3` | `partial` | Unlocked (WSL2, 2550–2865 MHz SM / 10251 MHz Mem) | `610.88` / `13.5` |
-| [`rtx_pro_6000_blackwell.json`](rtx_pro_6000_blackwell.json) | NVIDIA RTX PRO 6000 Blackwell Server Edition | `sm_120` | Discrete (GDDR7) | `0.21.0-posthoc` | `partial` | Unlocked (Linux, 1710 to 2332 MHz SM / 12481 MHz Mem) | `580.82.07` / `13.0` |
+| [`rtx4070.json`](rtx4070.json) | NVIDIA GeForce RTX 4070 | `sm_89` | Discrete (GDDR6X) | `0.21.0-posthoc` | `partial` | Unlocked (WSL2, 2550 to 2865 MHz SM / 10251 MHz Mem) | `610.88` / `13.5` |
+| [`rtxpro6000.json`](rtxpro6000.json) | NVIDIA RTX PRO 6000 Blackwell Server Edition | `sm_120` | Discrete (GDDR7) | `0.21.0-posthoc` | `partial` | Unlocked (Linux, 1710 to 2332 MHz SM / 12481 MHz Mem) | `580.82.07` / `13.0` |
 
-## Where Each Field Comes From
+Only the RTX 4070 and GB10 profiles have been through a sealed holdout. The others are measured but not validated yet.
 
-Every profile is built from public APIs and isolated synthetic microbenchmarks — never from reverse engineering and never by fitting parameters to GEMM or LLM kernel timings.
+## Where each field comes from
+
+Every profile is built from public APIs and isolated synthetic microbenchmarks, never from reverse engineering and never by fitting parameters to GEMM or LLM kernel timings.
 
 | Section | Source | Contents |
 |---|---|---|
@@ -23,13 +27,13 @@ Every profile is built from public APIs and isolated synthetic microbenchmarks �
 | `provenance` | `nvidia-smi`, OS & collector | Suite/driver/toolkit versions, UTC timestamp, `source` label, `power_limit_w`, and `clock_policy`. |
 | `specs` | CUDA Runtime API (`cudaGetDeviceProperties` / `cudaDeviceGetAttribute`) | Exact hardware limits: `sm_count`, `warp_size`, `registers_per_sm`, `shared_mem_per_sm_bytes`, carveout options, `l2_size_bytes`, `l2_line_bytes`, `l2_sector_bytes`, `capabilities`, and supported `mma_shapes`. |
 | `measured.memory` | `vgpu_bench` (`dram-bw`, `l2`, `latency`, `latency-curve`, `l2-rescan`, `mlp`, `closed-loop`, `closed-loop-mma`, `l2-merge`) | Achievable DRAM/L2/SMEM bandwidth, active-SM scaling curves, bytes-in-flight MLP curves, closed-loop latency/bandwidth tables, L2 effective capacity, L2 rescan hit-rate curve, and MSHR miss-merging rates. |
-| `measured.compute` | `vgpu_bench` (`mma`, `mma-chain`) + estimates | Measured `mma_tflops_per_sm_by_warps`, `mma_chain` dependency throughput, and `fp32_fma_tflops`. Currently `non_mma_issue_rate_per_sm_gips` and `sfu_tflops` are tagged `source: "estimated"`. |
+| `measured.compute` | `vgpu_bench` (`mma`, `mma-chain`) + estimates | Measured MMA throughput by warps, MMA dependency chains, SFU and shuffle issue rates and latency, and `fp32_fma_tflops`. `non_mma_issue_rate_per_sm_gips` is still `source: "estimated"`. |
 | `measured.async_pipeline` & `measured.pipeline` | `vgpu_bench` (`cp-async`, `stage-overhead`) | `cp.async` per-SM bandwidth, per-stage synchronization overhead, and minimum async roundtrip latency (TMA fields are `null` on architectures without TMA). |
-| `measured.spill` | Estimates (pending spill microbenchmark) | Per-SM local-memory L1 hit/miss bandwidth, latency, and L1-to-L2 spill threshold; currently tagged `source: "estimated"`. |
+| `measured.spill` and spill curves in `measured.memory` | `vgpu_bench` (`spill-latency`, `l1-carveout`) + estimates | Measured L1 to L2 spill threshold, threshold by carveout and spill reload latency. Local memory L1 hit and miss bandwidth and latency are still `source: "estimated"`. |
 | `measured.overhead` | `vgpu_bench` (`launch`) | Device launch overhead (CUDA Graph), host launch overhead, and per-CTA launch latency. |
 | `measured.cta_dispatch` | `vgpu_bench` (`cta-dispatch`) | Empirical CTA-to-SM first-wave mapping (`%smid`, `%globaltimer`), `observed_policy`, `candidate_policies`, `order_consistency`, and `confidence`. |
 
-## Reading `provenance`
+## Reading provenance
 
 `provenance` records the exact conditions under which a profile was collected:
 
@@ -46,7 +50,7 @@ Every profile is built from public APIs and isolated synthetic microbenchmarks �
   - `observed_sm_clock_range_mhz`, `observed_mem_clock_range_mhz`: `[min, max]` clocks polled via `nvidia-smi` under active benchmark load.
   - `throttle_events`: Count of thermal slowdown samples observed during collection (`0` is expected for a clean profile).
 
-## Understanding Confidence (`rel_uncertainty`, `locked`, `source`)
+## Confidence
 
 Every scalar measurement uses a `MeasuredValue` envelope:
 
@@ -65,13 +69,13 @@ Every scalar measurement uses a `MeasuredValue` envelope:
 
 How VirtualGPU uses these fields during simulation:
 
-- **`rel_uncertainty` drives perturbation-based ranking resolution.** The Rust core draws shared Latin Hypercube samples (default 32 draws plus nominal draw 0) across all measured parameters, perturbing each by `±rel_uncertainty` (grouped by `perturb_group` so correlated quantities move together). A pair of kernel variants is only declared ordered if all draws agree by at least 5%; otherwise it is reported as `indistinguishable`.
+- **`rel_uncertainty` drives perturbation-based ranking resolution.** The Rust core draws shared Latin Hypercube samples (default 32 draws plus nominal draw 0) across all measured parameters, perturbing each by `+/-rel_uncertainty` (grouped by `perturb_group` so correlated quantities move together). A pair of kernel variants is only declared ordered if all draws agree by at least 5%; otherwise it is reported as `indistinguishable`.
 - **Floor and widening rules:**
-  - Directly measured fields with locked clocks carry a `0.10` (±10%) floor (or wider if the bootstrap 95% CI half-width is larger).
+  - Directly measured fields with locked clocks carry a `0.10` (+/-10%) floor (or wider if the bootstrap 95% CI half-width is larger).
   - When `clock_policy.locked` is `false` (for example on WSL2, where Linux cannot lock GPU clocks), `collect_profile.py` widens `rel_uncertainty` for clock-sensitive fields based on the observed SM clock drift range (e.g., `0.1082` on `rtx4070.json`).
-  - Fields with `source: "estimated"` carry a wider `0.30` (±30%) uncertainty so comparisons that depend heavily on unmeasured parameters naturally fall back to `indistinguishable` instead of producing false confidence.
+  - Fields with `source: "estimated"` carry a wider `0.30` (+/-30%) uncertainty so comparisons that depend heavily on unmeasured parameters naturally fall back to `indistinguishable` instead of producing false confidence.
 
-## Validating Profiles
+## Validating profiles
 
 Run the built-in schema and semantic validator on any profile:
 

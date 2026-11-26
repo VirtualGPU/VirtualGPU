@@ -1,21 +1,30 @@
-# VirtualGPU Microbenchmark Suite
+# Microbenchmark suite
 
-CUDA C++ microbenchmarks that query static device limits and measure effective hardware parameters to generate a VirtualGPU profile (`schemas/gpu_profile.schema.json`).
+CUDA C++ benchmarks that read a GPU's static limits and measure its real rates, latencies and dispatch behavior. `collect_profile.py` runs them all and writes one profile JSON (`schemas/gpu_profile.schema.json`). Nothing here is fitted to GEMM or attention timings.
+
+| File | What it is |
+| --- | --- |
+| `src/vgpu_bench.cu` | The `vgpu_bench` binary and its subcommands (`dram-bw`, `l2`, `mma`, `cta-dispatch`, `spill-latency` and more) |
+| `src/m2_kernels.cuh` | Kernels for the closed loop, pipeline, sync loop, SFU, shuffle and spill benchmarks |
+| `build.py` | Builds `vgpu_bench` for one architecture |
+| `collect_profile.py` | Runs every benchmark and writes the profile |
 
 ## Build
 
-Install `nvidia-cuda-nvcc` and `nvidia-cuda-runtime` inside the project virtual environment, then build:
+Install `nvidia-cuda-nvcc` and `nvidia-cuda-runtime` in the project virtual environment, then build for your GPU:
 
 ```bash
 .venv/bin/python microbench/build.py --arch sm_89
 ```
 
-## Run (M1)
+Pass `--nvcc <path>` to use a system CUDA toolkit instead.
 
-Always wrap GPU execution with the shared GPU lock:
+## Run
 
 ```bash
-flock /tmp/virtualgpu-gpu.lock .venv/bin/python microbench/collect_profile.py --output profiles/rtx4070.json
+.venv/bin/python microbench/collect_profile.py --output profiles/<gpu>.json
 ```
 
-In WSL2, clock locking is unavailable from inside Linux; `collect_profile.py` records observed clocks via `nvidia-smi`, marks `clock_policy.locked = false`, and widens `rel_uncertainty` according to the unlocked-clock degradation rule.
+Lock clocks first when you can. On WSL2 clocks can't be locked from Linux, so the collector records the observed clocks, sets `clock_policy.locked = false` and widens `rel_uncertainty` for clock sensitive fields.
+
+The full steps, including the checks to run before you open a pull request, are in [contributing a profile](../docs/guides/contributing-a-profile.md).

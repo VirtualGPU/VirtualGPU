@@ -9,9 +9,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-DEFAULT_SCHEMA_PATH = (
-    Path(__file__).resolve().parents[2] / "schemas" / "gpu_profile.schema.json"
-)
+DEFAULT_SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schemas" / "gpu_profile.schema.json"
 
 
 def _profile_search_dirs() -> list[Path]:
@@ -116,10 +114,18 @@ def _semantic_checks(profile: dict[str, Any]) -> list[str]:
     sm_count = specs["sm_count"]
     mem = measured["memory"]
     _check_monotonic_curve(
-        mem["dram_bw_by_active_sms"], "active_sms", sm_count, "measured.memory.dram_bw_by_active_sms", errors
+        mem["dram_bw_by_active_sms"],
+        "active_sms",
+        sm_count,
+        "measured.memory.dram_bw_by_active_sms",
+        errors,
     )
     _check_monotonic_curve(
-        mem["l2_bw_by_active_sms"], "active_sms", sm_count, "measured.memory.l2_bw_by_active_sms", errors
+        mem["l2_bw_by_active_sms"],
+        "active_sms",
+        sm_count,
+        "measured.memory.l2_bw_by_active_sms",
+        errors,
     )
 
     for mlp_key, peak_key in (

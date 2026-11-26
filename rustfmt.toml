@@ -1,0 +1,2 @@
+# Defaults, kept so editors and CI agree on the edition.
+edition = "2021"
