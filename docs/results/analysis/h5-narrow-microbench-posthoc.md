@@ -55,6 +55,8 @@ The four SM-side forms stop at the fast end of their grids because their calibra
 
 **3. Staging narrow elements through registers into shared memory costs per element.** `sync-loop-narrow` at hot L2: 2 B stages are 45% to 54% faster in the model than measured, aligned or not, while 16 B stages are 9% to 22% fast. For the same stage, 2 B takes 1.1 to 3.6 times as long as 16 B; the model predicts the same time for both. The implied rate of 2 B shared memory stores grows almost linearly with CTAs per SM (4 KiB stages, no MMA: 0.17, 0.32 and 0.41 warp stores per ns per SM at 1, 2 and 3 CTAs), which points to a cost on each CTA's own chain rather than a shared throughput limit. `gmem-narrow` has no shared memory stores and shows none of it at hot L2. From DRAM, `sync-loop-narrow` at 2 B is 24% to 26% fast aligned and 36% to 38% offset, close to observation 1.
 
+   **Correction.** Part of this hot-L2 gap is not a staging cost: the 16 KiB stages compile with each load interleaved with its shared memory store after the first seven loads, so a thread keeps only a few loads in flight, unlike the Triton `mask-mnk` kernels, which issue most of their loads first. See [h5-followups-gb10-posthoc.md](h5-followups-gb10-posthoc.md), register staging, observation 3.
+
 **4. `mask-mnk` has both.** Its loop is 2 B global loads, each followed by a 2 B shared memory store, with data from L2 and DRAM, which fits the earlier finding that neither a slower `lsu` nor slower MLP curves can fit it alone.
 
 ## Next steps
