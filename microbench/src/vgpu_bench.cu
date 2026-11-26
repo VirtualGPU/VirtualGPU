@@ -572,6 +572,9 @@ int main(int argc, char** argv) {
   if (mode == "sync-loop-overlap") {
     return run_sync_loop_overlap(device, samples, warmup);
   }
+  if (mode == "sync-loop-share") {
+    return run_sync_loop_share(device, samples, warmup);
+  }
   std::fprintf(stderr, "Unknown mode: %s\n", mode.c_str());
   return 2;
 }
