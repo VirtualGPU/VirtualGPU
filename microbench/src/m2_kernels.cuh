@@ -6590,3 +6590,218 @@ static int run_sync_loop_delta(int device, int samples, int warmup, bool flag_on
   CUDA_CHECK(cudaFree(d_start)); CUDA_CHECK(cudaFree(d_clock));
   return 0;
 }
+
+// sync-loop-free: groups of G CTAs read the same stage in a free-running single-buffer loop (no schedule,
+// no step barrier), so the followers' natural offset from the first issuer can be measured. With STAMP,
+// thread 0 records %globaltimer just before each step's copies. Every CTA records its stage latency
+// (cycles from a barrier before its copies to the barrier after wait_group 0) and its finish time; the
+// output is the mean over all CTAs, since the first issuer of a step changes from step to step. The
+// region is addressed with `mask` from `start`, as in sync-loop-delta (cold ring or warm 4 MiB).
+#define FREE_MMA(acc0, acc1, acc2, acc3)                                                          \
+  asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, " \
+               "{%8,%9}, {%0,%1,%2,%3};\n"                                                         \
+               : "+f"(acc0), "+f"(acc1), "+f"(acc2), "+f"(acc3)                                    \
+               : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1))
+
+template <int STAGE_BYTES, int NUM_WARPS, int MI, int G, bool STAMP>
+__global__ void free_kernel(const uint4* __restrict__ src, float* __restrict__ sink, size_t mask, size_t start,
+                            int steps, unsigned long long* __restrict__ stamps, double* __restrict__ out_latency,
+                            unsigned long long* __restrict__ out_finish, unsigned long long* __restrict__ out_clock) {
+  extern __shared__ uint4 smem[];
+  const uint32_t tid = threadIdx.x;
+  const uint32_t warp_id = tid >> 5;
+  const uint32_t lane = tid & 31u;
+  constexpr size_t STAGE_U4 = static_cast<size_t>(STAGE_BYTES) / sizeof(uint4);
+  constexpr int VECS = STAGE_BYTES / (NUM_WARPS * 32 * 16);
+  constexpr int LD_N = STAGE_BYTES / (NUM_WARPS * 512);
+  const size_t groups = gridDim.x / G;
+  const size_t group = blockIdx.x / G;
+  uint32_t a0 = 0x3c003c00u, a1 = 0x3c003c00u, a2 = 0x3c003c00u, a3 = 0x3c003c00u;
+  uint32_t b0 = 0x3c003c00u, b1 = 0x3c003c00u;
+  uint32_t live_acc = 0u;
+  float c00 = 0.f, c01 = 0.f, c02 = 0.f, c03 = 0.f, c10 = 0.f, c11 = 0.f, c12 = 0.f, c13 = 0.f;
+  float c20 = 0.f, c21 = 0.f, c22 = 0.f, c23 = 0.f, c30 = 0.f, c31 = 0.f, c32 = 0.f, c33 = 0.f;
+  long long latency = 0;
+  const unsigned long long g0 = read_globaltimer();
+  const long long k0 = clock64();
+  for (int step = 0; step < steps; ++step) {
+    asm volatile("bar.sync 0;\n" ::: "memory");
+    const long long t0 = clock64();
+    if (STAMP && tid == 0) stamps[static_cast<size_t>(blockIdx.x) * steps + step] = read_globaltimer();
+    const size_t base = (start + (static_cast<size_t>(step) * groups + group) * STAGE_U4) & mask;
+    #pragma unroll
+    for (int v = 0; v < VECS; ++v) {
+      size_t off = static_cast<size_t>(v) * (NUM_WARPS * 32) + tid;
+      uint32_t saddr = static_cast<uint32_t>(__cvta_generic_to_shared(smem + off));
+      asm volatile("cp.async.cg.shared.global [%0], [%1], 16;\n" :: "r"(saddr), "l"(src + ((base + off) & mask)) : "memory");
+    }
+    asm volatile("cp.async.commit_group;\n" ::: "memory");
+    asm volatile("cp.async.wait_group 0;\n" ::: "memory");
+    asm volatile("bar.sync 0;\n" ::: "memory");
+    latency += clock64() - t0;
+    #pragma unroll
+    for (int r = 0; r < LD_N; ++r) {
+      size_t off_u4 = (static_cast<size_t>(r) * NUM_WARPS + warp_id) * 32ULL + lane;
+      uint32_t saddr = static_cast<uint32_t>(__cvta_generic_to_shared(smem + off_u4));
+      uint32_t r0, r1, r2, r3;
+      asm volatile("ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0,%1,%2,%3}, [%4];\n"
+                   : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "r"(saddr) : "memory");
+      live_acc ^= (r0 ^ r1 ^ r2 ^ r3);
+      if (r == LD_N - 1) { a0 = r0; a1 = r1; a2 = r2; a3 = r3; b0 = r0; b1 = r1; }
+    }
+    #pragma unroll
+    for (int m = 0; m < MI; ++m) { FREE_MMA(c00, c01, c02, c03); FREE_MMA(c10, c11, c12, c13); FREE_MMA(c20, c21, c22, c23); FREE_MMA(c30, c31, c32, c33); }
+  }
+  asm volatile("bar.sync 0;\n" ::: "memory");
+  if (tid == 0) {
+    out_latency[blockIdx.x] = static_cast<double>(latency) / steps;
+    out_finish[blockIdx.x] = read_globaltimer();
+    if (blockIdx.x == 0) {
+      out_clock[0] = static_cast<unsigned long long>(clock64() - k0);
+      out_clock[1] = read_globaltimer() - g0;
+    }
+  }
+  float sum = c00 + c01 + c02 + c03 + c10 + c11 + c12 + c13 + c20 + c21 + c22 + c23 + c30 + c31 + c32 + c33 +
+              static_cast<float>(live_acc & 1u);
+  if (sum == -999999.0f) sink[blockIdx.x * blockDim.x + tid] = sum;
+}
+#undef FREE_MMA
+
+static int run_sync_loop_free(int device, int samples, int warmup) {
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  const int sm_count = prop.multiProcessorCount;
+  constexpr int STEPS = 1024;
+  constexpr int BINS = 256, BIN_NS = 32;
+  const size_t cold_bytes = 256ULL * 1024ULL * 1024ULL;
+  const size_t cold_mask = cold_bytes / sizeof(uint4) - 1, warm_mask = 4ULL * 1024ULL * 1024ULL / sizeof(uint4) - 1;
+  uint4* d_src = nullptr;
+  float* d_sink = nullptr;
+  unsigned long long *d_stamps = nullptr, *d_finish = nullptr, *d_clock = nullptr;
+  double* d_latency = nullptr;
+  CUDA_CHECK(cudaMalloc(&d_src, cold_bytes));
+  CUDA_CHECK(cudaMalloc(&d_sink, static_cast<size_t>(sm_count) * 256 * sizeof(float)));
+  CUDA_CHECK(cudaMalloc(&d_stamps, static_cast<size_t>(sm_count) * STEPS * sizeof(unsigned long long)));
+  CUDA_CHECK(cudaMalloc(&d_finish, sm_count * sizeof(unsigned long long)));
+  CUDA_CHECK(cudaMalloc(&d_clock, 2 * sizeof(unsigned long long)));
+  CUDA_CHECK(cudaMalloc(&d_latency, sm_count * sizeof(double)));
+  CUDA_CHECK(cudaMemset(d_src, 0x3c, cold_bytes));
+  size_t cold_start = 0;
+  std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"steps\": %d,\n  \"offset_bin_ns\": %d,\n  \"sync_loop_free\": [",
+              samples, sm_count, STEPS, BIN_NS);
+  bool first = true;
+  auto run_point = [&](auto sb_c, auto w_c, auto mi_c, auto g_c, auto stamp_c, bool warm) {
+    constexpr int SB = decltype(sb_c)::value, W = decltype(w_c)::value, MI = decltype(mi_c)::value;
+    constexpr int G = decltype(g_c)::value;
+    constexpr bool STAMP = decltype(stamp_c)::value;
+    constexpr int SMEM = SB > 53248 ? SB : 53248;
+    const int grid = sm_count / G * G;
+    auto kernel = free_kernel<SB, W, MI, G, STAMP>;
+    CUDA_CHECK(cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
+    int max_blocks = 0;
+    CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, W * 32, SMEM));
+    if (max_blocks != 1) { std::fprintf(stderr, "free_kernel: %d CTAs per SM\n", max_blocks); std::exit(1); }
+    std::vector<double> lat(grid);
+    std::vector<unsigned long long> finish(grid), stamps(STAMP ? static_cast<size_t>(grid) * STEPS : 0);
+    unsigned long long clk[2] = {0, 0};
+    auto launch = [&]() {
+      kernel<<<grid, W * 32, SMEM>>>(d_src, d_sink, warm ? warm_mask : cold_mask, warm ? 0 : cold_start, STEPS, d_stamps,
+                                     d_latency, d_finish, d_clock);
+      CUDA_CHECK(cudaDeviceSynchronize());
+      if (!warm) cold_start = (cold_start + static_cast<size_t>(STEPS) * (grid / G) * (SB / sizeof(uint4))) & cold_mask;
+      CUDA_CHECK(cudaMemcpy(lat.data(), d_latency, grid * sizeof(double), cudaMemcpyDeviceToHost));
+      CUDA_CHECK(cudaMemcpy(finish.data(), d_finish, grid * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
+      CUDA_CHECK(cudaMemcpy(clk, d_clock, sizeof(clk), cudaMemcpyDeviceToHost));
+      if (STAMP) CUDA_CHECK(cudaMemcpy(stamps.data(), d_stamps, stamps.size() * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
+    };
+    for (int w = 0; w < warmup; ++w) launch();
+    std::vector<double> latency_s, step_s, spread_s;
+    std::vector<unsigned long long> hist(BINS + 1, 0);
+    std::vector<double> offsets;
+    for (int s = 0; s < samples; ++s) {
+      launch();
+      const double ghz = static_cast<double>(clk[0]) / static_cast<double>(clk[1]);
+      double latency_sum = 0.0, spread_sum = 0.0;
+      for (int g = 0; g < grid / G; ++g) {
+        double mean = 0.0, sq = 0.0;
+        for (int i = 0; i < G; ++i) mean += static_cast<double>(finish[g * G + i] - finish[g * G]) / G;
+        for (int i = 0; i < G; ++i) {
+          const double x = static_cast<double>(finish[g * G + i] - finish[g * G]) - mean;
+          sq += x * x / G;
+        }
+        spread_sum += std::sqrt(sq);
+        for (int i = 0; i < G; ++i) latency_sum += lat[g * G + i] / ghz;
+      }
+      const int groups = grid / G;
+      latency_s.push_back(latency_sum / grid);
+      spread_s.push_back(spread_sum / groups);
+      step_s.push_back(static_cast<double>(clk[1]) / STEPS);
+      if (STAMP) {
+        for (int g = 0; g < groups; ++g) {
+          for (int step = 0; step < STEPS; ++step) {
+            unsigned long long lo = ~0ULL;
+            int lead = 0;
+            for (int i = 0; i < G; ++i) {
+              const unsigned long long t = stamps[static_cast<size_t>(g * G + i) * STEPS + step];
+              if (t < lo) { lo = t; lead = i; }
+            }
+            for (int i = 0; i < G; ++i) {
+              if (i == lead) continue;
+              const double d = static_cast<double>(stamps[static_cast<size_t>(g * G + i) * STEPS + step] - lo);
+              offsets.push_back(d);
+              ++hist[std::min<size_t>(BINS, static_cast<size_t>(d / BIN_NS))];
+            }
+          }
+        }
+      }
+    }
+    auto list = [](const char* name, const std::vector<double>& v) {
+      std::printf(", \"%s\": [", name);
+      for (size_t i = 0; i < v.size(); ++i) std::printf(i ? ", %.1f" : "%.1f", v[i]);
+      std::printf("]");
+    };
+    if (!first) std::printf(",");
+    first = false;
+    std::printf("\n    {\"region\": \"%s\", \"stamp\": %s, \"stage_bytes\": %d, \"num_warps\": %d, \"mma_groups\": %d, "
+                "\"group\": %d, \"grid\": %d", warm ? "warm" : "cold", STAMP ? "true" : "false", SB, W, MI, G, grid);
+    list("stage_latency_ns_samples", latency_s);
+    list("step_ns_samples", step_s);
+    list("finish_spread_ns_samples", spread_s);
+    if (STAMP) {
+      std::sort(offsets.begin(), offsets.end());
+      auto q = [&](double p) { return offsets[static_cast<size_t>(p * (offsets.size() - 1))]; };
+      std::printf(", \"follower_offset_ns_quantiles\": {\"p10\": %.0f, \"p25\": %.0f, \"p50\": %.0f, \"p75\": %.0f, \"p90\": %.0f, \"p99\": %.0f}",
+                  q(0.1), q(0.25), q(0.5), q(0.75), q(0.9), q(0.99));
+      std::printf(", \"follower_offset_histogram\": [");
+      for (int b = 0; b <= BINS; ++b) std::printf(b ? ", %llu" : "%llu", hist[b]);
+      std::printf("]");
+    }
+    std::printf("}");
+  };
+  using T = std::true_type;
+  using F = std::false_type;
+  auto each = [&](auto sb_c, auto w_c, auto mi_c, auto g_c) {
+    run_point(sb_c, w_c, mi_c, g_c, F{}, true);
+    run_point(sb_c, w_c, mi_c, g_c, F{}, false);
+    run_point(sb_c, w_c, mi_c, g_c, T{}, false);
+  };
+  auto each_g = [&](auto sb_c, auto w_c, auto mi_c) {
+    each(sb_c, w_c, mi_c, std::integral_constant<int, 4>{});
+    each(sb_c, w_c, mi_c, std::integral_constant<int, 16>{});
+  };
+  auto each_mi = [&](auto sb_c, auto w_c) {
+    each_g(sb_c, w_c, std::integral_constant<int, 2>{});
+    each_g(sb_c, w_c, std::integral_constant<int, 8>{});
+    each_g(sb_c, w_c, std::integral_constant<int, 32>{});
+  };
+  auto each_w = [&](auto sb_c) {
+    each_mi(sb_c, std::integral_constant<int, 4>{});
+    each_mi(sb_c, std::integral_constant<int, 8>{});
+  };
+  each_w(std::integral_constant<int, 16384>{});
+  each_w(std::integral_constant<int, 32768>{});
+  std::printf("\n  ]\n}\n");
+  CUDA_CHECK(cudaFree(d_src)); CUDA_CHECK(cudaFree(d_sink)); CUDA_CHECK(cudaFree(d_stamps));
+  CUDA_CHECK(cudaFree(d_finish)); CUDA_CHECK(cudaFree(d_clock)); CUDA_CHECK(cudaFree(d_latency));
+  return 0;
+}
