@@ -30,7 +30,7 @@ The base loops differ from the real kernel only by the copies, their address ari
 
 ## Forms (no free parameters)
 
-Counts are per warp per loop iteration from the SASS (a body unrolled by the compiler is scaled by its HMMA count against the tile's MMAs per iteration); rates are those the model uses, from `profiles/gb10.json`: `t_mma = HMMA W 4096 / mma_tflops_per_sm_by_warps(W)`, `t_alu = OTHER W / non_mma_issue_rate`, `t_sfu = MUFU W / sfu_issue_rate(W)`, `t_shfl = SHFL W / shfl_issue_rate(W)`, `t_smem = LDSM bytes W / smem_bw` (128, 256 or 512 bytes per `.x1`, `.x2`, `.x4` warp instruction, so per-CTA bytes as in the model's `smem_bytes`), `sync = fixed_sync_ns` at `W` warps and one buffer.
+Counts are per warp per loop iteration from the SASS (a body unrolled by the compiler is scaled by its HMMA count against the tile's MMAs per iteration); rates are those the model uses, from `profiles/gb10.json`: `t_mma = HMMA W 4096 / mma_tflops_per_sm_by_warps(W)`, `t_alu = OTHER W / non_mma_issue_rate`, `t_sfu = MUFU W / sfu_issue_rate(W)`, `t_shfl = SHFL W / shfl_issue_rate(W)`, `t_smem = LDSM bytes W / smem_bw` (128, 256 or 512 bytes per `.x1`, `.x2`, `.x4` warp instruction, written `LDSM.16.M88`, `LDSM.16.M88.2` and `LDSM.16.M88.4` in SASS, so per-CTA bytes in the unit of the model's `smem_bytes`; note that every warp's ldmatrix reads the whole K and V tile, 294912 B per CTA per iteration for `m128n64-w8`, while the KernelIR counts the tiles once, 65536 B), `sync = fixed_sync_ns` at `W` warps and one buffer.
 
 - F-max, the current core: `t_mma + max((OTHER + MUFU + SHFL) W / issue_rate, t_smem, t_sfu, t_shfl) + sync`.
 - F-sum: `t_mma + t_alu + t_sfu + t_shfl + t_smem + sync`.

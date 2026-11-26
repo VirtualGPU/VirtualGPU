@@ -14,7 +14,8 @@ from collections import Counter
 from pathlib import Path
 
 KEY = "mma.sync:f16:f16:f32:16x8x16"
-LDSM_BYTES = {"x1": 128, "x2": 256, "x4": 512}
+# SASS writes ldmatrix .x1, .x2, .x4 as LDSM.16.M88, LDSM.16.M88.2, LDSM.16.M88.4 (MT88 when transposed).
+LDSM_BYTES = {"M88": 128, "MT88": 128, "2": 256, "4": 512}
 DIFFER = 0.02
 WRONG = 0.15
 CLASSES = ("HMMA", "LDSM", "MUFU", "SHFL", "BAR")
@@ -52,7 +53,10 @@ def loop_counts(sass):
         op = re.sub(r"^@!?U?P\w+\s+", "", text).split()[0]
         base = op.split(".")[0]
         if base == "LDSM":
-            ldsm_bytes += next((b for k, b in LDSM_BYTES.items() if f".{k}" in op), 128)
+            last = op.split(".")[-1]
+            if last not in LDSM_BYTES:
+                raise ValueError(f"unexpected ldmatrix form {op}")
+            ldsm_bytes += LDSM_BYTES[last]
         counts[base if base in CLASSES else "OTHER"] += 1
     if not best:
         raise ValueError("no MMA loop found")
