@@ -1,4 +1,4 @@
-{
+{"acquisition_check": {"status": "failed", "rule": "acquisition dispersion rules of 2026-11-27 (lead, from 6's audit)", "failed_condition": 2, "consequence": "conclusions provisional; not repeated, as the result does not enter the model", "lists_iqr_over_median_above_10pct": 0.023, "lists_max_over_min_above_1_5": 0.197, "points_cross_process_range_above_10pct": 0.0},
  "device": "NVIDIA GB10 (Spark 1)",
  "binary": "vgpu_bench sm_121 at f96e7ed",
  "mode": "sync-loop-delta",

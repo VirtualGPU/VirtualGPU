@@ -1,4 +1,4 @@
-{
+{"acquisition_check": {"status": "failed", "rule": "acquisition dispersion rules of 2026-11-27 (lead, from 6's audit)", "failed_condition": 2, "consequence": "conclusions provisional; not repeated, as the result does not enter the model", "lists_iqr_over_median_above_10pct": 0.038, "lists_max_over_min_above_1_5": 0.425, "points_cross_process_range_above_10pct": null},
   "samples": 9,
   "sync_loop_share": [
     {"dep": "free", "share_ctas": 1, "split_kv": false, "mem_level": "l2", "ctas_per_sm": 1, "active_ctas": 46, "num_warps": 4, "stage_bytes": 16384, "mma_per_warp_per_block": 64, "steps": 320, "turnaround_ns_samples": [2531.20, 2624.50, 2620.90, 2612.40, 2723.80, 4534.30, 2687.30, 2655.30, 2617.30], "cycles_per_step_samples": [6361.6, 6362.1, 6363.8, 6371.6, 6362.9, 8008.4, 6376.2, 6365.3, 6365.7]},
