@@ -1,5 +1,7 @@
 # Narrow-load microbenchmarks on GB10 (H5): results
 
+**Status (2026-11-27): both captures are void, and the conclusions below are provisional.** Checked with the capture dispersion rule adopted for all post-hoc microbenchmarks on 2026-11-27 (a capture is void if more than 5% of its sample lists have an interquartile range above 10% of the median, more than 15% have largest over smallest above 1.5, or, across processes, more than 5% of its points have per-process medians spreading more than 10%): `gmem-narrow-1` has 11.9% of its lists with an interquartile range above 10% and 19.8% of its points spreading more than 10% across processes; `sync-loop-narrow-1` has 15.1% and 11.1%. The data stay archived and the scores are kept as computed, but no verdict here stands until a capture that passes the rule repeats it.
+
 **Post-hoc.** The candidate forms below were frozen before these points were measured, but the analysis is part of the H5 post-hoc investigation ([h5-two-byte-posthoc.md](h5-two-byte-posthoc.md)) and changes no model. The observations in the last sections were made after the data was seen; any form built on them must be validated on new points.
 
 ## Protocol

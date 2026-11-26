@@ -1,5 +1,20 @@
 # H5 follow-ups on GB10: DRAM-side narrow request form and register staging
 
+**Status (2026-11-27): every capture in this document is void, and its conclusions are provisional.** Checked with the capture dispersion rule adopted for all post-hoc microbenchmarks on 2026-11-27 (a capture is void if more than 5% of its sample lists have an interquartile range above 10% of the median, more than 15% have largest over smallest above 1.5, or, across processes, more than 5% of its points have per-process medians spreading more than 10%):
+
+| Capture | IQR above 10% | Largest over smallest above 1.5 | Points spreading over 10% across processes |
+|---|---:|---:|---:|
+| `gmem-narrow-validate-1` (GB10) | 11.0% | 4.1% | 24.2% |
+| `sync-loop-narrow-validate-1` (GB10) | 10.6% | 5.0% | 5.6% |
+| `stage-narrow-1` (GB10) | 9.8% | 2.6% | 3.7% |
+| `stage-narrow-batched-1` (GB10) | 7.7% | 2.0% | 3.1% |
+| `stage-narrow-validate-1` (GB10) | 8.0% | 2.2% | 6.1% |
+| `gmem-narrow-validate-2` (GB10) | 11.3% | 3.5% | 13.1% |
+| `stage-narrow-k1-1` (GB10) | 7.6% | 4.7% | 4.2% |
+| `gmem-narrow-validate-1` (RTX 4070) | 6.6% | 54.4% | 0.7% |
+
+The data stay archived and the scores below are kept as they were computed; none of the verdicts in this document stands until a capture that passes the rule repeats it. Post-hoc, on GB10 the dispersion sits in the launches shorter than about 1 ms and in the long narrow DRAM points (single samples up to 1.7 times the median), while hot-L2 launches over 1 ms are tight; one possible reason for the DRAM points, not tested, is CPU memory traffic on GB10's shared memory. The last register staging round is being repeated with every launch over 1 ms (`validation/h5_staging_k1.py`).
+
 **Post-hoc.** Both follow-ups come from observations on the first narrow-load points ([h5-narrow-microbench-posthoc.md](h5-narrow-microbench-posthoc.md)), so those points are not held out for them. The DRAM-side form was frozen before the new points below were measured; the register staging points are measurement only. No model code changed.
 
 ## Capture
@@ -121,7 +136,7 @@ MAPE over the 192 pure-load DRAM points is 27.1% (current model 33.8%, p90 72.7%
 
 Post-hoc and from the void capture only, the 1 B points suggest why: on the RTX 4070 their request rate is not capped. It falls as each thread keeps more rows in flight, from up to 12.4 warp requests per ns at 4 loads per thread to 3.3 to 3.7 at 24, and the calibration point (16 per thread) sits on the slow side. Rows in flight per CTA set how many DRAM pages are open at once, so on this GPU the narrow DRAM cost follows access locality rather than a GPU-wide request rate. If a clean capture confirms this, the form's request limit is a GB10 observation that does not carry over.
 
-## Last register staging round: K1 does not pass
+## Last register staging round: K1 (capture void, being repeated)
 
 K1 is b1 + b2 unchanged, with no new constant. Frozen in [validation/h5-staging-k1-frozen.json](../../../validation/h5-staging-k1-frozen.json) (SHA-256 `908c0d4302abac1423884134d3063e51184fb809c7b3ac1ee194609bb63b2475`) by [validation/h5_staging_k1.py](../../../validation/h5_staging_k1.py) before measurement, with the same pass rule and 8-MMA rule as before, and with the MAPE and width medians over the points without MMA registered as a descriptive result. Q and tau come from the same two calibration points, each the median of 5 independent processes run before the 5 repeats. The 96 new points are 4 warps, 6 and 10 KiB stages, 2 and 4 CTAs per SM, 1 to 16 B, the three variants, chains of 0 and 8 MMAs; four 10 KiB points with loads and stores were excluded before measurement because, with the Spark's own `ptxas`, they need more than 128 registers per thread, and exactly those four ran at 3 CTAs per SM instead of 4.
 
@@ -132,9 +147,7 @@ Captured on GB10 under the lock (thermal gate 51.4 / 51.7 C, 2496 / 2509 MHz; 51
 - K1: MAPE 16.9% (current model 25.7%); median error 1 B +3.6%, 2 B -3.8%, 4 B +8.8%, 16 B -1.4%. Every width is within 10%, but the MAPE is above 15%, so K1 does not pass.
 - Post-hoc: stores alone are now predicted 17% to 18% slow at both 2 and 4 CTAs per SM (Q was calibrated with 16 KiB stages and 3 CTAs), and loads alone 8% to 10% slow at 2 CTAs; the 8-MMA points, not judged, add the MMA chain miss (2 B -17%).
 
-H5 register staging stops here: b1 + b2 points the right way and lowers the MAPE from 28.7% to 10.7% (second round) and from 25.7% to 16.9% (this round), but it did not meet the pass rule and does not go into the core ([design.md section 9.5](../../design.md#95-narrow-register-staged-loads-h5)).
-
-**Sample dispersion of the GB10 captures.** The dispersion rule adopted for RTX 4070 captures (more than 10% of sample lists with largest over smallest above 1.3) is not applied to GB10, but by it the GB10 captures of H5 would read 15.2% (`gmem-narrow-validate-1`), 14.6% (`-2`), 11.4% (`stage-narrow-validate-1`) and 12.0% (`stage-narrow-k1-1`). On GB10 these are single high samples in otherwise tight lists, at random positions, not two groups; every point uses the median over repeats of per-repeat medians, which these samples do not move.
+This capture is void under the dispersion rule (status above), so the verdict is withdrawn; K1 is frozen again with 9 GiB per sample, which puts the shortest predicted launch at 1.55 ms, and will be measured once more with the same points, calibration and pass rule. If that capture passes the rule and K1 fails, H5 register staging closes as a known limit ([design.md section 9.5](../../design.md#95-narrow-register-staged-loads-h5)).
 
 ## Open item outside H5
 
@@ -142,5 +155,5 @@ H5 register staging stops here: b1 + b2 points the right way and lowers the MAPE
 
 ## Next steps
 
-- DRAM-side form: repeat the RTX 4070 test with the same frozen file in a quiet desktop window (GPU engine utilization under 5% for 60 s before the capture, dispersion check after it). It does not go into the core in any case before that test passes.
-- Register staging: closed as a known limit (section above).
+- DRAM-side form: repeat on GB10 and on the RTX 4070 with launches over 1 ms and captures that pass the dispersion rule; it stays out of the core until then.
+- Register staging: K1 again with launches over 1 ms (frozen), then close or not.
