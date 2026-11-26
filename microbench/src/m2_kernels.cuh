@@ -1861,7 +1861,9 @@ static int run_l2_merge(int device, int samples, int warmup) {
   CUDA_CHECK(cudaMalloc(&d_dram, dram_bytes));
   CUDA_CHECK(cudaMalloc(&d_flush, dram_bytes));
   CUDA_CHECK(cudaMalloc(&d_sink, 1024 * sizeof(uint4)));
-  CUDA_CHECK(cudaMalloc(&d_cta_turn, 256 * sizeof(double)));
+  // One slot per CTA; the largest launch below is sm_count * 2.
+  const size_t max_ctas = std::max<size_t>(256, static_cast<size_t>(sm_count) * 2);
+  CUDA_CHECK(cudaMalloc(&d_cta_turn, max_ctas * sizeof(double)));
   CUDA_CHECK(cudaMemset(d_dram, 21, dram_bytes));
   CUDA_CHECK(cudaMemset(d_flush, 22, dram_bytes));
 
@@ -1875,7 +1877,7 @@ static int run_l2_merge(int device, int samples, int warmup) {
   const std::vector<int> k_list = {4096, 8192, 16384};
   const int steps = 256;
 
-  std::vector<double> h_cta_turn(256, 0.0);
+  std::vector<double> h_cta_turn(max_ctas, 0.0);
   std::printf("{\n  \"samples\": %d,\n  \"cycles_per_ns\": %.4f,\n  \"l2_merge_by_sharing\": [",
               samples, cycles_per_ns);
   bool first = true;
