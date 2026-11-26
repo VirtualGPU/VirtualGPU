@@ -632,6 +632,9 @@ int main(int argc, char** argv) {
   if (mode == "l2-paths") {
     return run_l2_paths(device, samples, warmup);
   }
+  if (mode == "mma-ilp") {
+    return run_mma_ilp(device, samples, warmup);
+  }
   std::fprintf(stderr, "Unknown mode: %s\n", mode.c_str());
   return 2;
 }
