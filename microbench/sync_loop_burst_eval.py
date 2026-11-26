@@ -40,7 +40,8 @@ def measured(paths):
         for p in json.load(open(path))["sync_loop_burst"]:
             key = (p["dep"], p["start"], p["grid"], p["stage_bytes"])
             turn.setdefault(key, []).append(st.median(p["turnaround_ns_samples"]))
-            coherence.setdefault(key[1:], []).append([st.median(c) for c in p["coherence_samples"]])
+            if p["dep"] == "free":
+                coherence.setdefault(key[1:], []).append([st.median(c) for c in p["coherence_samples"]])
     excess = {}
     for (dep, start, n, sb), v in turn.items():
         if dep == "free":
