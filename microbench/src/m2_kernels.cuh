@@ -6233,10 +6233,15 @@ static int run_sync_loop_miss(int device, int samples, int warmup) {
     constexpr bool NOLOAD = decltype(noload_c)::value;
     constexpr int SB = decltype(sb_c)::value, FD = decltype(fd_c)::value, G = decltype(g_c)::value;
     auto kernel = miss_kernel<NOLOAD, SB, 8, 8, FD, G>;
-    CUDA_CHECK(cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, SB));
+    // At least 52 KiB of shared memory per CTA keeps one CTA per SM at every stage size.
+    constexpr int SMEM = SB > 53248 ? SB : 53248;
+    CUDA_CHECK(cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
+    int max_blocks = 0;
+    CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, 256, SMEM));
+    if (max_blocks != 1) { std::fprintf(stderr, "miss_kernel: %d CTAs per SM\n", max_blocks); std::exit(1); }
     auto time_ms = [&](int st) {
       CUDA_CHECK(cudaEventRecord(ev_start));
-      kernel<<<grid, 256, SB>>>(d_hot, d_cold, d_sink_f, hot_mask, cold_mask, st, d_cyc);
+      kernel<<<grid, 256, SMEM>>>(d_hot, d_cold, d_sink_f, hot_mask, cold_mask, st, d_cyc);
       CUDA_CHECK(cudaEventRecord(ev_stop));
       CUDA_CHECK(cudaEventSynchronize(ev_stop));
       float ms = 0.0f;
