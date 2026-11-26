@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 from virtualgpu.frontend.compiler import ARTIFACT_HASH_VERSION
 
-from validation import h5_candidates, h5_dram_form, h5_staging_forms, v02_score
+from validation import h5_candidates, h5_dram_form, h5_staging_forms, h5_staging_k1, v02_score
 from validation.baseline import gemm_work, latency_ns, predict
 from validation.experiment import core_records, development_gates, load_case, validate_core_builds
 from validation.holdout import read_verified_report, require_release, seal_report, sha256
@@ -825,3 +825,32 @@ class StagingFormsTest(unittest.TestCase):
         self.assertAlmostEqual(result["q_warp_stores_per_ns_per_sm"], 2.0)
         self.assertAlmostEqual(result["tau_ns_per_load"], 1.0)
         self.assertAlmostEqual(result["forms"]["b2_load_chain"]["errors"][new], 0.0)
+
+
+class StagingK1Test(unittest.TestCase):
+    def test_points_are_new(self):
+        keys = [h5_staging_forms.key(p) for p in h5_staging_k1.points()]
+        self.assertEqual((len(keys), len(set(keys))), (96, 96))
+        old = {h5_staging_forms.key(p) for p in h5_staging_forms.points()}
+        self.assertFalse(old & set(keys))
+        self.assertEqual(sum(h5_staging_k1.excluded(p) for p in h5_staging_k1.points()), 4)
+
+    def test_constants_use_the_median_calibration_run(self):
+        cal1 = h5_staging_forms.key(h5_staging_forms.CAL_B1)
+        cal2 = h5_staging_forms.key(h5_staging_forms.CAL_B2)
+        new = h5_staging_forms.key(h5_staging_k1.points()[0])
+        frozen = {"calibration_b1": h5_staging_forms.CAL_B1, "calibration_b2": h5_staging_forms.CAL_B2,
+                  "calibration_runs": 5, "q_grid": [1.0, 2.0, 4.0], "order": [cal1, cal2, new], "points": {
+                      cal1: {"c0_current": 40.0, "b1_grid": [160.0, 80.0, 40.0],
+                             "l2_load_steps_x_loads_per_thread": 0},
+                      cal2: {"c0_current": 100.0, "b1_grid": [100.0] * 3,
+                             "l2_load_steps_x_loads_per_thread": 50},
+                      new: {"c0_current": 100.0, "b1_grid": [100.0] * 3,
+                            "l2_load_steps_x_loads_per_thread": 10}}}
+        runs = {cal1: [70.0, 80.0, 90.0, 80.0, 85.0], cal2: [150.0, 140.0, 160.0, 150.0, 155.0]}
+        result = h5_staging_k1.score(frozen, {new: 110.0}, runs)
+        self.assertAlmostEqual(result["q_warp_stores_per_ns_per_sm"], 2.0)
+        self.assertAlmostEqual(result["tau_ns_per_load"], 1.0)
+        self.assertAlmostEqual(result["forms"]["k1_b1_b2"]["errors"][new], 0.0)
+        with self.assertRaises(ValueError):
+            h5_staging_k1.score(frozen, {new: 110.0}, {cal1: runs[cal1][:4], cal2: runs[cal2]})
