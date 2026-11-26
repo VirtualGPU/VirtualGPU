@@ -7119,3 +7119,92 @@ static int run_l2_paths(int device, int samples, int warmup) {
   CUDA_CHECK(cudaFree(d_buf)); CUDA_CHECK(cudaFree(d_sink));
   return 0;
 }
+
+// mma-ilp: each warp keeps ILP independent m16n8k16 f16 -> f32 accumulators and runs a chain of N
+// dependent MMAs on each per step, rotating over the accumulators, with no memory traffic. Every
+// accumulator feeds the sink so nothing is eliminated. CTAs per SM are set by dynamic shared memory.
+template <int ILP, int N>
+__global__ void mma_ilp_kernel(float* __restrict__ sink, int steps, uint32_t seed) {
+  const uint32_t a0 = 0x3c003c00u ^ (seed & 1u), a1 = 0x3c003c00u, a2 = 0x3c003c00u, a3 = 0x3c003c00u;
+  const uint32_t b0 = 0x3c003c00u, b1 = 0x3c003c00u ^ (seed & 2u);
+  float acc[ILP][4];
+  #pragma unroll
+  for (int i = 0; i < ILP; ++i) { acc[i][0] = acc[i][1] = acc[i][2] = acc[i][3] = 0.f; }
+  for (int step = 0; step < steps; ++step) {
+    #pragma unroll
+    for (int n = 0; n < N; ++n) {
+      #pragma unroll
+      for (int i = 0; i < ILP; ++i) {
+        asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
+                     : "+f"(acc[i][0]), "+f"(acc[i][1]), "+f"(acc[i][2]), "+f"(acc[i][3])
+                     : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
+      }
+    }
+  }
+  float sum = 0.f;
+  #pragma unroll
+  for (int i = 0; i < ILP; ++i) sum += acc[i][0] + acc[i][1] + acc[i][2] + acc[i][3];
+  if (sum == -999999.0f) sink[blockIdx.x * blockDim.x + threadIdx.x] = sum;
+}
+
+static int run_mma_ilp(int device, int samples, int warmup) {
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  const int sm_count = prop.multiProcessorCount;
+  float* d_sink = nullptr;
+  CUDA_CHECK(cudaMalloc(&d_sink, static_cast<size_t>(sm_count) * 3 * 512 * sizeof(float)));
+  cudaEvent_t ev_start, ev_stop;
+  CUDA_CHECK(cudaEventCreate(&ev_start));
+  CUDA_CHECK(cudaEventCreate(&ev_stop));
+  std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"chain_lengths\": [16, 64],\n  \"mma_ilp\": [", samples, sm_count);
+  bool first = true;
+  auto run_point = [&](auto ilp_c, int warps, int cps) {
+    constexpr int ILP = decltype(ilp_c)::value;
+    // Shared memory that leaves room for exactly cps CTAs per SM.
+    const int smem = static_cast<int>(prop.sharedMemPerMultiprocessor / cps) - static_cast<int>(prop.reservedSharedMemPerBlock) - 128;
+    auto k16 = mma_ilp_kernel<ILP, 16>;
+    auto k64 = mma_ilp_kernel<ILP, 64>;
+    for (auto k : {k16, k64}) CUDA_CHECK(cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, smem));
+    int blocks = 0;
+    CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&blocks, k64, warps * 32, smem));
+    if (blocks != cps) { std::fprintf(stderr, "mma_ilp: %d CTAs per SM, wanted %d\n", blocks, cps); std::exit(1); }
+    const int grid = sm_count * cps;
+    auto time_ms = [&](auto k, int steps) {
+      CUDA_CHECK(cudaEventRecord(ev_start));
+      k<<<grid, warps * 32, smem>>>(d_sink, steps, 0u);
+      CUDA_CHECK(cudaEventRecord(ev_stop));
+      CUDA_CHECK(cudaEventSynchronize(ev_stop));
+      float ms = 0.0f;
+      CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
+      return static_cast<double>(ms);
+    };
+    // Steps so that the N = 64 launch takes about 2 ms; the same steps for N = 16.
+    const double probe = time_ms(k64, 64);
+    int steps = static_cast<int>(64 * 2.0 / std::max(probe, 1e-4));
+    steps = std::min(1 << 20, std::max(256, steps));
+    std::vector<double> slope;
+    for (int w = 0; w < warmup; ++w) { time_ms(k16, steps); time_ms(k64, steps); }
+    for (int s = 0; s < samples; ++s) {
+      const double t16 = time_ms(k16, steps), t64 = time_ms(k64, steps);
+      slope.push_back((t64 - t16) * 1e6 / (static_cast<double>(steps) * 48.0 * ILP));
+    }
+    if (!first) std::printf(",");
+    first = false;
+    std::printf("\n    {\"ilp\": %d, \"num_warps\": %d, \"ctas_per_sm\": %d, \"steps\": %d, \"ns_per_mma_per_warp_samples\": [",
+                ILP, warps, cps, steps);
+    for (size_t i = 0; i < slope.size(); ++i) std::printf(i ? ", %.4f" : "%.4f", slope[i]);
+    std::printf("]}");
+  };
+  auto each = [&](auto ilp_c) {
+    for (int warps : {1, 2, 3, 4, 8})
+      for (int cps : {1, 2, 3})
+        if (warps * cps <= 16) run_point(ilp_c, warps, cps);
+  };
+  each(std::integral_constant<int, 1>{});
+  each(std::integral_constant<int, 2>{});
+  each(std::integral_constant<int, 4>{});
+  each(std::integral_constant<int, 8>{});
+  std::printf("\n  ]\n}\n");
+  CUDA_CHECK(cudaFree(d_sink));
+  return 0;
+}
