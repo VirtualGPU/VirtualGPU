@@ -6815,16 +6815,20 @@ static int run_sync_loop_free(int device, int samples, int warmup) {
 
 // sync-loop-burst: the gemm_s2 shaped single-buffer loop on warm L2 with n CTAs, either started together
 // (lock) or with CTA c held back c * stagger_ns (stag), to see whether the CTAs' simultaneous stages
-// meet the L2 bandwidth. Each CTA records %globaltimer at the start of its first, middle and last step.
+// meet the L2 bandwidth. Each CTA records %globaltimer at the start of steps 0, 16, 64, 256, S/2 and
+// S - 1, and its cycles per step after the start offset; block 0 records the SM clock.
 #define BURST_MMA(acc0, acc1, acc2, acc3)                                                         \
   asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, " \
                "{%8,%9}, {%0,%1,%2,%3};\n"                                                         \
                : "+f"(acc0), "+f"(acc1), "+f"(acc2), "+f"(acc3)                                    \
                : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1))
 
+constexpr int BURST_STAMPS = 6;
+
 template <bool NOLOAD, int STAGE_BYTES, int NUM_WARPS, int MI>
 __global__ void burst_kernel(const uint4* __restrict__ src, float* __restrict__ sink, size_t mask, int steps,
-                             unsigned long long stagger_ns, unsigned long long* __restrict__ out_stamps) {
+                             unsigned long long stagger_ns, unsigned long long* __restrict__ out_stamps,
+                             double* __restrict__ out_cycles, unsigned long long* __restrict__ out_clock) {
   extern __shared__ uint4 smem[];
   const uint32_t tid = threadIdx.x;
   const uint32_t warp_id = tid >> 5;
@@ -6842,14 +6846,20 @@ __global__ void burst_kernel(const uint4* __restrict__ src, float* __restrict__ 
     while (read_globaltimer() < until) {}
   }
   __syncthreads();
+  const long long k0 = clock64();
+  const unsigned long long g0 = read_globaltimer();
+  const int marks[BURST_STAMPS] = {0, 16, 64, 256, steps / 2, steps - 1};
   uint32_t a0 = 0x3c003c00u, a1 = 0x3c003c00u, a2 = 0x3c003c00u, a3 = 0x3c003c00u;
   uint32_t b0 = 0x3c003c00u, b1 = 0x3c003c00u;
   uint32_t live_acc = 0u;
   float c00 = 0.f, c01 = 0.f, c02 = 0.f, c03 = 0.f, c10 = 0.f, c11 = 0.f, c12 = 0.f, c13 = 0.f;
   float c20 = 0.f, c21 = 0.f, c22 = 0.f, c23 = 0.f, c30 = 0.f, c31 = 0.f, c32 = 0.f, c33 = 0.f;
   for (int step = 0; step < steps; ++step) {
-    if (tid == 0 && (step == 0 || step == steps / 2 || step == steps - 1)) {
-      out_stamps[blockIdx.x * 3 + (step == 0 ? 0 : step == steps / 2 ? 1 : 2)] = read_globaltimer();
+    if (tid == 0) {
+      #pragma unroll
+      for (int m = 0; m < BURST_STAMPS; ++m) {
+        if (step == marks[m]) out_stamps[blockIdx.x * BURST_STAMPS + m] = read_globaltimer();
+      }
     }
     if constexpr (!NOLOAD) {
       #pragma unroll
@@ -6877,6 +6887,13 @@ __global__ void burst_kernel(const uint4* __restrict__ src, float* __restrict__ 
     asm volatile("bar.sync 0;\n" ::: "memory");
     base = (base + step_u4) & mask;
   }
+  if (tid == 0) {
+    out_cycles[blockIdx.x] = static_cast<double>(clock64() - k0) / steps;
+    if (blockIdx.x == 0) {
+      out_clock[0] = static_cast<unsigned long long>(clock64() - k0);
+      out_clock[1] = read_globaltimer() - g0;
+    }
+  }
   float sum = c00 + c01 + c02 + c03 + c10 + c11 + c12 + c13 + c20 + c21 + c22 + c23 + c30 + c31 + c32 + c33 +
               static_cast<float>(live_acc & 1u);
   if (sum == -999999.0f) sink[blockIdx.x * blockDim.x + tid] = sum;
@@ -6891,10 +6908,13 @@ static int run_sync_loop_burst(int device, int samples, int warmup) {
   const size_t mask = hot_bytes / sizeof(uint4) - 1;
   uint4* d_hot = nullptr;
   float* d_sink = nullptr;
-  unsigned long long* d_stamps = nullptr;
+  unsigned long long *d_stamps = nullptr, *d_clock = nullptr;
+  double* d_cycles = nullptr;
   CUDA_CHECK(cudaMalloc(&d_hot, hot_bytes));
   CUDA_CHECK(cudaMalloc(&d_sink, static_cast<size_t>(sm_count) * 256 * sizeof(float)));
-  CUDA_CHECK(cudaMalloc(&d_stamps, static_cast<size_t>(sm_count) * 3 * sizeof(unsigned long long)));
+  CUDA_CHECK(cudaMalloc(&d_stamps, static_cast<size_t>(sm_count) * BURST_STAMPS * sizeof(unsigned long long)));
+  CUDA_CHECK(cudaMalloc(&d_cycles, sm_count * sizeof(double)));
+  CUDA_CHECK(cudaMalloc(&d_clock, 2 * sizeof(unsigned long long)));
   CUDA_CHECK(cudaMemset(d_hot, 0x3c, hot_bytes));
   cudaEvent_t ev_start, ev_stop;
   CUDA_CHECK(cudaEventCreate(&ev_start));
@@ -6906,7 +6926,8 @@ static int run_sync_loop_burst(int device, int samples, int warmup) {
   auto coherence = [](const std::vector<unsigned long long>& st, int grid, int which, double step_ns) {
     double c = 0.0, s = 0.0;
     for (int b = 0; b < grid; ++b) {
-      const double phase = 2.0 * 3.14159265358979323846 * std::fmod(static_cast<double>(st[b * 3 + which] - st[which]), step_ns) / step_ns;
+      const double rel = static_cast<double>(static_cast<long long>(st[b * BURST_STAMPS + which] - st[which]));
+      const double phase = 2.0 * 3.14159265358979323846 * std::fmod(std::fmod(rel, step_ns) + step_ns, step_ns) / step_ns;
       c += std::cos(phase);
       s += std::sin(phase);
     }
@@ -6924,26 +6945,36 @@ static int run_sync_loop_burst(int device, int samples, int warmup) {
     const unsigned long long stagger = static_cast<unsigned long long>(stagger_ns);
     auto time_ms = [&](int st) {
       CUDA_CHECK(cudaEventRecord(ev_start));
-      kernel<<<grid, 256, SMEM>>>(d_hot, d_sink, mask, st, stagger, d_stamps);
+      kernel<<<grid, 256, SMEM>>>(d_hot, d_sink, mask, st, stagger, d_stamps, d_cycles, d_clock);
       CUDA_CHECK(cudaEventRecord(ev_stop));
       CUDA_CHECK(cudaEventSynchronize(ev_stop));
       float ms = 0.0f;
       CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
       return static_cast<double>(ms);
     };
+    // At least 1024 steps so the coherence marks at 16, 64 and 256 come before the middle one.
     double probe = time_ms(64);
     int steps = static_cast<int>(1.0 / std::max(probe / 64.0, 1e-5));
-    steps = std::min(65536, std::max(256, ((steps + 63) / 64) * 64));
+    steps = std::min(65536, std::max(1024, ((steps + 63) / 64) * 64));
     for (int w = 0; w < warmup; ++w) time_ms(steps);
-    std::vector<double> turn, coh_mid, coh_last;
-    std::vector<unsigned long long> st(static_cast<size_t>(grid) * 3);
+    std::vector<double> turn, event_turn;
+    std::vector<std::vector<double>> coh(BURST_STAMPS);
+    std::vector<unsigned long long> st(static_cast<size_t>(grid) * BURST_STAMPS);
+    std::vector<double> cyc(grid);
+    unsigned long long clk[2] = {0, 0};
     for (int s = 0; s < samples; ++s) {
       const double ms = time_ms(steps);
-      turn.push_back(ms * 1e6 / steps);
+      event_turn.push_back(ms * 1e6 / steps);
       CUDA_CHECK(cudaMemcpy(st.data(), d_stamps, st.size() * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
-      const double step_ns = static_cast<double>(st[2] - st[1]) / (steps - 1 - steps / 2);
-      coh_mid.push_back(coherence(st, grid, 1, step_ns));
-      coh_last.push_back(coherence(st, grid, 2, step_ns));
+      CUDA_CHECK(cudaMemcpy(cyc.data(), d_cycles, grid * sizeof(double), cudaMemcpyDeviceToHost));
+      CUDA_CHECK(cudaMemcpy(clk, d_clock, sizeof(clk), cudaMemcpyDeviceToHost));
+      // Per-CTA steps after the start offset, so the stag offsets add no tail.
+      const double ghz = static_cast<double>(clk[0]) / static_cast<double>(clk[1]);
+      double mean = 0.0;
+      for (int b = 0; b < grid; ++b) mean += cyc[b] / ghz / grid;
+      turn.push_back(mean);
+      const double step_ns = static_cast<double>(st[5] - st[4]) / (steps - 1 - steps / 2);
+      for (int m = 0; m < BURST_STAMPS; ++m) coh[m].push_back(coherence(st, grid, m, step_ns));
     }
     if (!first) std::printf(",");
     first = false;
@@ -6951,17 +6982,21 @@ static int run_sync_loop_burst(int device, int samples, int warmup) {
                 "\"stagger_ns\": %.1f, \"turnaround_ns_samples\": [", NOLOAD ? "noload" : "free", stagger > 0 ? "stag" : "lock",
                 grid, SB, steps, stagger_ns);
     for (size_t i = 0; i < turn.size(); ++i) std::printf(i ? ", %.2f" : "%.2f", turn[i]);
-    std::printf("], \"coherence_mid_samples\": [");
-    for (size_t i = 0; i < coh_mid.size(); ++i) std::printf(i ? ", %.3f" : "%.3f", coh_mid[i]);
-    std::printf("], \"coherence_last_samples\": [");
-    for (size_t i = 0; i < coh_last.size(); ++i) std::printf(i ? ", %.3f" : "%.3f", coh_last[i]);
+    std::printf("], \"event_turnaround_ns_samples\": [");
+    for (size_t i = 0; i < event_turn.size(); ++i) std::printf(i ? ", %.2f" : "%.2f", event_turn[i]);
+    std::printf("], \"coherence_steps\": [0, 16, 64, 256, %d, %d], \"coherence_samples\": [", steps / 2, steps - 1);
+    for (int m = 0; m < BURST_STAMPS; ++m) {
+      std::printf(m ? ", [" : "[");
+      for (size_t i = 0; i < coh[m].size(); ++i) std::printf(i ? ", %.3f" : "%.3f", coh[m][i]);
+      std::printf("]");
+    }
     std::printf("]}");
     std::vector<double> sorted = turn;
     std::sort(sorted.begin(), sorted.end());
     return sorted[sorted.size() / 2];
   };
   auto each = [&](auto sb_c) {
-    for (int n : {12, 24, 48}) {
+    for (int n : {12, 36, 40, 44, 48}) {
       if (n > sm_count) continue;
       run_point(std::true_type{}, sb_c, n, 0.0);
       const double step = run_point(std::false_type{}, sb_c, n, 0.0);
@@ -6974,5 +7009,6 @@ static int run_sync_loop_burst(int device, int samples, int warmup) {
   each(std::integral_constant<int, 65536>{});
   std::printf("\n  ]\n}\n");
   CUDA_CHECK(cudaFree(d_hot)); CUDA_CHECK(cudaFree(d_sink)); CUDA_CHECK(cudaFree(d_stamps));
+  CUDA_CHECK(cudaFree(d_cycles)); CUDA_CHECK(cudaFree(d_clock));
   return 0;
 }
