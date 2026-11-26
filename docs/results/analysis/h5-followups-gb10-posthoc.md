@@ -14,7 +14,7 @@ DGX Spark GB10, 2026-11-27, one session under the shared GPU lock running three 
 
 No throttle reason was active and about 115 GiB of memory was available. The raw captures are archived as `h5-followup-captures.tar.gz` (SHA-256 `87142a0cf52129a65f3325b12acee8cb3464a037eda13b2715b73a49f7f056f9`; `gmem-narrow-validate-1.json` `9277ba00...`, `sync-loop-narrow-validate-1.json` `9a110693...`, `stage-narrow-1.json` `109270ee...`), kept on the Bifrost workstation in `~/scratch/vgpu8/` and on the Spark in `~/virtualgpu/s8-narrow/runs/`.
 
-## DRAM-side narrow request form: passes on GB10
+## DRAM-side narrow request form: first GB10 session
 
 From DRAM, the first points ran at one of two limits: about 7.3 sectors per ns over the GPU for 4 and 16 B loads, the plateau of the profile's strided DRAM curve with 128 B segments (236 GB/s), and about 3.3 warp requests per ns for 1 and 2 B loads. The form is
 
@@ -43,7 +43,7 @@ Median error by width and alignment, pure loads from DRAM:
 | Aligned, current model | -48.4% | -21.8% | -11.0% | -7.7% |
 | Offset, current model | -48.5% | -38.3% | -27.2% | -12.5% |
 
-The form passes its rule on GB10. The cross-GPU test on the RTX 4070, with R calibrated at the same point there, waits for that GPU to be free.
+The form passed its rule in this session; the repeat and the RTX 4070 test are below.
 
 The hot-L2 regression points stay where the current model puts them, but that is not accurate everywhere: the median error is within 13% in every width and alignment group, while 1 B loads with 4 in flight are predicted 1.2 to 3.7 times as slow as measured, 3.2 to 3.7 times at 1 CTA per SM (MAPE 53% at 4 in flight against 9% to 11% at 12 and 24). This is a separate issue of the current model at hot L2 with few loads in flight, in the opposite direction to H5, and is left out of H5 (see the open item below).
 
@@ -79,7 +79,7 @@ Captured on the same day under the lock (thermal gate 51.7 / 52.2 C, 2515 / 2522
 
 Captured under the lock on the same day: `stage-narrow-validate` (thermal gate 51.2 / 51.7 C, 2509 / 2515 MHz; 51 to 60 C and 2411 to 2522 MHz during capture) and a repeat of `gmem-narrow-validate` (52.9 / 53.3 C, 2515 / 2515 MHz; 53 to 62 C, 2405 to 2541 MHz), no throttle reason. Raw captures in `h5-followup2-captures.tar.gz` (SHA-256 `666492765d113467c9d2b66a7f73af25113a1124e8cf213001fa6c74f4acf851`; `stage-narrow-validate-1.json` `74f9e32d...`, `gmem-narrow-validate-2.json` `7ffc646d...`), in the same two places.
 
-**The DRAM-side form misses its group rule on the repeat.** Scored with the same frozen file ([h5-dram-form-gb10-repeat-posthoc.json](h5-dram-form-gb10-repeat-posthoc.json)): the calibration point measured 2397.0 us against 2468.7 us in the first session, so R = 3.50 instead of 3.39 warp requests per ns. The 192 pure-load DRAM points give MAPE 10.8% (current model 27.5%), but the median error of aligned 2 B loads is -10.9%, beyond the 10% group limit (first session -8.3%); the other seven groups stay within -6.6% to -0.2%. A 2.9% drift of the single calibration point between sessions is enough to cross the limit, so the form passes one session of two and the RTX 4070 test should calibrate R from the median of repeated calibration measurements.
+**The DRAM-side form misses its group rule on the repeat.** Scored with the same frozen file ([h5-dram-form-gb10-repeat-posthoc.json](h5-dram-form-gb10-repeat-posthoc.json)): the calibration point measured 2397.0 us against 2468.7 us in the first session, so R = 3.50 instead of 3.39 warp requests per ns. The 192 pure-load DRAM points give MAPE 10.8% (current model 27.5%), but the median error of aligned 2 B loads is -10.9%, beyond the 10% group limit (first session -8.3%); the other seven groups stay within -6.6% to -0.2%. A 2.9% drift of the single calibration point between sessions is enough to cross the limit. On GB10 the form passed one session of two (aligned 2 B: -8.3% and -10.9% against a 10% limit): marginal, not a robust pass. It is not judged a third time on these points; the RTX 4070 test below decides.
 
 **The register staging forms do not pass.** Frozen in [validation/h5-staging-forms-frozen.json](../../../validation/h5-staging-forms-frozen.json) (SHA-256 `952cc5edb72eb49acaf448c3f221814b5490751f0335d1bc6d83bb1cec77b0c3`) by [validation/h5_staging_forms.py](../../../validation/h5_staging_forms.py) before measurement:
 
@@ -100,11 +100,30 @@ b1 + b2 meets the MAPE limit, but 1 and 2 B stay 15% fast, so no form passes. Ea
 
 **Where the remaining 1 and 2 B error sits (post-hoc, after this verdict).** Split by the MMA chain, the b1 + b2 median errors on the judged points are 1 B -8%, 2 B -10%, 4 B +2%, 16 B -0% without MMA, and 1 B -20%, 2 B -17%, 4 B -6%, 16 B -10% with 8 MMAs per warp. The 4-warp `stage-narrow-batched` points, predicted after the fact with the same Q and tau, show the same split more cleanly: without MMA 2 B -1%, 4 B +2%, 16 B +4%; with 32 MMAs every width is 15% to 17% fast. Stage size, CTAs per SM and the variant move the narrow residual by a few points only (8 and 12 KiB: -15% and -16%; 1 and 3 CTAs: -14% and -17%). So b1 + b2 accounts for the width dependence, and most of what remains is the width-independent underestimate of dependent MMA chains (the same kind as H7 in attention), which reached the verdict because the 16 B 8-MMA points sat just inside the 10% rule (-9.7%).
 
+## RTX 4070 cross-GPU test of the DRAM-side form: fails
+
+The decisive test, on a GPU none of the form's choices saw. Before the capture, [validation/h5_dram_form.py](../../../validation/h5_dram_form.py) was changed to calibrate R from 5 independent processes of the calibration point alone (`gmem-narrow-calibrate`), one before each of the 5 repeats of the validation sweep, taking their median; everything else, the points and the pass rule, stayed as on GB10. Predictions were frozen with the RTX 4070 profile (`0.21.0-posthoc`; BW = 457.10 GB/s, the largest point of its 128 B strided curves) in [validation/h5-dram-form-rtx4070-frozen.json](../../../validation/h5-dram-form-rtx4070-frozen.json) (SHA-256 `170d2f9c23ad677caed0e843a87c00c03167db0a9f6838ea7197e5abf41a1b3d`).
+
+Captured on the workstation's RTX 4070 under WSL2, 2026-11-26 22:29 to 22:31 UTC, after the thermal gate (37.6 / 37.5 C, 2865 / 2865 MHz; 36 to 45 C and a constant 2865 MHz during capture, no throttle reason). The Windows desktop was running (28 graphics processes: browsers, chat clients, the Steam client, no game, no other compute process; 5.3 GiB of memory and 5% utilization before the capture), recorded in the capture's host snapshot. Raw capture `rtx4070-gmem-narrow-validate-1.json` (SHA-256 `56f328b9...`) in `h5-rtx4070-captures.tar.gz` (`7009de7626d10533467eb0fe4af7a0a00a9c1d06589da4c9cc9e164c0caeaaf7`), on the workstation in `~/scratch/vgpu8/`.
+
+The five calibration runs agree within 0.2% (2351.1 to 2355.2 us, median 2354.2 us, R = 3.56 warp requests per ns), but the form fails ([h5-dram-form-rtx4070-posthoc.json](h5-dram-form-rtx4070-posthoc.json)):
+
+| | 1 B | 2 B | 4 B | 16 B |
+|---|---:|---:|---:|---:|
+| Aligned, form | +82.9% | -0.5% | -3.9% | +2.5% |
+| Offset, form | +61.1% | -11.5% | -10.8% | +5.4% |
+| Aligned, current model | -41.7% | -48.4% | -5.3% | +0.5% |
+| Offset, current model | -49.2% | -53.7% | -26.2% | +0.0% |
+
+MAPE over the 192 pure-load DRAM points is 27.1% (current model 33.8%, p90 72.7%). The 2, 4 and 16 B groups move close to the measurements, but 1 B is now predicted far too slow, and offset 2 and 4 B fall just outside 10%.
+
+Post-hoc, the reason is visible in the 1 B points: on the RTX 4070 their request rate is not capped. It falls as each thread keeps more rows in flight, from up to 12.4 warp requests per ns at 4 loads per thread to 3.3 to 3.7 at 24, and the calibration point (16 per thread) sits on the slow side. Rows in flight per CTA set how many DRAM pages are open at once, so on this GPU the narrow DRAM cost follows access locality rather than a GPU-wide request rate. The form's request limit was a GB10 observation and does not carry over. The DRAM-side form therefore does not go into the core.
+
 ## Open item outside H5
 
 **Hot L2 with few loads in flight is predicted too slow.** `gmem-narrow-validate`, hot L2, `.cg`: 1 B loads with 4 in flight per thread are predicted 3.2 to 3.7 times as slow as measured at 1 CTA per SM and 1.2 to 2.8 times at 3 CTAs, aligned or not; other widths at 4 in flight up to 1.3 times; at 12 and 24 in flight the MAPE is 9% to 11%. The point values are in [h5-dram-form-gb10-posthoc.json](h5-dram-form-gb10-posthoc.json) (`gmem_l2_regression`). Not investigated.
 
 ## Next steps
 
-- Register staging: propose forms from the `stage-narrow` and `stage-narrow-batched` points (a per-instruction shared memory store cost on the shared pipe and a per-request cost on the CTA's chain for loads from L2), freeze them with one calibration point each, and validate on another set of points.
-- DRAM-side form: the RTX 4070 cross-GPU test first; only after it passes, wiring the form into the core for `mask-mnk` with its DRAM-sourced fraction from the L2 model, agreed beforehand with the owner of the round-trip path in `sim.rs`.
+- DRAM-side form: stopped. It passed one GB10 session of two and failed on the RTX 4070, so it does not go into the core. The RTX 4070 points suggest that narrow DRAM loads depend on how many rows each CTA keeps open, which a new form would have to be built and validated for from scratch.
+- Register staging: one last round. Without MMA, b1 + b2 already tracks the width dependence; the proposed single candidate is b1 + b2 unchanged, recalibrated in a new session and validated on points not measured before, with the same pass rule. If it fails, H5 register staging is closed as a known limit.
