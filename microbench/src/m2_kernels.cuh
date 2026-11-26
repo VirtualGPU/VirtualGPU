@@ -6900,7 +6900,7 @@ __global__ void burst_kernel(const uint4* __restrict__ src, float* __restrict__ 
 }
 #undef BURST_MMA
 
-static int run_sync_loop_burst(int device, int samples, int warmup) {
+static int run_sync_loop_burst(int device, int samples, int warmup, bool check) {
   cudaDeviceProp prop{};
   CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
   const int sm_count = prop.multiProcessorCount;
@@ -7003,12 +7003,119 @@ static int run_sync_loop_burst(int device, int samples, int warmup) {
       run_point(std::false_type{}, sb_c, n, step / n);
     }
   };
-  each(std::integral_constant<int, 16384>{});
-  each(std::integral_constant<int, 32768>{});
-  each(std::integral_constant<int, 49152>{});
-  each(std::integral_constant<int, 65536>{});
+  // The check grid: stage sizes and CTA counts the burst sweep did not measure, simultaneous starts only.
+  auto each_check = [&](auto sb_c) {
+    for (int n : {1, 16, 28, 34, 42, 46}) {
+      if (n > sm_count) continue;
+      run_point(std::true_type{}, sb_c, n, 0.0);
+      run_point(std::false_type{}, sb_c, n, 0.0);
+    }
+  };
+  if (check) {
+    each_check(std::integral_constant<int, 24576>{});
+    each_check(std::integral_constant<int, 40960>{});
+    each_check(std::integral_constant<int, 57344>{});
+  } else {
+    each(std::integral_constant<int, 16384>{});
+    each(std::integral_constant<int, 32768>{});
+    each(std::integral_constant<int, 49152>{});
+    each(std::integral_constant<int, 65536>{});
+  }
   std::printf("\n  ]\n}\n");
   CUDA_CHECK(cudaFree(d_hot)); CUDA_CHECK(cudaFree(d_sink)); CUDA_CHECK(cudaFree(d_stamps));
   CUDA_CHECK(cudaFree(d_cycles)); CUDA_CHECK(cudaFree(d_clock));
+  return 0;
+}
+
+// l2-paths: the L2 read bandwidth against active SMs on warm L2 through two load paths in one session:
+// the ld.global.cg ILP-8 kernel of run_l2 (16 warps per CTA) and a 4-stage cp.async ring as in
+// VirtualGPU issue #8 (16 warps per CTA, two 16 B copies per thread per stage), one CTA per SM at
+// every point, plus the cp.async kernel at three CTAs per SM on the full GPU as in #8 (8 warps per CTA
+// there, so three CTAs' rings fit in shared memory).
+__global__ void l2_cp_async_kernel(const uint4* __restrict__ src, uint4* __restrict__ sink, size_t mask, int steps) {
+  extern __shared__ uint4 smem[];
+  const uint32_t tid = threadIdx.x;
+  const size_t stride = static_cast<size_t>(gridDim.x) * blockDim.x;
+  size_t idx = (static_cast<size_t>(blockIdx.x) * blockDim.x + tid) & mask;
+  auto issue = [&](int slot) {
+    #pragma unroll
+    for (int sub = 0; sub < 2; ++sub) {
+      const size_t off = (static_cast<size_t>(slot) * 2 + sub) * blockDim.x + tid;
+      const uint32_t saddr = static_cast<uint32_t>(__cvta_generic_to_shared(&smem[off]));
+      asm volatile("cp.async.cg.shared.global [%0], [%1], 16;\n" :: "r"(saddr), "l"(src + idx) : "memory");
+      idx = (idx + stride) & mask;
+    }
+    asm volatile("cp.async.commit_group;\n" ::: "memory");
+  };
+  #pragma unroll
+  for (int s = 0; s < 4; ++s) issue(s);
+  for (int step = 4; step < steps; ++step) {
+    asm volatile("cp.async.wait_group 3;\n" ::: "memory");
+    issue(step & 3);
+  }
+  asm volatile("cp.async.wait_all;\n" ::: "memory");
+  __syncthreads();
+  if (smem[tid].x == 0xdeadbeefu) sink[tid & 1023u] = smem[tid];
+}
+
+static int run_l2_paths(int device, int samples, int warmup) {
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  const int sm_count = prop.multiProcessorCount;
+  const size_t ws_bytes = 4ULL * 1024ULL * 1024ULL;
+  const size_t mask = ws_bytes / sizeof(uint4) - 1ULL;
+  uint4 *d_buf = nullptr, *d_sink = nullptr;
+  CUDA_CHECK(cudaMalloc(&d_buf, ws_bytes));
+  CUDA_CHECK(cudaMalloc(&d_sink, 1024 * sizeof(uint4)));
+  CUDA_CHECK(cudaMemset(d_buf, 3, ws_bytes));
+  cudaEvent_t ev_start, ev_stop;
+  CUDA_CHECK(cudaEventCreate(&ev_start));
+  CUDA_CHECK(cudaEventCreate(&ev_stop));
+  const int threads = 512;
+  constexpr int CP_SMEM = 4 * 2 * 512 * 16;
+  CUDA_CHECK(cudaFuncSetAttribute(l2_cp_async_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, CP_SMEM));
+  auto time_gbps = [&](auto launch, double bytes) {
+    for (int w = 0; w < warmup; ++w) launch();
+    CUDA_CHECK(cudaDeviceSynchronize());
+    std::vector<double> g;
+    for (int s = 0; s < samples; ++s) {
+      CUDA_CHECK(cudaEventRecord(ev_start));
+      launch();
+      CUDA_CHECK(cudaEventRecord(ev_stop));
+      CUDA_CHECK(cudaEventSynchronize(ev_stop));
+      float ms = 0.0f;
+      CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
+      g.push_back((bytes / 1e9) / (static_cast<double>(ms) / 1e3));
+    }
+    return g;
+  };
+  auto print = [](const char* path, int sms, int grid, const std::vector<double>& g, bool& first) {
+    if (!first) std::printf(",");
+    first = false;
+    std::printf("\n    {\"path\": \"%s\", \"active_sms\": %d, \"grid\": %d, \"gbps_samples\": [", path, sms, grid);
+    for (size_t i = 0; i < g.size(); ++i) std::printf(i ? ", %.3f" : "%.3f", g[i]);
+    std::printf("]}");
+  };
+  std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"working_set_bytes\": %zu,\n  \"l2_paths\": [", samples, sm_count, ws_bytes);
+  bool first = true;
+  for (int sms : {1, 12, 24, 36, 40, 44, 48}) {
+    if (sms > sm_count) continue;
+    const int iters = sms <= 4 ? 4096 : 2048;
+    const double ld_bytes = static_cast<double>(sms) * threads * 8.0 * 16.0 * iters;
+    print("ld_global_cg", sms, sms,
+          time_gbps([&] { l2_read_cg_ilp8_kernel<<<sms, threads>>>(d_buf, d_sink, mask, iters); }, ld_bytes), first);
+    const int steps = 2 * iters * 4;
+    const double cp_bytes = static_cast<double>(sms) * threads * 2.0 * 16.0 * steps;
+    print("cp_async", sms, sms,
+          time_gbps([&] { l2_cp_async_kernel<<<sms, threads, CP_SMEM>>>(d_buf, d_sink, mask, steps); }, cp_bytes), first);
+  }
+  {
+    const int grid = sm_count * 3, steps = 8192, half = threads / 2;
+    const double cp_bytes = static_cast<double>(grid) * half * 2.0 * 16.0 * steps;
+    print("cp_async", sm_count, grid,
+          time_gbps([&] { l2_cp_async_kernel<<<grid, half, CP_SMEM / 2>>>(d_buf, d_sink, mask, steps); }, cp_bytes), first);
+  }
+  std::printf("\n  ]\n}\n");
+  CUDA_CHECK(cudaFree(d_buf)); CUDA_CHECK(cudaFree(d_sink));
   return 0;
 }

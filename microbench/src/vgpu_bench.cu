@@ -634,7 +634,13 @@ int main(int argc, char** argv) {
     return run_stage_narrow_validate(device, samples, warmup);
   }
   if (mode == "sync-loop-burst") {
-    return run_sync_loop_burst(device, samples, warmup);
+    return run_sync_loop_burst(device, samples, warmup, false);
+  }
+  if (mode == "sync-loop-burst-check") {
+    return run_sync_loop_burst(device, samples, warmup, true);
+  }
+  if (mode == "l2-paths") {
+    return run_l2_paths(device, samples, warmup);
   }
   std::fprintf(stderr, "Unknown mode: %s\n", mode.c_str());
   return 2;
