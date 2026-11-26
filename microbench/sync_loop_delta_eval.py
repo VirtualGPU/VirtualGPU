@@ -69,6 +69,7 @@ def judge(h, points):
     )
     if all(st.median(v) > 50 for v in err.values()):
         print("every form misses by more than 50 ns: all wrong")
+        return
     for a in h:
         ok = True
         for b in h:
