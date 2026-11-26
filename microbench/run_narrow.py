@@ -121,7 +121,7 @@ def main():
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError(args.output)
-    smi = which("nvidia-smi")
+    smi = which("nvidia-smi") or "/usr/lib/wsl/lib/nvidia-smi"
     before = host_snapshot(smi)
     require_quiet(before)
     query = json.loads(command(str(args.binary), "--mode", "query", "--device", "0"))
