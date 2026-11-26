@@ -782,6 +782,15 @@ class DramNarrowFormTest(unittest.TestCase):
         self.assertAlmostEqual(result["groups"]["gmem_dram"]["form_errors"][dram], 0.0)
         self.assertTrue(result["groups"]["gmem_l2_regression"]["prediction_unchanged"])
 
+    def test_cross_gpu_rate_uses_the_median_calibration_run(self):
+        frozen, cal, dram, l2 = self.frozen()
+        frozen["calibration_runs"] = 5
+        runs = [180.0, 200.0, 260.0, 190.0, 210.0]
+        result = h5_dram_form.score(frozen, {cal: 999.0, dram: 150.0, l2: 80.0}, runs)
+        self.assertAlmostEqual(result["rate_warp_requests_per_ns"], 2.0)
+        with self.assertRaises(ValueError):
+            h5_dram_form.score(frozen, {cal: 200.0, dram: 150.0, l2: 80.0}, runs[:4])
+
     def test_calibration_below_the_floor_is_not_identifiable(self):
         frozen, cal, dram, l2 = self.frozen()
         result = h5_dram_form.score(frozen, {cal: 90.0, dram: 150.0, l2: 80.0})

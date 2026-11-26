@@ -35,6 +35,7 @@ MODES = {
     "gmem-narrow": "gmem_load_narrow",
     "sync-loop-narrow": "sync_loop_narrow",
     "gmem-narrow-validate": "gmem_load_narrow",
+    "gmem-narrow-calibrate": "gmem_load_narrow",
     "sync-loop-narrow-validate": "sync_loop_narrow",
     "stage-narrow": "stage_narrow",
     "stage-narrow-batched": "stage_narrow",
@@ -112,6 +113,11 @@ def main():
     parser.add_argument("output", type=Path)
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--warmup-seconds", type=int, default=120)
+    parser.add_argument(
+        "--calibration-mode",
+        choices=sorted(MODES),
+        help="Also run this mode as its own process before every repeat",
+    )
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError(args.output)
@@ -125,7 +131,11 @@ def main():
         args.warmup_seconds,
         timeout_report=args.output.with_suffix(".thermal-timeout.json"),
     )
-    repeats = [run_once(smi, args.binary, args.mode) for _ in range(args.repeats)]
+    repeats, calibration = [], []
+    for _ in range(args.repeats):
+        if args.calibration_mode:
+            calibration.append(run_once(smi, args.binary, args.calibration_mode))
+        repeats.append(run_once(smi, args.binary, args.mode))
     write_json(
         args.output,
         {
@@ -137,6 +147,8 @@ def main():
             "thermal_warmup": warm,
             "thermal_stability": stable,
             "repeats": repeats,
+            "calibration_mode": args.calibration_mode,
+            "calibration_runs": calibration,
             "host_after": host_snapshot(smi),
         },
     )

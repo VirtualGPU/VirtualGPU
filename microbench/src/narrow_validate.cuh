@@ -387,6 +387,22 @@ static int run_gmem_narrow_validate(int device, int samples, int warmup) {
   return 0;
 }
 
+// The calibration point of the DRAM-side form alone, run as its own process
+// between repeats of gmem-narrow-validate.
+static int run_gmem_narrow_calibrate(int device, int samples, int warmup) {
+  using namespace narrow;
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  Buffers b;
+  Timer timer;
+  bool first = true;
+  std::printf("{\n  \"samples\": %d,\n  \"gmem_load_narrow\": [", samples);
+  gmem_narrow_point<1, 16, true, kMaskNone>(prop, timer, b.data, b.sink, b.flush, b.flush_sink, b.flush_vec4,
+                                            true, false, 2, 8, 1, 32, samples, warmup, first);
+  std::printf("\n  ]\n}\n");
+  return 0;
+}
+
 static int run_sync_loop_narrow_validate(int device, int samples, int warmup) {
   using namespace narrow;
   cudaDeviceProp prop{};
