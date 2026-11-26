@@ -39,4 +39,16 @@ The microbenchmarks (`gmem-narrow` and `sync-loop-narrow` in `microbench/src/nar
 
 ## Frozen candidate predictions
 
-Before any point is measured, [validation/h5_candidates.py](../../../validation/h5_candidates.py) turns all 1076 benchmark points (968 `gmem-narrow`, 108 `sync-loop-narrow`) into KernelIR with the benchmark's geometry and predicts them with the current core and GB10 profile (`0.22.0-posthoc`) under seven forms: the current model, per instruction and per sector on the shared `lsu` path, per instruction and per sector on the CTA's dependent chain, a request-indexed `ld_global_v4` MLP curve, and sector-inflated traffic. The core requires an MMA, so points without one carry a single token MMA per CTA and iteration. Each parametrized form takes its one constant from the calibration point (2 B, aligned, unmasked, default cache, DRAM, 1 CTA per SM, 8 warps, 16 loads in flight); every other point is held out. The predictions are frozen on a grid of each constant in [validation/h5-candidates-frozen.json](../../../validation/h5-candidates-frozen.json) (SHA-256 `ae49b684ae8ca9e9ca5b60aa7c12fb3ef9dd2c3f52da0a5ad0b1317e06ac7f70`), and `evaluate` interpolates them at the calibrated constant. A form that misses the held-out points by more than 15% MAPE does not go into the core.
+Before any point is measured, [validation/h5_candidates.py](../../../validation/h5_candidates.py) turns all 1290 benchmark points (1128 `gmem-narrow`, 162 `sync-loop-narrow`) into KernelIR with the benchmark's geometry and predicts them with the current core and GB10 profile (`0.22.0-posthoc`) under seven forms: the current model, per instruction and per sector on the shared `lsu` path, per instruction and per sector on the CTA's dependent chain, a request-indexed `ld_global_v4` MLP curve, and traffic that counts every byte of each touched sector (no parameter). The core requires an MMA, so points without one carry a single token MMA per CTA and iteration.
+
+Each parametrized form takes its one constant from one point where its mechanism lives, and every other point is held out:
+
+| Forms | Calibration point |
+|---|---|
+| Shared `lsu` path, per instruction and per sector | 2 B, aligned, unmasked, `.cg`, hot L2, one 128 B line per batch, 2 CTAs per SM, 8 warps, 16 loads in flight |
+| CTA dependent chain, per instruction and per sector | the same with 1 CTA per SM |
+| Request-indexed MLP | the shared-path point read from DRAM (768 KiB in flight, above the knee of the MLP curve) |
+
+The SM-side points use `.cg` and one line per batch so that L1 hits cannot enter their constants. The predictions are frozen on a grid of each constant in [validation/h5-candidates-frozen.json](../../../validation/h5-candidates-frozen.json) (SHA-256 `4bb2ee23bc29866888a684f99ef726295e7966be0089b6fde227eefb33ff6f3f`); at each calibration point the prediction is monotone in the constant. `evaluate` interpolates the grid at the calibrated constant. A form that misses the held-out points by more than 15% MAPE does not go into the core.
+
+The kernels were checked in SASS on GB10 (`sm_121a`, CUDA 13.0): unmasked loads carry no predicate, the always-true and tail masks compile to predicated `LDG.E.U16` without branches or widening, `.cg` loads compile to `LDG.E.*.STRONG.GPU`, every `sync-loop-narrow` instance keeps its `ldmatrix`, and no narrow kernel uses local memory or stack.

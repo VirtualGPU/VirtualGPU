@@ -71,7 +71,7 @@ __device__ __forceinline__ bool lane_on(uint32_t lane, uint32_t elem, uint32_t l
 template <int W, int N, bool CG, int MASK>
 __global__ void gmem_narrow_kernel(const uint8_t* __restrict__ src, uint32_t* __restrict__ sink,
                                    size_t pitch, int rows_per_cta, int share, int batches,
-                                   int sweeps, uint32_t limit) {
+                                   int sweeps, uint32_t step, uint32_t limit) {
   extern __shared__ uint8_t pad[];
   const uint32_t lane = threadIdx.x & 31u;
   const uint32_t warp = threadIdx.x >> 5;
@@ -81,7 +81,7 @@ __global__ void gmem_narrow_kernel(const uint8_t* __restrict__ src, uint32_t* __
   uint32_t dep = 0u;
   for (int s = 0; s < sweeps; ++s) {
     for (int b = 0; b < batches; ++b) {
-      const uint32_t elem = static_cast<uint32_t>(b) * 32u + lane + dep;
+      const uint32_t elem = static_cast<uint32_t>(b) * step + lane + dep;
       uint32_t x = 0u;
       #pragma unroll
       for (int u = 0; u < N; ++u) {
@@ -131,9 +131,9 @@ inline int pad_bytes(const cudaDeviceProp& prop, int cps) {
 inline size_t round_up(size_t x, size_t a) { return (x + a - 1) / a * a; }
 
 constexpr size_t kDramBytes = 256ULL << 20;   // requested bytes per DRAM sample
-constexpr size_t kL2Set = 8ULL << 20;         // L2-hot working set
-constexpr size_t kL2Bytes = 64ULL << 20;      // requested bytes per L2 sample
-constexpr size_t kBufferBytes = 320ULL << 20;
+constexpr size_t kL2Set = 12ULL << 20;        // L2-hot working set, far above L1
+constexpr size_t kL2Bytes = 256ULL << 20;     // requested bytes per L2 sample
+constexpr size_t kBufferBytes = 1088ULL << 20;
 
 template <typename Kernel>
 void set_smem(Kernel k, int bytes) {
@@ -143,8 +143,8 @@ void set_smem(Kernel k, int bytes) {
 template <int W, int N, bool CG, int MASK>
 void gmem_narrow_point(const cudaDeviceProp& prop, Timer& timer, const uint8_t* buf,
                        uint32_t* sink, const uint4* flush, uint4* flush_sink, size_t flush_vec4,
-                       bool dram, bool offset, int cps, int warps, int share, int samples,
-                       int warmup, bool& first) {
+                       bool dram, bool offset, int cps, int warps, int share, int step_bytes,
+                       int samples, int warmup, bool& first) {
   auto kernel = gmem_narrow_kernel<W, N, CG, MASK>;
   const int smem = pad_bytes(prop, cps);
   set_smem(kernel, smem);
@@ -156,20 +156,25 @@ void gmem_narrow_point(const cudaDeviceProp& prop, Timer& timer, const uint8_t* 
   const size_t rows = static_cast<size_t>(grid / share) * rows_per_cta;
   const size_t seg = 32ULL * W;
   int batches = 0, sweeps = 1;
+  // A batch moves `step_bytes` along the row: one warp load (32 W) or a
+  // full 128 B line, so that no two batches share an L1 line.
+  const size_t step = static_cast<size_t>(step_bytes);
   if (dram) {
     batches = static_cast<int>(std::max<size_t>(1, kDramBytes / (static_cast<size_t>(grid) * rows_per_cta * seg)));
   } else {
-    batches = static_cast<int>(std::max<size_t>(1, kL2Set / (rows * seg)));
+    batches = static_cast<int>(std::max<size_t>(1, kL2Set / (rows * step)));
     sweeps = static_cast<int>(std::max<size_t>(1, kL2Bytes / (static_cast<size_t>(grid) * rows_per_cta * seg * batches)));
   }
-  const size_t pitch = round_up(static_cast<size_t>(batches) * seg + seg, 128) + (offset ? W : 0);
+  const size_t pitch = round_up(static_cast<size_t>(batches) * step + seg, 128) + (offset ? W : 0);
   if (rows * pitch > kBufferBytes) {
     std::fprintf(stderr, "gmem-narrow: buffer too small\n");
     std::exit(3);
   }
-  const uint32_t limit = static_cast<uint32_t>(batches) * 32u + 1u;
+  const uint32_t step_elems = static_cast<uint32_t>(step / W);
+  const uint32_t limit = static_cast<uint32_t>(batches) * step_elems + 1u;
   auto launch = [&]() {
-    kernel<<<grid, warps * 32, smem>>>(buf, sink, pitch, rows_per_cta, share, batches, sweeps, limit);
+    kernel<<<grid, warps * 32, smem>>>(buf, sink, pitch, rows_per_cta, share, batches, sweeps,
+                                       step_elems, limit);
   };
   auto clean = [&]() {
     if (dram) l2_read_cg_kernel<<<sms * 4, 512>>>(flush, flush_sink, flush_vec4, 1);
@@ -184,11 +189,11 @@ void gmem_narrow_point(const cudaDeviceProp& prop, Timer& timer, const uint8_t* 
   CUDA_CHECK(cudaGetLastError());
   std::printf("%s\n    {\"width_bytes\": %d, \"mask\": \"%s\", \"aligned\": %s, \"cache\": \"%s\", "
               "\"level\": \"%s\", \"ctas_per_sm\": %d, \"ctas_per_sm_fit\": %d, \"num_warps\": %d, "
-              "\"loads_in_flight\": %d, \"share\": %d, \"grid\": %d, \"rows_per_cta\": %d, "
+              "\"loads_in_flight\": %d, \"share\": %d, \"column_step_bytes\": %d, \"grid\": %d, \"rows_per_cta\": %d, "
               "\"pitch_bytes\": %zu, \"batches\": %d, \"sweeps\": %d, \"smem_bytes\": %d, \"elapsed_ns\": [",
               first ? "" : ",", W, MASK == kMaskNone ? "none" : (MASK == kMaskTrue ? "true" : "tail"),
               offset ? "false" : "true", CG ? "cg" : "default", dram ? "dram" : "l2", cps, fit, warps, N,
-              share, grid, rows_per_cta, pitch, batches, sweeps, smem);
+              share, step_bytes, grid, rows_per_cta, pitch, batches, sweeps, smem);
   for (size_t i = 0; i < ns.size(); ++i) std::printf("%s%.1f", i ? ", " : "", ns[i]);
   std::printf("]}");
   first = false;
@@ -203,8 +208,8 @@ void gmem_narrow_sweep(const cudaDeviceProp& prop, Timer& timer, const uint8_t* 
       for (int cps = 1; cps <= 2; ++cps)
         for (int warps = 4; warps <= 8; warps *= 2)
           gmem_narrow_point<W, N, CG, MASK>(prop, timer, buf, sink, flush, flush_sink, flush_vec4,
-                                            level == 1, offset == 1, cps, warps, 1, samples, warmup,
-                                            first);
+                                            level == 1, offset == 1, cps, warps, 1, 32 * W, samples,
+                                            warmup, first);
 }
 
 template <int W, int N, int MASK>
@@ -303,8 +308,9 @@ __global__ void sync_loop_narrow_kernel(const uint8_t* __restrict__ src, float* 
     }
     asm volatile("bar.sync 0;\n" ::: "memory");
   }
+  // Keep every ldmatrix live: `live` is not provably constant.
   const float sum = static_cast<float>(live & 1u) + c0 + c1 + c2 + c3;
-  if (sum == -999999.0f) sink[blockIdx.x * blockDim.x + tid] = sum;
+  if (live == 0x9e3779b9u || sum == -999999.0f) sink[blockIdx.x * blockDim.x + tid] = sum;
 }
 
 template <int W, int ROWS, int MMA_ITERS>
@@ -405,6 +411,25 @@ struct Buffers {
   }
 };
 
+template <int W, int MASK>
+void line_step_masks(const cudaDeviceProp& prop, Timer& timer, const Buffers& b, int samples,
+                     int warmup, bool& first) {
+  for (int cg = 0; cg < 2; ++cg)
+    for (int level = 0; level < 2; ++level)
+      for (int offset = 0; offset < 2; ++offset)
+        for (int cps = 1; cps <= 2; ++cps)
+          for (int warps = 4; warps <= 8; warps *= 2) {
+            if (cg)
+              gmem_narrow_point<W, 16, true, MASK>(prop, timer, b.data, b.sink, b.flush, b.flush_sink,
+                                                   b.flush_vec4, level == 1, offset == 1, cps, warps, 1,
+                                                   128, samples, warmup, first);
+            else
+              gmem_narrow_point<W, 16, false, MASK>(prop, timer, b.data, b.sink, b.flush, b.flush_sink,
+                                                    b.flush_vec4, level == 1, offset == 1, cps, warps, 1,
+                                                    128, samples, warmup, first);
+          }
+}
+
 }  // namespace narrow
 
 static int run_gmem_narrow(int device, int samples, int warmup) {
@@ -425,13 +450,19 @@ static int run_gmem_narrow(int device, int samples, int warmup) {
   gmem_narrow_depths<4, kMaskTail>(prop, timer, b.data, b.sink, b.flush, b.flush_sink, b.flush_vec4, samples, warmup, first);
   gmem_narrow_depths<16, kMaskNone>(prop, timer, b.data, b.sink, b.flush, b.flush_sink, b.flush_vec4, samples, warmup, first);
   gmem_narrow_depths<16, kMaskTrue>(prop, timer, b.data, b.sink, b.flush, b.flush_sink, b.flush_vec4, samples, warmup, first);
+  // One line per batch for the loads narrower than a line, 16 in flight.
+  line_step_masks<1, kMaskNone>(prop, timer, b, samples, warmup, first);
+  line_step_masks<1, kMaskTrue>(prop, timer, b, samples, warmup, first);
+  line_step_masks<2, kMaskNone>(prop, timer, b, samples, warmup, first);
+  line_step_masks<2, kMaskTrue>(prop, timer, b, samples, warmup, first);
+  line_step_masks<2, kMaskTail>(prop, timer, b, samples, warmup, first);
   // Sharing: four CTAs read the same rows, DRAM only.
   for (int offset = 0; offset < 2; ++offset)
     for (int cps = 1; cps <= 2; ++cps) {
       gmem_narrow_point<2, 16, false, kMaskNone>(prop, timer, b.data, b.sink, b.flush, b.flush_sink,
-                                                 b.flush_vec4, true, offset == 1, cps, 8, 4, samples, warmup, first);
+                                                 b.flush_vec4, true, offset == 1, cps, 8, 4, 64, samples, warmup, first);
       gmem_narrow_point<16, 16, false, kMaskNone>(prop, timer, b.data, b.sink, b.flush, b.flush_sink,
-                                                  b.flush_vec4, true, offset == 1, cps, 8, 4, samples, warmup, first);
+                                                  b.flush_vec4, true, offset == 1, cps, 8, 4, 512, samples, warmup, first);
     }
   std::printf("\n  ]\n}\n");
   return 0;
@@ -447,8 +478,10 @@ static int run_sync_loop_narrow(int device, int samples, int warmup) {
   std::printf("{\n  \"samples\": %d,\n  \"sync_loop_narrow\": [", samples);
   sync_loop_narrow_stages<2, 0>(prop, timer, b.data, b.fsink, b.flush, b.flush_sink, b.flush_vec4, samples, warmup, first);
   sync_loop_narrow_stages<2, 8>(prop, timer, b.data, b.fsink, b.flush, b.flush_sink, b.flush_vec4, samples, warmup, first);
+  sync_loop_narrow_stages<2, 32>(prop, timer, b.data, b.fsink, b.flush, b.flush_sink, b.flush_vec4, samples, warmup, first);
   sync_loop_narrow_stages<16, 0>(prop, timer, b.data, b.fsink, b.flush, b.flush_sink, b.flush_vec4, samples, warmup, first);
   sync_loop_narrow_stages<16, 8>(prop, timer, b.data, b.fsink, b.flush, b.flush_sink, b.flush_vec4, samples, warmup, first);
+  sync_loop_narrow_stages<16, 32>(prop, timer, b.data, b.fsink, b.flush, b.flush_sink, b.flush_vec4, samples, warmup, first);
   std::printf("\n  ]\n}\n");
   return 0;
 }

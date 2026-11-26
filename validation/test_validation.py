@@ -670,15 +670,16 @@ class NarrowLoadCandidatesTest(unittest.TestCase):
     def test_points_match_the_benchmark(self):
         points = h5_candidates.gmem_narrow_points() + h5_candidates.sync_loop_narrow_points()
         keys = [h5_candidates.point_key(p) for p in points]
-        self.assertEqual((len(points), len(set(keys))), (1076, 1076))
-        self.assertIn(h5_candidates.point_key(h5_candidates.CALIBRATION), keys)
+        self.assertEqual((len(points), len(set(keys))), (1290, 1290))
+        for point in h5_candidates.CALIBRATIONS.values():
+            self.assertIn(h5_candidates.point_key(point), keys)
 
     def test_geometry_fits_the_benchmark_buffer(self):
         specs = json.loads(h5_candidates.PROFILE.read_text())["specs"]
         for p in h5_candidates.gmem_narrow_points() + h5_candidates.sync_loop_narrow_points():
             g = h5_candidates.geometry(p, specs)
             rows = g["grid"] // p.get("share", 1) * g["rows_per_cta"]
-            self.assertLessEqual(rows * g["pitch"], 320 << 20)
+            self.assertLessEqual(rows * g["pitch"], 1088 << 20)
             self.assertEqual(g["pitch"] % 128, 0 if p["aligned"] else p["width_bytes"])
 
     def test_calibration_inverts_the_grid(self):

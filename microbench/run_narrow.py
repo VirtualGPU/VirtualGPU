@@ -27,12 +27,36 @@ from repeat_mlp import (  # noqa: E402
     write_json,
 )
 
+# GB10 shares its memory with the CPU: a large CPU process competes for it.
+MAX_FOREIGN_RSS_KIB = 8 << 20
+MIN_AVAILABLE_KIB = 16 << 20
+
 MODES = {"gmem-narrow": "gmem_load_narrow", "sync-loop-narrow": "sync_loop_narrow"}
 SAMPLES = 15
 WARMUP = 3
 
 
+def memory_snapshot():
+    meminfo = dict(
+        line.split(":", 1) for line in Path("/proc/meminfo").read_text().splitlines() if ":" in line
+    )
+    available = int(meminfo["MemAvailable"].split()[0])
+    top = command("ps", "-eo", "pid,rss,comm", "--sort=-rss").splitlines()[1:6]
+    return {"utc": utc(), "mem_available_kib": available, "top_rss": top}
+
+
+def require_memory(snapshot):
+    if snapshot["mem_available_kib"] < MIN_AVAILABLE_KIB:
+        raise RuntimeError(f"Only {snapshot['mem_available_kib']} KiB of memory available")
+    for line in snapshot["top_rss"]:
+        pid, rss, name = line.split(None, 2)
+        if int(rss) > MAX_FOREIGN_RSS_KIB:
+            raise RuntimeError(f"Large CPU process holds unified memory: {pid} {name} {rss} KiB")
+
+
 def run_once(smi, binary, mode):
+    memory = memory_snapshot()
+    require_memory(memory)
     args = [
         str(binary),
         "--mode",
@@ -65,6 +89,7 @@ def run_once(smi, binary, mode):
         if process.returncode != 0:
             raise RuntimeError(f"{mode} failed: {err.read()}")
         return {
+            "memory_before": memory,
             "started_utc": started,
             "finished_utc": utc(),
             "telemetry": trace,
