@@ -41,7 +41,7 @@ CONFIGS = [
         ("m128n64-w8-s3", 128, 64, 8, 3),
     )
 ]
-VARIANTS = {0: "unchanged", 1: "noload", 2: "dep", 3: "dep_cost"}
+VARIANTS = {0: "unchanged", 1: "noload", 2: "dep", 3: "dep_cost", 4: "timestamp"}
 
 
 @triton.jit
@@ -56,6 +56,7 @@ def _tiles(
     maximum,
     start,
     stop,
+    stamps,
     SEQ: tl.constexpr,
     D: tl.constexpr,
     BN: tl.constexpr,
@@ -93,7 +94,13 @@ def _tiles(
         acc = tl.dot(weights.to(tl.float16), v, acc * correction[:, None])
         normalizer = normalizer * correction + tl.sum(weights, 1)
         maximum = new_max
-        if ABLATE >= 2:
+        if ABLATE == 4:
+            # %globaltimer after the PV product, before the next tile's copies are issued.
+            now = tl.inline_asm_elementwise(
+                "mov.u64 $0, %globaltimer;", "=l,r", [tile], dtype=tl.int64, is_pure=False, pack=1
+            )
+            tl.store(stamps + (tile - start) // BN, now)
+        if ABLATE == 2 or ABLATE == 3:
             probe = tl.max(tl.max(acc, 1), 0)
             if ABLATE == 2:
                 live = probe != -12345.0
@@ -109,6 +116,7 @@ def ablated_attention(
     V,
     Out,
     LSE,
+    TS,
     HQ: tl.constexpr,
     HK: tl.constexpr,
     SEQ: tl.constexpr,
@@ -143,6 +151,7 @@ def ablated_attention(
         maximum,
         0,
         SEQ,
+        TS + (head_batch * tl.num_programs(0) + query_block) * (SEQ // BN),
         SEQ,
         D,
         BN,
@@ -197,15 +206,18 @@ def loop_mma_count(ptx):
 
 def check(target):
     """Compile every variant offline and report resources and loop instruction counts."""
+    from virtualgpu.frontend import MockTensor
     from virtualgpu.frontend.compiler import compile_triton_aot, specialize_triton_call
 
     from validation.attention_runner import _AOT_POINTERS
+
+    pointers = (*_AOT_POINTERS, MockTensor("i64"))
 
     for config in CONFIGS:
         for ablate, name in VARIANTS.items():
             constants, options = specialize(config, ablate)
             parsed, sig, cx, attrs = specialize_triton_call(
-                ablated_attention, target, (*_AOT_POINTERS, *constants), options
+                ablated_attention, target, (*pointers, *constants), options
             )
             art = compile_triton_aot(
                 ablated_attention,
@@ -263,6 +275,8 @@ def run(samples, out):
     v = torch.randn((batch, hk, seq, dim), device="cuda", dtype=torch.float16)
     o = torch.empty_like(q)
     lse = torch.empty((batch, hq, seq), device="cuda", dtype=torch.float32)
+    smallest = min(c["block_m"] * c["block_n"] for c in CONFIGS)
+    ts = torch.zeros(batch * hq * seq * seq // smallest, device="cuda", dtype=torch.int64)
     sms = torch.cuda.get_device_properties(0).multi_processor_count
     rows = []
     for config in CONFIGS:
@@ -271,7 +285,7 @@ def run(samples, out):
             constants, options = specialize(config, ablate)
 
             def operation(constants=constants, options=options, grid=grid):
-                ablated_attention[grid](q, k, v, o, lse, *constants, **options)
+                ablated_attention[grid](q, k, v, o, lse, ts, *constants, **options)
 
             operation()
             torch.cuda.synchronize()
@@ -289,6 +303,11 @@ def run(samples, out):
                     "kernel_ns_median": statistics.median(times),
                 }
             )
+            if name == "timestamp":
+                # Last launch: one %globaltimer reading per CTA and iteration, program-major
+                # (program = head_batch * grid[0] + query_block), relative to the earliest.
+                stamps = ts[: grid[0] * grid[1] * (seq // config["block_n"])]
+                rows[-1]["stamps_ns"] = (stamps - stamps.min()).tolist()
             print(
                 f"{config['config_id']} {name}: {statistics.median(times) / 1e3:.1f} us",
                 file=sys.stderr,

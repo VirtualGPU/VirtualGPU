@@ -48,10 +48,11 @@ def target(config_id):
     v = torch.randn((batch, hk, seq, dim), device="cuda", dtype=torch.float16)
     o = torch.empty_like(q)
     lse = torch.empty((batch, hq, seq), device="cuda", dtype=torch.float32)
+    ts = torch.zeros(1, device="cuda", dtype=torch.int64)
     grid, _, _ = launch_spec(case, config)
     constants, options = ablation.specialize(config, 0)
     for _ in range(WARMUP + 1):
-        ablation.ablated_attention[grid](q, k, v, o, lse, *constants, **options)
+        ablation.ablated_attention[grid](q, k, v, o, lse, ts, *constants, **options)
     torch.cuda.synchronize()
     print(json.dumps({"grid": list(grid), "num_warps": config["num_warps"]}), flush=True)
 
