@@ -8,7 +8,7 @@ Phase 1 asked one question: **when VirtualGPU says kernel variant A is faster th
 - Nine workload shapes (36 configs each, warm and cold L2) were measured on the GPU and sealed before the freeze. Nobody read them until all predictions were archived.
 - VirtualGPU used **no GEMM timings**. Its only hardware input is the GPU profile, measured by the microbenchmark suite.
 - Two baselines were scored on the same data: roofline with wave quantization, and a NeuSight-style learned predictor trained on all RTX 4070 development GEMM timings.
-- Pass criteria, fixed before any model score was seen, are in [design.md](design.md) section 8. The full report with digests and timestamps is [validation/phase1-holdout-report.md](../validation/phase1-holdout-report.md).
+- Pass criteria, fixed before any model score was seen, are in [design.md](../design.md) section 8. The full report with digests and timestamps is [validation/phase1-holdout-report.md](../../validation/phase1-holdout-report.md).
 
 ## Result
 
@@ -45,7 +45,7 @@ When VirtualGPU says A is faster than B, the RTX 4070 agrees about 95% of the ti
 
 ## What Phase 1 does not show
 
-- Transfer to a GPU whose data was not used to build the model. That is Phase 2, preregistered in [validation/phase2-preregistration.md](../validation/phase2-preregistration.md).
+- Transfer to a GPU whose data was not used to build the model. That is Phase 2, preregistered in [validation/phase2-preregistration.md](../../validation/phase2-preregistration.md).
 - Other kernel types such as attention or mixture of experts.
 - Reliable shortlists for shapes with unaligned dimensions. The cause is under post-hoc investigation and cannot change the Phase 1 decision.
 
@@ -61,4 +61,4 @@ Several apparent model errors turned out to be measurement or frontend errors. E
 | `num_stages=2` assumed to overlap loads | Prefetch depth off by one | `cp.async.wait_group` semantics in the PTX |
 | Processing order within a timestamp | Results depended on iteration order | A 4% warm-versus-cold anomaly |
 
-Every model change is justified by a microbenchmark or a hardware principle and recorded in its commit message. No model parameter was fitted to GEMM timings. Residuals that could not be explained this way are listed in [design.md](design.md) section 9.
+Every model change is justified by a microbenchmark or a hardware principle and recorded in its commit message. No model parameter was fitted to GEMM timings. Residuals that could not be explained this way are listed in [design.md](../design.md) section 9.

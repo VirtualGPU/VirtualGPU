@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from virtualgpu.frontend.compiler import MockTensor
 from virtualgpu.frontend.triton_gemm import extract_gemm_kernel_ir
@@ -45,10 +46,20 @@ def normalize_gemm_config(entry: Mapping[str, Any], index: int = 0) -> tuple[str
     if "group_m" in entry:
         cfg["GROUP_M"] = int(entry["group_m"])
     for key in (
-        "BM", "BN", "BK", "GROUP_M",
-        "BLOCK_M", "BLOCK_N", "BLOCK_K", "GROUP_SIZE_M",
-        "BLOCK_SIZE_M", "BLOCK_SIZE_N", "BLOCK_SIZE_K",
-        "num_warps", "num_stages", "maxnreg",
+        "BM",
+        "BN",
+        "BK",
+        "GROUP_M",
+        "BLOCK_M",
+        "BLOCK_N",
+        "BLOCK_K",
+        "GROUP_SIZE_M",
+        "BLOCK_SIZE_M",
+        "BLOCK_SIZE_N",
+        "BLOCK_SIZE_K",
+        "num_warps",
+        "num_stages",
+        "maxnreg",
     ):
         if key in entry and entry[key] is not None:
             cfg[key] = int(entry[key])
@@ -74,12 +85,21 @@ def _build_kernel_call_args(
 
     # Support kernels with (A, B, C, M, N, K, ...) as well as (a_ptr, b_ptr, c_ptr, M, N, K, stride_...)
     arg_map: dict[str, Any] = {
-        "A": a, "B": b, "C": c,
-        "a_ptr": a, "b_ptr": b, "c_ptr": c,
-        "M": M, "N": N, "K": K,
-        "stride_am": K, "stride_ak": 1,
-        "stride_bk": N, "stride_bn": 1,
-        "stride_cm": N, "stride_cn": 1,
+        "A": a,
+        "B": b,
+        "C": c,
+        "a_ptr": a,
+        "b_ptr": b,
+        "c_ptr": c,
+        "M": M,
+        "N": N,
+        "K": K,
+        "stride_am": K,
+        "stride_ak": 1,
+        "stride_bk": N,
+        "stride_bn": 1,
+        "stride_cm": N,
+        "stride_cn": 1,
     }
     positional: list[Any] = []
     for name in fn.arg_names:
@@ -232,14 +252,16 @@ def predict_gemm_configs(
     records: list[dict[str, Any]] = []
     for config_id, item in extracted.items():
         if item["status"] != "ok":
-            records.append({
-                "case_id": case_id,
-                "config_id": config_id,
-                "profile_revision": revision,
-                "status": "unsupported",
-                "assumptions": {"l2_state": l2_state, "dispatch_policy": "round_robin"},
-                "reason": item["reason"],
-            })
+            records.append(
+                {
+                    "case_id": case_id,
+                    "config_id": config_id,
+                    "profile_revision": revision,
+                    "status": "unsupported",
+                    "assumptions": {"l2_state": l2_state, "dispatch_policy": "round_robin"},
+                    "reason": item["reason"],
+                }
+            )
             continue
         records.append(
             predict_kernel_ir(

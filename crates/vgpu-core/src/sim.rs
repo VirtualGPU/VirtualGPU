@@ -10,7 +10,7 @@
 //!   GPU, with the achievable bandwidth taken from the profile curve for the
 //!   current number of active SMs.
 //!
-//! See `docs/proposals/model-core.md`, sections 3.1 to 3.5.
+//! See `docs/components/model-core.md`, sections 3.1 to 3.5.
 
 use crate::kernel::{Access, Kernel, Spill, SpillScope, Work};
 use crate::occupancy::{occupancy, Occupancy, OccupancyError};

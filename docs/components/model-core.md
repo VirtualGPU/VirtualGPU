@@ -1,6 +1,6 @@
-# Proposal: Performance Model Core
+# Performance model core
 
-Status: proposal for discussion. Owner: model core. No code.
+How the core turns a `KernelIR` and a GPU profile into a predicted time, a resource breakdown and pairwise verdicts. Code: `crates/vgpu-core/src/`. The mechanisms the core runs today are listed in [design.md section 6.4](../design.md#64-mechanisms-in-the-core). If this file and the code disagree, the code is right and this file gets fixed.
 
 ## 1. Scope
 
@@ -19,21 +19,17 @@ In scope:
 
 Out of scope (owned elsewhere):
 
-- Extracting kernel structure from Triton (frontend proposal).
-- The kernel IR format itself and the L2 reuse model (kernel IR and L2 proposal). The core calls the L2 model; it does not implement it.
-- Measuring profile fields (microbenchmark and profile proposal).
-- Baselines and the evaluation protocol (validation proposal). The core must not contain baseline code.
+- Extracting kernel structure from Triton ([frontend.md](frontend.md)).
+- The kernel IR format and the L2 reuse model ([kernel-ir.md](kernel-ir.md)). The core calls the L2 model through its API.
+- Measuring profile fields ([profiles.md](profiles.md)).
+- Baselines and the evaluation protocol ([validation.md](validation.md)). The core must not contain baseline code.
 
-Goal-dependent (pending the project goal decision):
-
-- Whether use cases 2 and 3 (algorithm comparison, full-model bottleneck finding) are first-class. They need absolute calibration per resource, which raises the bar for every measured field. This proposal designs for use case 1 and keeps the structure open for the others.
-- Which operator classes beyond GEMM the core must support in the first version (attention, MoE, normalization). The phase model below is generic, but only GEMM-shaped main loops are specified in detail.
 
 ## 2. Interfaces
 
-### 2.1 Input: `KernelIR` (schema owned by the kernel IR proposal)
+### 2.1 Input: `KernelIR`
 
-The core consumes `KernelIR` v0.1 as defined in `kernel-ir-and-l2.md`. How the core uses each part:
+The core consumes `KernelIR` v0.1 as defined in [kernel-ir.md](kernel-ir.md). How the core uses each part:
 
 - `launch.grid`, `launch.num_warps`, `resources.*`: occupancy (3.3).
 - `body.outer_loop.trip_counts`: tiles per program. One for ordinary kernels, more for persistent kernels (3.6). No separate code path.
@@ -43,7 +39,7 @@ The core consumes `KernelIR` v0.1 as defined in `kernel-ir-and-l2.md`. How the c
 - `gmem_load` / `gmem_store` ops: bytes per iteration, split into L2 and DRAM bytes by the L2 model.
 - `alu` / `sfu` ops: issue work.
 
-Fields added at the core's request and how the core uses them:
+Other `KernelIR` fields the core reads:
 
 - `resources.spill_scope`: `none` and `prologue_epilogue` are one-time costs, `inner_loop_confirmed` and `inner_loop_assumed` are per-iteration costs, and `inner_loop_assumed` gets a widened uncertainty (3.7).
 - `pipeline_loop.prefetch_distance`: the overlap depth in 3.5, instead of assuming `num_stages - 1`.
@@ -55,15 +51,15 @@ Fields added at the core's request and how the core uses them:
 - `alu` / `sfu` counts in `insts_per_warp_per_iter`.
 - `gmem_load.nominal_bytes_per_cta` is the full-tile size; actual bytes for masked edge tiles come from `access_map`.
 
-### 2.2 Input: GPU profile (schema owned by the microbenchmark and profile proposal)
+### 2.2 Input: GPU profile
 
-The core consumes profile v0.1 as defined in `microbench-and-profile.md`.
+The core consumes profile v0.1 as defined in [profiles.md](profiles.md).
 
 - `specs`: used exactly, never perturbed. Occupancy uses `max_warps_per_sm`, `max_blocks_per_sm`, `registers_per_sm`, `register_alloc_unit_regs`, `shared_mem_per_sm_bytes`, `max_shared_mem_per_block_bytes`, and `shared_mem_alloc_granularity_bytes`.
 - `measured.*`: every `MeasuredValue` is perturbed within `rel_uncertainty` (section 4).
 - `measured.cta_dispatch`: selects the dispatch policy (3.2).
 
-Fields the core still needs, requested from the profile proposal:
+Profile fields the core reads beyond the basic specs:
 
 1. Shared memory carveout: the allowed carveout sizes and the per-CTA reserved shared memory. Without them occupancy is wrong whenever shared memory is the limiter.
 2. MMA throughput as a function of MMA-issuing warps per SM (a short table per key, for example 4, 8, 16, 32 warps), not one peak number. This is how `num_warps` enters the model (3.5).
@@ -72,9 +68,9 @@ Fields the core still needs, requested from the profile proposal:
 5. In `cta_dispatch`: a list of `candidate_policies` whenever `confidence` is not high, and the raw first-wave `(cta_id -> sm_id, start_ns)` table for each probe whenever `observed_policy` is `unknown`. The fitted enum is enough otherwise.
 6. Optional: load latency under load (latency versus achieved bandwidth). Without it the core derives a loaded latency from the bandwidth curve.
 
-### 2.3 L2 model calls (API owned by the kernel IR and L2 proposal)
+### 2.3 L2 model calls
 
-The core uses the online API in `kernel-ir-and-l2.md`:
+The core uses the online API in [kernel-ir.md](kernel-ir.md):
 
 - `begin_tile` / `end_tile` when a tile (one outer iteration of a CTA) starts and ends, so the L2 model always knows the resident set.
 - `split(sm_id, cta_id, outer_idx, op_id, k_begin, k_end, is_write, cache_policy, t_ns)` once per (CTA, op, phase segment). The segment covers the half-open inner-step range `[k_begin, k_end)` between two changes of the resident set; prologue and epilogue pass `[0, 1)`. The result is the aggregate over the range. Calls stay per segment, never per pipeline iteration, which keeps a 4096-tile GEMM at a few calls per tile and operand.
@@ -119,7 +115,7 @@ The scheduler keeps a queue of programs in launch order and a slot count per SM 
 - `grouped`: the same, but SMs are filled in groups (for example by GPC) with a measured group order.
 - `measured_table`: the first-wave mapping is taken directly from the measured trace; later waves use first-free.
 
-Later waves always use "first SM to free a slot", because that is the behavior the trace measurement can observe directly, and it does not depend on undocumented arbitration. When the profile lists several candidate policies, the model runs each and treats the policy as one more perturbation dimension (section 4). Comparisons that flip with the policy become indistinguishable. This answers risk 6.
+Later waves always use "first SM to free a slot", because that is the behavior the trace measurement can observe directly, and it does not depend on undocumented arbitration. When the profile lists several candidate policies, the model runs each and treats the policy as one more perturbation dimension (section 4). Comparisons that flip with the policy become indistinguishable.
 
 ### 3.3 Occupancy
 
@@ -151,7 +147,7 @@ The MMA throughput share depends on how many warps issue MMA on the SM, using th
 
 ### 3.6 Persistent and warp-specialized kernels
 
-Persistent kernels (risk 4) need no special scheduler: the grid is the number of programs, and each program walks its tile list from the kernel IR. Each tile contributes its phases in sequence. If the kernel IR marks epilogue-to-next-tile overlap, the epilogue of tile i runs as a concurrent phase with the main loop of tile i+1 on the same CTA, sharing its resources.
+Persistent kernels need no special scheduler: the grid is the number of programs, and each program walks its tile list from the kernel IR. Each tile contributes its phases in sequence. If the kernel IR marks epilogue-to-next-tile overlap, the epilogue of tile i runs as a concurrent phase with the main loop of tile i+1 on the same CTA, sharing its resources.
 
 Warp specialization is modeled as two concurrent phases in one CTA, a producer (loads only) and a consumer (compute only), coupled by an `S`-deep buffer: the consumer cannot run ahead of the producer by more than `S` iterations and vice versa. In steady state this reduces to the same maximum as 3.5, without the latency term competing with compute warps for issue slots.
 
@@ -159,7 +155,7 @@ Neither test GPU (sm_89, sm_121) is known to us to exercise Triton's warp specia
 
 ### 3.7 Register spills
 
-Risk 3. The assembler reports static spill bytes, not dynamic counts. The core uses:
+The assembler reports static spill bytes, not dynamic counts. The core uses:
 
 - `inner_loop_confirmed`: spill bytes are added as local memory traffic to every iteration, and `account_spill` decides how much of it reaches L2 and DRAM.
 - `inner_loop_assumed`: the same at draw 0. In draws 1 to `N` the per-iteration spill traffic is scaled by a factor sampled uniformly in `[0, 1]`, covering everything from a one-time cost to a per-iteration cost. A ranking that depends on where the spill code sits then becomes indistinguishable.
@@ -174,50 +170,13 @@ A constant from the profile, plus per-CTA launch latency at dispatch. Matters on
 
 ## 4. Perturbation-based resolution
 
-Risk 1: when variants are bound by different resources, profile errors do not cancel. The core therefore treats the profile as uncertain and makes every comparison paired.
+When variants are bound by different resources, profile errors do not cancel. The core therefore treats the profile as uncertain and makes every comparison paired.
 
-- Draw 0 is the unperturbed profile. Draws 1 to `N` (default `N = 32`, Latin hypercube, fixed seed) sample each measured field uniformly within `+/- rel_uncertainty` of its value. `rel_uncertainty` already includes the 10% floor from the profile proposal. Grouping and curve rules are in 2.2. Specification fields are fixed. Derived quantities are recomputed from the drawn values so that they stay consistent.
+- Draw 0 is the unperturbed profile. Draws 1 to `N` (default `N = 32`, Latin hypercube, fixed seed) sample each measured field uniformly within `+/- rel_uncertainty` of its value. `rel_uncertainty` already includes the 10% floor from [profiles.md](profiles.md). Grouping and curve rules are in 2.2. Specification fields are fixed. Derived quantities are recomputed from the drawn values so that they stay consistent.
 - Discrete dimensions are sampled alongside: the dispatch policy when the profile lists `candidate_policies` (3.2), and the L2 model's `eviction_mode` and `cross_wave_reuse` (2.3).
 - The same draws are used for every variant (common random numbers). An error shared by all variants moves them together, so only errors that affect the variants differently change their order. This is what makes the comparison paired.
-- Verdict for a pair (A, B): "A faster" if A is faster in every draw including draw 0; "B faster" likewise; otherwise "indistinguishable". Exact nominal ties are indistinguishable. This matches the sensitivity rule in the validation proposal. A softer rule (for example 90% of draws) can only be introduced if it is calibrated on calibration data, never on holdout data (risk 9).
+- Verdict for a pair (A, B): "A faster" if A is at least 5% faster in every draw including draw 0; "B faster" likewise; otherwise "indistinguishable". The 5% band is fixed, not tuned (see the verdict rule in [design.md](../design.md#decisions)). A softer rule can only be introduced if it is calibrated on calibration data, never on holdout data.
 - If either variant has status `unsupported`, no verdict is given. If either has `unvalidated_feature`, the verdict is still computed, and the flag goes with it.
 - Verdicts are kept per pair, with no hard grouping, so non-transitive results are reported as they are.
 
 Cost: `N + 1` simulations per variant. This is where the 1 ms per simulation requirement in 3.1 comes from.
-
-## 5. Response to the shared risks
-
-| Risk | Response |
-|---|---|
-| 1. Errors do not cancel across bottlenecks | Section 4: perturbation with common random numbers, pairwise verdicts. |
-| 2. Swizzle as program id arithmetic | Resolved by the frontend's scalar evaluator; the core consumes tile coordinates per program (2.1). |
-| 3. Spill penalty | Section 3.7. |
-| 4. Persistent kernels and warp specialization | Section 3.6. |
-| 5. Stage structure after the pipelining pass | The core consumes stage count and prefetch distance as produced by the pass (2.1); it never infers them from `num_stages`. |
-| 6. CTA dispatch order | Section 3.2: measured policy, ambiguity becomes a perturbation dimension. |
-| 7. Baselines | Owned by validation. The core exposes its intermediate quantities (occupancy, waves, per-resource times) so a baseline can be built from the same profile without sharing code. |
-| 8. Hardware noise | Owned by validation. The core is deterministic for a fixed seed. |
-| 9. Pairwise metrics, calibration and validation split | Section 4. |
-
-## 6. Measurements the core depends on
-
-Requested from the microbenchmark suite, in priority order:
-
-1. CTA dispatch trace (`%smid`, `%globaltimer` per program) for grids of 1 to 4 waves and several occupancies, on both test GPUs.
-2. DRAM and L2 achievable bandwidth versus number of active SMs.
-3. MMA throughput per SM versus MMA-issuing warps per SM, for the instruction shapes and dtypes Triton emits on each test GPU.
-4. Load latency under increasing load (to calibrate the latency increase in 3.5).
-5. Shared memory carveout chosen by the runtime for given per-CTA shared memory, to verify 3.3.
-6. Spill traffic cost at small and large local memory footprints.
-7. Launch overhead and per-CTA launch latency.
-
-The core also needs a few end-to-end checks of its own mechanisms, separate from the ranking experiment: a single-wave kernel, a kernel with a deliberately bad tail, and a pure-bandwidth kernel, each compared against hardware. These isolate mechanism errors before rank correlation hides them.
-
-## 7. Open questions
-
-1. Implementation language. The 1 ms per simulation requirement in 3.1 rules out a pure Python event loop for large grids. Options: a compiled core (Rust or C++) with a Python binding, or Python with an analytical shortcut for waves of identical CTAs. Decision belongs to the lead.
-2. Whether identical CTAs (same phases, no L2 interaction differences) should be batched into one event stream as an optimization, and how to keep that exact.
-3. Whether a softer verdict rule than unanimity (section 4) is worth calibrating, jointly with validation.
-4. How the latency bound in 3.5 grows with load: a fixed latency plus queueing term, or a measured latency-versus-bandwidth curve from the profile.
-5. Whether the core needs a cluster level (thread block clusters, distributed shared memory) for any first-version target. Depends on what sm_121 supports and what Triton emits for it.
-6. Goal-dependent: whether non-GEMM operator classes need their own phase templates in the first version.

@@ -9,33 +9,54 @@ from typing import Any
 import pytest
 import triton
 import triton.language as tl
-
 import virtualgpu
 from virtualgpu.autotune import AutotuneReport, autotune_offline, prune_configs_by
 from virtualgpu.cli import main as cli_main
 from virtualgpu.frontend.compiler import MockTensor
 
-
-REPO_ROOT = Path(__file__).resolve().parents[4]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 PROFILE_EXAMPLE_PATH = REPO_ROOT / "schemas" / "examples" / "profile_example.json"
 
 
 _TEST_CONFIGS = [
-    triton.Config({"BLOCK_SIZE_M": 64, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 32, "GROUP_SIZE_M": 8}, num_warps=4, num_stages=3),
-    triton.Config({"BLOCK_SIZE_M": 128, "BLOCK_SIZE_N": 128, "BLOCK_SIZE_K": 32, "GROUP_SIZE_M": 8}, num_warps=4, num_stages=3),
-    triton.Config({"BLOCK_SIZE_M": 128, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 32, "GROUP_SIZE_M": 8}, num_warps=4, num_stages=3),
-    triton.Config({"BLOCK_SIZE_M": 128, "BLOCK_SIZE_N": 128, "BLOCK_SIZE_K": 64, "GROUP_SIZE_M": 8}, num_warps=4, num_stages=5),
+    triton.Config(
+        {"BLOCK_SIZE_M": 64, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 32, "GROUP_SIZE_M": 8},
+        num_warps=4,
+        num_stages=3,
+    ),
+    triton.Config(
+        {"BLOCK_SIZE_M": 128, "BLOCK_SIZE_N": 128, "BLOCK_SIZE_K": 32, "GROUP_SIZE_M": 8},
+        num_warps=4,
+        num_stages=3,
+    ),
+    triton.Config(
+        {"BLOCK_SIZE_M": 128, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 32, "GROUP_SIZE_M": 8},
+        num_warps=4,
+        num_stages=3,
+    ),
+    triton.Config(
+        {"BLOCK_SIZE_M": 128, "BLOCK_SIZE_N": 128, "BLOCK_SIZE_K": 64, "GROUP_SIZE_M": 8},
+        num_warps=4,
+        num_stages=5,
+    ),
 ]
 
 
 @triton.autotune(configs=_TEST_CONFIGS, key=["M", "N", "K"])
 @triton.jit
 def _autotuned_gemm(
-    a_ptr, b_ptr, c_ptr,
-    M, N, K,
-    stride_am, stride_ak,
-    stride_bk, stride_bn,
-    stride_cm, stride_cn,
+    a_ptr,
+    b_ptr,
+    c_ptr,
+    M,
+    N,
+    K,
+    stride_am,
+    stride_ak,
+    stride_bk,
+    stride_bn,
+    stride_cm,
+    stride_cn,
     BLOCK_SIZE_M: tl.constexpr,
     BLOCK_SIZE_N: tl.constexpr,
     BLOCK_SIZE_K: tl.constexpr,
@@ -201,17 +222,29 @@ def test_autotune_offline_ranks_triton_autotuner_and_reports_ties(tmp_path: Path
 def test_cli_autotune_writes_report_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(virtualgpu, "_core", _DeterministicCore, raising=False)
     out_file = tmp_path / "autotune_report.json"
-    rc = cli_main([
-        "autotune",
-        "--kernel", "virtualgpu.frontend.tests.test_autotune:_autotuned_gemm",
-        "--shape", "1024", "1024", "512",
-        "--profile", str(PROFILE_EXAMPLE_PATH),
-        "--cache", "cold",
-        "--draws", "8",
-        "--top-k", "2",
-        "--cache-dir", str(tmp_path / "cache"),
-        "--out", str(out_file),
-    ])
+    rc = cli_main(
+        [
+            "autotune",
+            "--kernel",
+            "tests.frontend.test_autotune:_autotuned_gemm",
+            "--shape",
+            "1024",
+            "1024",
+            "512",
+            "--profile",
+            str(PROFILE_EXAMPLE_PATH),
+            "--cache",
+            "cold",
+            "--draws",
+            "8",
+            "--top-k",
+            "2",
+            "--cache-dir",
+            str(tmp_path / "cache"),
+            "--out",
+            str(out_file),
+        ]
+    )
     assert rc == 0
     data = json.loads(out_file.read_text(encoding="utf-8"))
     assert data["status"] == "ok"
@@ -235,10 +268,15 @@ def test_online_pruner_shortlists_and_falls_back_loudly_on_total_failure(tmp_pat
         "a_ptr": MockTensor("f16", 0x10000),
         "b_ptr": MockTensor("f16", 0x210000),
         "c_ptr": MockTensor("f16", 0x410000),
-        "M": 1024, "N": 1024, "K": 512,
-        "stride_am": 512, "stride_ak": 1,
-        "stride_bk": 1024, "stride_bn": 1,
-        "stride_cm": 1024, "stride_cn": 1,
+        "M": 1024,
+        "N": 1024,
+        "K": 512,
+        "stride_am": 512,
+        "stride_ak": 1,
+        "stride_bk": 1024,
+        "stride_bn": 1,
+        "stride_cm": 1024,
+        "stride_cn": 1,
     }
     kept = pruner(_TEST_CONFIGS, nargs)
     assert len(kept) == 2
@@ -273,7 +311,9 @@ def test_online_pruner_shortlists_and_falls_back_loudly_on_total_failure(tmp_pat
         strict_pruner(_TEST_CONFIGS, nargs)
 
 
-def test_virtualgpu_autotune_decorator_env_switch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_virtualgpu_autotune_decorator_env_switch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.delenv("VIRTUALGPU_PROFILE", raising=False)
     plain = virtualgpu.autotune(configs=_TEST_CONFIGS, key=["M", "N", "K"])(_autotuned_gemm.fn)
     assert not hasattr(plain, "vgpu_reports")
@@ -292,7 +332,9 @@ def test_virtualgpu_autotune_decorator_env_switch(tmp_path: Path, monkeypatch: p
     assert wrapped._do_bench is not None
 
 
-def test_kernel_ir_disk_cache_and_predict_batch_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_kernel_ir_disk_cache_and_predict_batch_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from virtualgpu.frontend import compiler as comp_mod
     from virtualgpu.frontend import triton_gemm as tg_mod
 
@@ -310,7 +352,9 @@ def test_kernel_ir_disk_cache_and_predict_batch_path(tmp_path: Path, monkeypatch
             nonlocal batch_calls
             batch_calls += 1
             return [
-                _DeterministicCore.predict(ir_j, profile_json, l2_state=l2_state, draws=draws, seed=seed)
+                _DeterministicCore.predict(
+                    ir_j, profile_json, l2_state=l2_state, draws=draws, seed=seed
+                )
                 for ir_j in kernel_ir_jsons
             ]
 
@@ -333,8 +377,16 @@ def test_kernel_ir_disk_cache_and_predict_batch_path(tmp_path: Path, monkeypatch
     # second run must hit on-disk KernelIR cache cleanly.
     comp_mod._MEMORY_CACHE.clear()
     tg_mod._IR_MEMORY_CACHE.clear()
-    monkeypatch.setattr(triton, "compile", lambda *a, **k: (_ for _ in ()).throw(AssertionError("should hit IR cache")))
-    monkeypatch.setattr(tg_mod, "evaluate_ttgir_cta_offsets", lambda *a, **k: (_ for _ in ()).throw(AssertionError("should skip scalar_eval")))
+    monkeypatch.setattr(
+        triton,
+        "compile",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should hit IR cache")),
+    )
+    monkeypatch.setattr(
+        tg_mod,
+        "evaluate_ttgir_cta_offsets",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should skip scalar_eval")),
+    )
 
     r2 = autotune_offline(
         _autotuned_gemm,

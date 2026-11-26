@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ProcessPoolExecutor
-from dataclasses import asdict, dataclass
 import functools
 import hashlib
 import importlib
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
 import tempfile
-from typing import Any, Sequence
-
+from collections.abc import Sequence
+from concurrent.futures import ProcessPoolExecutor
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any
 
 _CANONICAL_TO_TORCH_DTYPE: dict[str, str] = {
     "f16": "float16",
@@ -101,9 +101,7 @@ _RE_PTX_TARGET = re.compile(r"^\s*\.target\s+(sm_[0-9a-zA-Z_]+)", re.MULTILINE)
 _RE_SPILL_LINE = re.compile(
     r"(\d+)\s+bytes\s+stack\s+frame,\s*(\d+)\s+bytes\s+spill\s+stores,\s*(\d+)\s+bytes\s+spill\s+loads"
 )
-_RE_USED_LINE = re.compile(
-    r"Used\s+(\d+)\s+registers(?:,\s*used\s+(\d+)\s+barriers)?"
-)
+_RE_USED_LINE = re.compile(r"Used\s+(\d+)\s+registers(?:,\s*used\s+(\d+)\s+barriers)?")
 _RE_VERSION = re.compile(r"release\s+([0-9.]+),\s*V([0-9.]+)")
 _RE_PTX_LOCAL_LDST = re.compile(r"\b(?:ld|st)\.local\b")
 _RE_TTGIR_LOC_DEF = re.compile(r"^#loc\d*\s*=.*$")
@@ -117,7 +115,9 @@ def _strip_ttgir_locs(line: str) -> str:
     i = 0
     n = len(line)
     while i < n:
-        if line.startswith("loc(", i) and (i == 0 or not (line[i - 1].isalnum() or line[i - 1] == "_")):
+        if line.startswith("loc(", i) and (
+            i == 0 or not (line[i - 1].isalnum() or line[i - 1] == "_")
+        ):
             depth = 0
             j = i + 3
             while j < n:
@@ -380,7 +380,9 @@ def parse_arch_number(target_arch: str) -> int:
     """Parse an NVIDIA SM string like 'sm_89' or 'sm_121' into its integer code."""
     m = re.fullmatch(r"sm_(\d+)a?", target_arch)
     if not m:
-        raise ValueError(f"Unsupported target_arch format: {target_arch!r} (expected e.g. 'sm_89', 'sm_121')")
+        raise ValueError(
+            f"Unsupported target_arch format: {target_arch!r} (expected e.g. 'sm_89', 'sm_121')"
+        )
     return int(m.group(1))
 
 
@@ -397,7 +399,9 @@ def default_aot_cache_dir() -> Path:
 
 def _canonical_json(obj: Any) -> Any:
     if isinstance(obj, dict):
-        return {str(k): _canonical_json(v) for k, v in sorted(obj.items(), key=lambda kv: str(kv[0]))}
+        return {
+            str(k): _canonical_json(v) for k, v in sorted(obj.items(), key=lambda kv: str(kv[0]))
+        }
     if isinstance(obj, (list, tuple)):
         return [_canonical_json(x) for x in obj]
     if isinstance(obj, (str, int, float, bool)) or obj is None:
@@ -567,7 +571,9 @@ def compile_triton_aot(
         if disk_path is not None:
             try:
                 disk_path.parent.mkdir(parents=True, exist_ok=True)
-                tmp_fd, tmp_name = tempfile.mkstemp(prefix=".aot_", suffix=".tmp", dir=str(disk_path.parent))
+                tmp_fd, tmp_name = tempfile.mkstemp(
+                    prefix=".aot_", suffix=".tmp", dir=str(disk_path.parent)
+                )
                 try:
                     with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
                         json.dump(_artifacts_to_dict(artifacts), f)
@@ -730,7 +736,9 @@ def compile_triton_aot_batch(
         mod_name, qualname = import_info
         workers = min(max_workers or 8, len(misses), os.cpu_count() or 1)
         parent_sys_path = tuple(sys.path)
-        triton_cache_dir = str(triton.knobs.cache.dir) if getattr(triton.knobs.cache, "dir", None) else None
+        triton_cache_dir = (
+            str(triton.knobs.cache.dir) if getattr(triton.knobs.cache, "dir", None) else None
+        )
         tasks = [
             (
                 idx,

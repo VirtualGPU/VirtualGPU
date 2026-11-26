@@ -1,21 +1,21 @@
-# Proposal: Microbenchmark Suite and GPU Profile Format
+# Microbenchmarks and GPU profiles
 
-Status: Draft for architecture alignment (Owner: Agent 1).
+The profile format and the CUDA suite that measures it. Schema: `schemas/gpu_profile.schema.json`. Code: `microbench/`. Profiles: `profiles/`. To measure your own GPU, see [contributing a profile](../guides/contributing-a-profile.md). The mechanisms the core runs today are listed in [design.md section 6.4](../design.md#64-mechanisms-in-the-core). If this file and the code disagree, the code is right and this file gets fixed.
 
 ## 1. Scope
 
-This proposal defines two components:
+This document defines two components:
 
-1. **GPU Profile Format (`v0.1` JSON):** A versioned, self-describing hardware profile consumed by the L2 model (Agent 3), performance model core (Agent 4), and validation harness (Agent 5).
+1. **GPU Profile Format (`v0.1` JSON):** A versioned, self-describing hardware profile consumed by the L2 model (the L2 model), performance model core (the model core), and validation harness (validation).
 2. **Microbenchmark Suite:** Isolated, public-API-only kernels that measure effective hardware rates, latencies, spill penalties, and CTA dispatch behavior on a target GPU to populate a profile.
 
-**Out of scope:** Reverse engineering vendor drivers, firmware, or ISA encodings; fitting parameters to target workloads (GEMM/attention/MoE); and benchmark validation datasets (owned by Agent 5).
+**Out of scope:** Reverse engineering vendor drivers, firmware, or ISA encodings; fitting parameters to target workloads (GEMM/attention/MoE); and benchmark validation datasets (owned by validation).
 
 **Current hardware reality:** Initial hardware bring-up is limited to two GPUs:
 - **RTX 4070 (`sm_89`, Ada):** Discrete GDDR6X, warp-level `mma.sync.aligned`, `cp.async`, no TMA.
 - **DGX Spark GB10 (`sm_121`, consumer/workstation Blackwell):** Unified LPDDR5x memory shared with Grace CPU. Per NVIDIA PTX ISA and CUDA documentation, `sm_121` supports TMA and warp-level `mma.sync.aligned` (including block-scaled `m16n8k32`/`m16n8k64` for low-precision formats) and **does not** support `tcgen05` or Tensor Memory (TMEM).
 
-No Hopper (`sm_90`) GPU is available. Hopper `wgmma` and datacenter Blackwell `tcgen05`/TMEM are represented via capability flags in the schema, but cannot be hardware-calibrated in Phase 1.
+No Hopper (`sm_90`) GPU has been measured yet. Hopper `wgmma` and data center Blackwell `tcgen05`/TMEM are represented by capability flags in the schema, but are not calibrated on hardware.
 
 ---
 
@@ -42,9 +42,9 @@ Every measured quantity uses a uniform **MeasuredValue** envelope:
 }
 ```
 
-`rel_uncertainty` is `max(default_floor, (ci95_high - ci95_low) / (2 * value))`, where `default_floor` is `0.10` for measured fields (matching Risk #1 perturbation) and higher (TBD, e.g., `0.25`) for spec-derived estimates. `perturb_group` is optional (`null` = independent draw; fields sharing the same group name share one multiplicative draw, e.g., `dram_bw_read_gbps` and `dram_bw_write_gbps`). Curves (`*_by_active_sms`, `*_by_warps`) share a single scalar multiplier across all points so the curve shape is preserved under perturbation.
+`rel_uncertainty` is `max(default_floor, (ci95_high - ci95_low) / (2 * value))`, where `default_floor` is `0.10` for measured fields (the perturbation floor the core uses) and higher (for example `0.25`) for spec-derived estimates. `perturb_group` is optional (`null` = independent draw; fields sharing the same group name share one multiplicative draw, e.g., `dram_bw_read_gbps` and `dram_bw_write_gbps`). Curves (`*_by_active_sms`, `*_by_warps`) share a single scalar multiplier across all points so the curve shape is preserved under perturbation.
 
-Top-level structure (**note:** all GB10 numbers below—such as `sm_count`, `l2_size_bytes`, and clocks—are **illustrative placeholders only**; real profiles must populate `specs.*` from runtime API queries and `measured.*` from hardware runs):
+Top-level structure (**note:** all GB10 numbers below, such as `sm_count`, `l2_size_bytes`, and clocks, are **illustrative placeholders only**; real profiles must populate `specs.*` from runtime API queries and `measured.*` from hardware runs):
 
 ```json
 {
@@ -205,17 +205,17 @@ Fields sharing a `perturb_group` receive the same multiplicative draw per pertur
 
 ### 2.4 Downstream Consumer Alignment
 
-- **Agent 4 (Model Core):** Reads `specs` (occupancy, carveout options, allocation granularity, MMA shape fit), `measured.*` (active-SM bandwidth curves for DRAM/L2, per-SM MMA throughput vs warp count, unloaded/loaded latency, non-MMA issue rate, spill, launch/per-CTA overhead, observed carveout, and `rel_uncertainty` for perturbation), and `cta_dispatch` (`observed_policy`, `candidate_policies`, `first_wave_trace`).
-- **Agent 3 (L2 Reuse):** Reads `specs.l2_size_bytes`, `specs.l2_line_bytes`, `specs.l2_sector_bytes`, `specs.l1_size_bytes`, `specs.l2_partitions`, `measured.memory.l2_effective_capacity_bytes`, `measured.memory.l2_bw_*` / `dram_bw_*` / `*_latency_ns`, and `cta_dispatch`.
-- **Agent 5 (Validation):** Shares the measurement hygiene protocol (Section 4, Risk #8) and inspects `provenance` (`profile_revision`, `calibration_run_id`, clock/WSL/power metadata) to enforce strict calibration/validation separation.
+- **Model core:** Reads `specs` (occupancy, carveout options, allocation granularity, MMA shape fit), `measured.*` (active-SM bandwidth curves for DRAM/L2, per-SM MMA throughput vs warp count, unloaded/loaded latency, non-MMA issue rate, spill, launch/per-CTA overhead, observed carveout, and `rel_uncertainty` for perturbation), and `cta_dispatch` (`observed_policy`, `candidate_policies`, `first_wave_trace`).
+- **L2 model:** Reads `specs.l2_size_bytes`, `specs.l2_line_bytes`, `specs.l2_sector_bytes`, `specs.l1_size_bytes`, `specs.l2_partitions`, `measured.memory.l2_effective_capacity_bytes`, `measured.memory.l2_bw_*` / `dram_bw_*` / `*_latency_ns`, and `cta_dispatch`.
+- **Validation:** Shares the measurement hygiene protocol and inspects `provenance` (`profile_revision`, `calibration_run_id`, clock/WSL/power metadata) to enforce strict calibration/validation separation.
 
 ---
 
 ## 3. Key Decisions
 
 ### D1. Uniform `MeasuredValue` envelope with built-in uncertainty
-- **Alternatives:** (A) Plain floats in JSON, with a hardcoded ±10% constant inside Agent 4; (B) Store raw timing arrays in the profile.
-- **Decision:** Structured `MeasuredValue` per scalar field. Keeps profiles compact, preserves observed hardware noise (CI95), and lets Agent 4 sample perturbations directly from `rel_uncertainty` (with a 10% floor for measured fields and wider bands for spec-derived or noisy fields).
+- **Alternatives:** (A) Plain floats in JSON, with a hardcoded ±10% constant inside the model core; (B) Store raw timing arrays in the profile.
+- **Decision:** Structured `MeasuredValue` per scalar field. Keeps profiles compact, preserves observed hardware noise (CI95), and lets the model core sample perturbations directly from `rel_uncertainty` (with a 10% floor for measured fields and wider bands for spec-derived or noisy fields).
 
 ### D2. Runtime API queries + synthetic isolated microbenchmarks (no workload regression)
 - **Alternatives:** (A) Fit profile parameters by regressing against Triton GEMM timings; (B) Use vendor datasheet numbers only.
@@ -227,7 +227,7 @@ Fields sharing a `perturb_group` receive the same multiplicative draw per pertur
 
 ### D4. Compact scaling curves for DRAM/L2 concurrency, MMA warps, and L2 working set
 - **Alternatives:** Single peak DRAM/L2/MMA scalars and raw spec L2 size.
-- **Decision:** Measure `dram_bw_by_active_sms` and `l2_bw_by_active_sms` at 4–6 SM counts (1, 2, 4, 25%, 50%, 100% SMs), sweep working-set size across `0.25x` to `4x` spec L2 to locate `l2_effective_capacity_bytes`, and measure `mma_tflops_per_sm_by_warps` across `1, 2, 4, 8+` issuing warps per SM. Tail waves with few active SMs do not achieve peak bandwidth, `num_warps` enters the model through the per-SM MMA curve, and GB10's unified LPDDR5x + Ada's large L2 make effective L2 capacity decisive for ranking.
+- **Decision:** Measure `dram_bw_by_active_sms` and `l2_bw_by_active_sms` at 4 to 6 SM counts (1, 2, 4, 25%, 50%, 100% SMs), sweep working-set size across `0.25x` to `4x` spec L2 to locate `l2_effective_capacity_bytes`, and measure `mma_tflops_per_sm_by_warps` across `1, 2, 4, 8+` issuing warps per SM. Tail waves with few active SMs do not achieve peak bandwidth, `num_warps` enters the model through the per-SM MMA curve, and GB10's unified LPDDR5x + Ada's large L2 make effective L2 capacity decisive for ranking.
 
 ### D5. Dedicated register-spill microbenchmark
 - **Alternatives:** Model register pressure purely via occupancy reduction.
@@ -235,7 +235,7 @@ Fields sharing a `perturb_group` receive the same multiplicative draw per pertur
 
 ### D6. Empirical CTA dispatch probing via `%smid` and `%globaltimer`
 - **Alternatives:** Assume strict round-robin CTA-to-SM assignment.
-- **Decision:** Run lightweight probe kernels that record `(blockIdx, %smid, %globaltimer_start, %globaltimer_end)` across 1D/2D grids at 1–4 waves and multiple occupancies, repeated across launches. Classify dispatch into `round_robin`, `grouped`, `measured_table`, or `unknown`, emit `candidate_policies` when ambiguous (so Agent 4 treats policy ambiguity as a perturbation dimension), and record `order_consistency` (`0.0–1.0`) and `first_wave_trace`.
+- **Decision:** Run lightweight probe kernels that record `(blockIdx, %smid, %globaltimer_start, %globaltimer_end)` across 1D/2D grids at 1 to 4 waves and multiple occupancies, repeated across launches. Classify dispatch into `round_robin`, `grouped`, `measured_table`, or `unknown`, emit `candidate_policies` when ambiguous (so the model core treats policy ambiguity as a perturbation dimension), and record `order_consistency` (`0.0 to 1.0`) and `first_wave_trace`.
 
 ### D7. Microbenchmark suite implemented in CUDA C++
 - **Alternatives:** Python + Triton, or CuPy/NVRTC.
@@ -250,38 +250,3 @@ Fields sharing a `perturb_group` receive the same multiplicative draw per pertur
   - If `throttle_events > 0`, add `+0.05` to the affected domain's `rel_uncertainty` and flag it in provenance.
 
 ---
-
-## 4. Risk Responses
-
-| Risk | How This Component Addresses It |
-|---|---|
-| **#1 Cross-bottleneck error does not cancel (perturbation resolution)** | Every measured parameter carries `rel_uncertainty` (floor `0.10`). Compute, L2, DRAM, async copy, and spill are measured independently on the same locked-clock baseline so inter-resource ratios are calibrated, not guessed. |
-| **#3 Register spill penalty must be modeled** | Dedicated `measured.spill` benchmarks measure per-SM local-memory bandwidth and latency in L1-hit and L1-miss regimes, keyed directly to `ptxas` spill/local-mem metrics from Agent 2. |
-| **#6 CTA dispatch order must be measured** | `cta_dispatch` microbenchmark records `%smid` and `%globaltimer` across grids and launches, outputting an observed policy plus `order_consistency` / `confidence` so Agent 4 can lower confidence when dispatch varies. |
-| **#8 Real-GPU measurement noise** | Mandatory hygiene protocol (aligned with Agent 5): lock SM/memory clocks when permitted and restore after runs (record achieved clocks and throttle events via NVML; flag `locked: false` if unsupported; record display activity on 4070 and keep host CPU memory idle on GB10), flush L2 with a `>= 2x L2` disjoint write buffer for cold-L2 tests, run thermal warmup, collect `N >= 15` timed iterations via CUDA events / `%globaltimer`, report median + bootstrap 95% CI. |
-| **#9 Strict calibration/validation separation** | Microbenchmark suite contains zero GEMM/attention/MoE kernels and zero Triton autotune configs. `provenance` tags every dataset and profile so Agent 5 can enforce zero overlap. |
-
----
-
-## 5. What Requires Real-Hardware Measurement
-
-To be executed on **RTX 4070 (`sm_89`)** and **DGX Spark GB10 (`sm_121`)** once implementation starts:
-
-1. **Static device query:** Verify exact `sm_count`, `registers_per_sm`, `shared_mem_per_sm_bytes`, `max_blocks_per_sm`, and `l2_size_bytes` via CUDA runtime API on both GPUs (do not rely on marketing tables).
-2. **Clock-lock & thermal behavior check:** Test whether `nvidia-smi -lgc` / `-lmc` is permitted on consumer RTX 4070 (WSL2/Windows driver) and DGX Spark GB10 (unified LPDDR5x), and measure clock drift over a 60-second run.
-3. **DRAM & L2 bandwidth vs active-SM curves:** Cold-L2 DRAM and warm-L2 streaming kernels at 1, 2, 4, 25%, 50%, 100% SMs. On GB10, check sensitivity to concurrent host CPU memory activity.
-4. **L2 effective capacity knee & sector overfetch:** Working-set sweep from `1 MB` to `4x L2` to locate `l2_effective_capacity_bytes`, plus narrow-row strided loads (`< 128B` vs `>= 128B`) to verify 32B sector vs 128B line overfetch (for Agent 3).
-5. **Memory latency hierarchy (unloaded & loaded):** Pointer-chasing kernels for shared memory, L2, and DRAM under low load and under concurrent streaming background load (for Agent 4's pipeline latency term).
-6. **Shared memory bandwidth & runtime carveout check:** Bank-conflict-free `LDS.128`/`STS.128` streaming per SM, plus `cudaOccupancyMaxActiveBlocksPerMultiprocessor` / runtime carveout sweep across per-CTA shared memory sizes.
-7. **Tensor Core & non-MMA throughput vs warp count:** Unrolled `mma.sync.aligned` register-resident loops sweeping `1, 2, 4, 8+` issuing warps per SM for each supported `(dtype, shape)` (`f16`, `bf16`, `tf32`, `f8`, plus `sm_121` block-scaled `fp4`/`fp8` shapes if emitted by Triton), plus per-SM non-MMA issue rate.
-8. **Async copy bandwidth:** `cp.async` per-SM throughput on `sm_89` and `sm_121`; TMA per-SM throughput and descriptor setup latency on `sm_121`.
-9. **Register spill penalty & L1-to-L2 cliff:** Forced-spill local-memory read/write sweep from small per-SM footprint (L1-resident) to large footprint (L1-overflow into L2/DRAM) to measure bandwidth, latency, and `l1_to_l2_spill_threshold_bytes_per_sm`.
-10. **Launch overhead & CTA dispatch probe:** Empty-kernel launch latency, per-CTA launch latency, and `%smid`/`%globaltimer` CTA-to-SM trace across 1–4 waves and multiple occupancies.
-
----
-
-## 6. Open Questions / TBD
-
-1. **Spec-derived profiles (depends on project goals):** If predicting unshipped/unowned GPUs without measured profiles remains a core goal, we need a defined rule for deriving `measured.*` from `specs.*` (e.g., efficiency factors from same-family measured profiles + `rel_uncertainty >= 0.25`).
-2. **Profile review & versioning policy (depends on community-profile goal):** Schema migration rules and automated sanity checks for community-submitted profiles (e.g., rejecting measured BW > 1.05x theoretical spec BW).
-3. **AMD HIP runner timing (depends on project goals):** Whether the HIP microbenchmark port is scheduled for Phase 2 or deferred until an AMD target GPU is available for validation.

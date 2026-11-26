@@ -1,4 +1,4 @@
-//! GPU profile, schema 0.1 (see `docs/proposals/microbench-and-profile.md`).
+//! GPU profile, schema 0.1 (see `docs/components/profiles.md`).
 //!
 //! Only the fields the core reads are typed; unknown fields are ignored so the
 //! profile format can grow without breaking the core.

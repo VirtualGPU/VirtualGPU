@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import hashlib
 import itertools
 import json
 import os
-from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
 import warnings
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
 from virtualgpu.api import _build_kernel_call_args, _load_profile, predict_kernel_ir
 from virtualgpu.frontend.compiler import ARTIFACT_HASH_VERSION
@@ -35,7 +36,9 @@ def _unwrap_kernel_and_configs(
         return base_fn, resolved_configs
 
     if configs is None:
-        raise ValueError("configs must be provided when kernel is not wrapped with @triton.autotune")
+        raise ValueError(
+            "configs must be provided when kernel is not wrapped with @triton.autotune"
+        )
     return kernel, list(configs)
 
 
@@ -136,7 +139,9 @@ class AutotuneReport:
         ]
         for idx, item in enumerate(self.ranking[: len(self.shortlist)], start=1):
             bn = item.get("primary_bottleneck") or {}
-            bn_str = f"{bn.get('resource', '?')} ({bn.get('fraction', 0.0) * 100:.0f}%)" if bn else "n/a"
+            bn_str = (
+                f"{bn.get('resource', '?')} ({bn.get('fraction', 0.0) * 100:.0f}%)" if bn else "n/a"
+            )
             lat_us = item["nominal_latency_ns"] / 1e3
             lines.append(f"  #{idx} {item['config_id']}: {lat_us:.1f} us | bottleneck={bn_str}")
         if self.indistinguishable_pairs:
@@ -211,12 +216,14 @@ def _rank_configs(
     ready_items: list[tuple[str, dict[str, int], dict[str, Any], str]] = []
     for cid, flat_cfg, item in zip(cids, flat_configs, extracted_batch):
         if isinstance(item, Exception):
-            bad_entries.append({
-                "config_id": cid,
-                "config": flat_cfg,
-                "status": "unsupported",
-                "reason": f"{type(item).__name__}: {item}",
-            })
+            bad_entries.append(
+                {
+                    "config_id": cid,
+                    "config": flat_cfg,
+                    "status": "unsupported",
+                    "reason": f"{type(item).__name__}: {item}",
+                }
+            )
             continue
         ir, ir_json = item
         if not toolchain_sample:
@@ -271,15 +278,17 @@ def _rank_configs(
 
     for (cid, flat_cfg, ir, _ir_json), pred in zip(ready_items, raw_preds):
         if pred["status"] != "ok":
-            bad_entries.append({
-                "config_id": cid,
-                "config": flat_cfg,
-                "status": "unsupported",
-                "reason": pred.get("reason", "unsupported"),
-                "resources": ir["resources"],
-                "diagnostics": ir["diagnostics"],
-                "unsupported_features": ir["unsupported_features"],
-            })
+            bad_entries.append(
+                {
+                    "config_id": cid,
+                    "config": flat_cfg,
+                    "status": "unsupported",
+                    "reason": pred.get("reason", "unsupported"),
+                    "resources": ir["resources"],
+                    "diagnostics": ir["diagnostics"],
+                    "unsupported_features": ir["unsupported_features"],
+                }
+            )
             continue
 
         diag = pred.get("diagnostics", {})
@@ -476,7 +485,9 @@ def _resolve_env_options(
 ) -> tuple[str | Path | Mapping[str, Any] | None, int, str, int, int]:
     resolved_profile = profile if profile is not None else os.environ.get("VIRTUALGPU_PROFILE")
     resolved_top_k = top_k if top_k is not None else int(os.environ.get("VIRTUALGPU_TOP_K", "5"))
-    resolved_l2 = l2_state if l2_state is not None else os.environ.get("VIRTUALGPU_L2_STATE", "cold")
+    resolved_l2 = (
+        l2_state if l2_state is not None else os.environ.get("VIRTUALGPU_L2_STATE", "cold")
+    )
     resolved_draws = draws if draws is not None else int(os.environ.get("VIRTUALGPU_DRAWS", "32"))
     resolved_seed = seed if seed is not None else int(os.environ.get("VIRTUALGPU_SEED", "17"))
     return resolved_profile, resolved_top_k, resolved_l2, resolved_draws, resolved_seed
@@ -504,8 +515,10 @@ def prune_configs_by(
     hook. Defaults to `top_k=5` so real hardware verifies the shortlist; `top_k=1`
     must be requested explicitly and is marked unverified in the report.
     """
-    resolved_profile, resolved_top_k, resolved_l2, resolved_draws, resolved_seed = _resolve_env_options(
-        profile=profile, top_k=top_k, l2_state=l2_state, draws=draws, seed=seed
+    resolved_profile, resolved_top_k, resolved_l2, resolved_draws, resolved_seed = (
+        _resolve_env_options(
+            profile=profile, top_k=top_k, l2_state=l2_state, draws=draws, seed=seed
+        )
     )
     if resolved_profile is None:
         raise ValueError("profile must be provided or VIRTUALGPU_PROFILE must be set")
@@ -514,7 +527,9 @@ def prune_configs_by(
     if resolved_top_k < 1:
         raise ValueError(f"top_k must be >= 1, got {resolved_top_k}")
 
-    def _early_config_prune(configs: list[Any], nargs: Mapping[str, Any], **kwargs: Any) -> list[Any]:
+    def _early_config_prune(
+        configs: list[Any], nargs: Mapping[str, Any], **kwargs: Any
+    ) -> list[Any]:
         candidates = list(configs)
         if user_prune is not None:
             candidates = user_prune(candidates, nargs, **kwargs)
@@ -569,7 +584,9 @@ def prune_configs_by(
 
         if report.status != "ok" or not report.shortlist:
             if strict:
-                raise RuntimeError(f"VirtualGPU could not model any candidate config: {report.advice}")
+                raise RuntimeError(
+                    f"VirtualGPU could not model any candidate config: {report.advice}"
+                )
             warnings.warn(
                 f"VirtualGPU could not model any candidate config ({report.advice}); "
                 "falling back to all candidate configs for hardware autotuning.",

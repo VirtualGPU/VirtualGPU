@@ -9,12 +9,10 @@ import jsonschema
 import pytest
 import triton
 import triton.language as tl
-
 from virtualgpu.frontend.triton_attention import extract_attention_kernel_ir
 from virtualgpu.frontend.ttgir import parse_ttgir_summary
 
-
-SCHEMA_PATH = Path(__file__).resolve().parents[4] / "schemas" / "kernel_ir.schema.json"
+SCHEMA_PATH = Path(__file__).resolve().parents[3] / "schemas" / "kernel_ir.schema.json"
 
 
 def _load_schema() -> dict:
@@ -23,13 +21,30 @@ def _load_schema() -> dict:
 
 @triton.jit
 def _fused_attention_fwd(
-    Q, K, V, Out,
+    Q,
+    K,
+    V,
+    Out,
     sm_scale,
-    stride_qz, stride_qh, stride_qm, stride_qk,
-    stride_kz, stride_kh, stride_kn, stride_kk,
-    stride_vz, stride_vh, stride_vn, stride_vk,
-    stride_oz, stride_oh, stride_om, stride_ok,
-    Z, H, N_CTX,
+    stride_qz,
+    stride_qh,
+    stride_qm,
+    stride_qk,
+    stride_kz,
+    stride_kh,
+    stride_kn,
+    stride_kk,
+    stride_vz,
+    stride_vh,
+    stride_vn,
+    stride_vk,
+    stride_oz,
+    stride_oh,
+    stride_om,
+    stride_ok,
+    Z,
+    H,
+    N_CTX,
     HEAD_DIM: tl.constexpr,
     BLOCK_M: tl.constexpr,
     BLOCK_N: tl.constexpr,
@@ -58,7 +73,9 @@ def _fused_attention_fwd(
 
     hi = (start_m + 1) * BLOCK_M if CAUSAL else N_CTX
     for start_n in range(0, hi, BLOCK_N):
-        k_ptrs = K + k_offset + (start_n + offs_n)[:, None] * stride_kn + offs_d[None, :] * stride_kk
+        k_ptrs = (
+            K + k_offset + (start_n + offs_n)[:, None] * stride_kn + offs_d[None, :] * stride_kk
+        )
         k = tl.load(k_ptrs, mask=(start_n + offs_n)[:, None] < N_CTX, other=0.0)
         qk = tl.dot(q, tl.trans(k))
         if CAUSAL:
@@ -72,7 +89,9 @@ def _fused_attention_fwd(
         alpha = tl.math.exp2(m_i - m_ij)
         l_i = l_i * alpha + l_ij
         acc = acc * alpha[:, None]
-        v_ptrs = V + v_offset + (start_n + offs_n)[:, None] * stride_vn + offs_d[None, :] * stride_vk
+        v_ptrs = (
+            V + v_offset + (start_n + offs_n)[:, None] * stride_vn + offs_d[None, :] * stride_vk
+        )
         v = tl.load(v_ptrs, mask=(start_n + offs_n)[:, None] < N_CTX, other=0.0)
         acc = tl.dot(p.to(tl.float16), v, acc)
         m_i = m_ij
@@ -186,13 +205,30 @@ def test_causal_attention_recovers_per_cta_trip_counts_and_access_map() -> None:
 
 @triton.jit
 def _two_loop_causal_attention_fwd(
-    Q, K, V, Out,
+    Q,
+    K,
+    V,
+    Out,
     sm_scale,
-    stride_qz, stride_qh, stride_qm, stride_qk,
-    stride_kz, stride_kh, stride_kn, stride_kk,
-    stride_vz, stride_vh, stride_vn, stride_vk,
-    stride_oz, stride_oh, stride_om, stride_ok,
-    Z, H, N_CTX,
+    stride_qz,
+    stride_qh,
+    stride_qm,
+    stride_qk,
+    stride_kz,
+    stride_kh,
+    stride_kn,
+    stride_kk,
+    stride_vz,
+    stride_vh,
+    stride_vn,
+    stride_vk,
+    stride_oz,
+    stride_oh,
+    stride_om,
+    stride_ok,
+    Z,
+    H,
+    N_CTX,
     HEAD_DIM: tl.constexpr,
     BLOCK_M: tl.constexpr,
     BLOCK_N: tl.constexpr,
@@ -218,7 +254,9 @@ def _two_loop_causal_attention_fwd(
 
     # Loop 1: off-diagonal unmasked blocks [0, start_m * BLOCK_M)
     for start_n in range(0, start_m * BLOCK_M, BLOCK_N):
-        k = tl.load(K + k_offset + (start_n + offs_n)[:, None] * stride_kn + offs_d[None, :] * stride_kk)
+        k = tl.load(
+            K + k_offset + (start_n + offs_n)[:, None] * stride_kn + offs_d[None, :] * stride_kk
+        )
         qk = tl.dot(q, tl.trans(k)) * qk_scale
         m_ij = tl.maximum(m_i, tl.max(qk, 1))
         p = tl.math.exp2(qk - m_ij[:, None])
@@ -226,13 +264,17 @@ def _two_loop_causal_attention_fwd(
         alpha = tl.math.exp2(m_i - m_ij)
         l_i = l_i * alpha + l_ij
         acc = acc * alpha[:, None]
-        v = tl.load(V + v_offset + (start_n + offs_n)[:, None] * stride_vn + offs_d[None, :] * stride_vk)
+        v = tl.load(
+            V + v_offset + (start_n + offs_n)[:, None] * stride_vn + offs_d[None, :] * stride_vk
+        )
         acc = tl.dot(p.to(tl.float16), v, acc)
         m_i = m_ij
 
     # Loop 2: diagonal masked blocks [start_m * BLOCK_M, (start_m + 1) * BLOCK_M)
     for start_n in range(start_m * BLOCK_M, (start_m + 1) * BLOCK_M, BLOCK_N):
-        k = tl.load(K + k_offset + (start_n + offs_n)[:, None] * stride_kn + offs_d[None, :] * stride_kk)
+        k = tl.load(
+            K + k_offset + (start_n + offs_n)[:, None] * stride_kn + offs_d[None, :] * stride_kk
+        )
         qk = tl.dot(q, tl.trans(k)) * qk_scale
         mask = offs_m[:, None] >= (start_n + offs_n)[None, :]
         qk = qk + tl.where(mask, 0.0, -1.0e6)
@@ -242,12 +284,17 @@ def _two_loop_causal_attention_fwd(
         alpha = tl.math.exp2(m_i - m_ij)
         l_i = l_i * alpha + l_ij
         acc = acc * alpha[:, None]
-        v = tl.load(V + v_offset + (start_n + offs_n)[:, None] * stride_vn + offs_d[None, :] * stride_vk)
+        v = tl.load(
+            V + v_offset + (start_n + offs_n)[:, None] * stride_vn + offs_d[None, :] * stride_vk
+        )
         acc = tl.dot(p.to(tl.float16), v, acc)
         m_i = m_ij
 
     acc = acc / l_i[:, None]
-    tl.store(Out + o_offset + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok, acc.to(tl.float16))
+    tl.store(
+        Out + o_offset + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok,
+        acc.to(tl.float16),
+    )
 
 
 def test_two_loop_causal_attention_sums_per_cta_trip_counts() -> None:
@@ -277,15 +324,15 @@ def test_two_loop_causal_attention_sums_per_cta_trip_counts() -> None:
 def test_split_async_wait_flagged_unsupported() -> None:
     fake_ttgir = (
         'module attributes {"ttg.num-warps" = 4 : i32, "ttg.threads-per-warp" = 32 : i32} {\n'
-        '  %k = ttg.local_alloc : () -> !ttg.memdesc<2x64x64xf16, #shared, #smem, mutable>\n'
-        '  scf.for %i = %c0 to %c8 step %c1 {\n'
-        '    %w1 = ttg.async_wait %tk {num = 2 : i32}\n'
-        '    %w2 = ttg.async_wait %tv {num = 0 : i32}\n'
-        '    %ck = ttg.async_copy_global_to_local %pk, %k : tensor<64x64x!tt.ptr<f16>>\n'
-        '    %g1 = ttg.async_commit_group tokens %ck\n'
-        '    %g2 = ttg.async_commit_group tokens %ck\n'
-        '  }\n'
-        '}\n'
+        "  %k = ttg.local_alloc : () -> !ttg.memdesc<2x64x64xf16, #shared, #smem, mutable>\n"
+        "  scf.for %i = %c0 to %c8 step %c1 {\n"
+        "    %w1 = ttg.async_wait %tk {num = 2 : i32}\n"
+        "    %w2 = ttg.async_wait %tv {num = 0 : i32}\n"
+        "    %ck = ttg.async_copy_global_to_local %pk, %k : tensor<64x64x!tt.ptr<f16>>\n"
+        "    %g1 = ttg.async_commit_group tokens %ck\n"
+        "    %g2 = ttg.async_commit_group tokens %ck\n"
+        "  }\n"
+        "}\n"
     )
     summary = parse_ttgir_summary(fake_ttgir, "", requested_num_stages=3, element_bytes=2)
     assert "split_async_wait_unsupported" in summary.unsupported_features
@@ -293,13 +340,30 @@ def test_split_async_wait_flagged_unsupported() -> None:
 
 @triton.jit
 def _bm_bn_attention_fwd(
-    Q, K, V, Out,
+    Q,
+    K,
+    V,
+    Out,
     sm_scale,
-    stride_qz, stride_qh, stride_qm, stride_qk,
-    stride_kz, stride_kh, stride_kn, stride_kk,
-    stride_vz, stride_vh, stride_vn, stride_vk,
-    stride_oz, stride_oh, stride_om, stride_ok,
-    Z, H, N_CTX,
+    stride_qz,
+    stride_qh,
+    stride_qm,
+    stride_qk,
+    stride_kz,
+    stride_kh,
+    stride_kn,
+    stride_kk,
+    stride_vz,
+    stride_vh,
+    stride_vn,
+    stride_vk,
+    stride_oz,
+    stride_oh,
+    stride_om,
+    stride_ok,
+    Z,
+    H,
+    N_CTX,
     HEAD_DIM: tl.constexpr,
     BM: tl.constexpr,
     BN: tl.constexpr,
@@ -318,7 +382,11 @@ def _bm_bn_attention_fwd(
     offs_n = tl.arange(0, BN)
     offs_d = tl.arange(0, HEAD_DIM)
 
-    q = tl.load(Q + q_offset + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk, mask=offs_m[:, None] < N_CTX, other=0.0)
+    q = tl.load(
+        Q + q_offset + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk,
+        mask=offs_m[:, None] < N_CTX,
+        other=0.0,
+    )
     m_i = tl.zeros([BM], dtype=tl.float32) - float("inf")
     l_i = tl.zeros([BM], dtype=tl.float32) + 1.0
     acc = tl.zeros([BM, HEAD_DIM], dtype=tl.float32)
@@ -326,7 +394,11 @@ def _bm_bn_attention_fwd(
 
     hi = (start_m + 1) * BM if CAUSAL else N_CTX
     for start_n in range(0, hi, BN):
-        k = tl.load(K + k_offset + (start_n + offs_n)[:, None] * stride_kn + offs_d[None, :] * stride_kk, mask=(start_n + offs_n)[:, None] < N_CTX, other=0.0)
+        k = tl.load(
+            K + k_offset + (start_n + offs_n)[:, None] * stride_kn + offs_d[None, :] * stride_kk,
+            mask=(start_n + offs_n)[:, None] < N_CTX,
+            other=0.0,
+        )
         qk = tl.dot(q, tl.trans(k)) * qk_scale
         if CAUSAL:
             qk = qk + tl.where(offs_m[:, None] >= (start_n + offs_n)[None, :], 0.0, -1.0e6)
@@ -336,12 +408,20 @@ def _bm_bn_attention_fwd(
         alpha = tl.math.exp2(m_i - m_ij)
         l_i = l_i * alpha + l_ij
         acc = acc * alpha[:, None]
-        v = tl.load(V + v_offset + (start_n + offs_n)[:, None] * stride_vn + offs_d[None, :] * stride_vk, mask=(start_n + offs_n)[:, None] < N_CTX, other=0.0)
+        v = tl.load(
+            V + v_offset + (start_n + offs_n)[:, None] * stride_vn + offs_d[None, :] * stride_vk,
+            mask=(start_n + offs_n)[:, None] < N_CTX,
+            other=0.0,
+        )
         acc = tl.dot(p.to(tl.float16), v, acc)
         m_i = m_ij
 
     acc = acc / l_i[:, None]
-    tl.store(Out + o_offset + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok, acc.to(tl.float16), mask=offs_m[:, None] < N_CTX)
+    tl.store(
+        Out + o_offset + offs_m[:, None] * stride_om + offs_d[None, :] * stride_ok,
+        acc.to(tl.float16),
+        mask=offs_m[:, None] < N_CTX,
+    )
 
 
 def test_attention_derives_tile_from_ttgir_and_matches_gemm_toolchain_keys() -> None:

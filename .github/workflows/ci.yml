@@ -1,189 +1,170 @@
 name: CI
 
 on:
-  push:
   pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  language-check:
-    name: Check English-only text files
-    runs-on: ubuntu-latest
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - name: Reject CJK characters in tracked text files
-        run: |
-          python3 - <<'PY'
-          import pathlib, re, subprocess, sys
-
-          pattern = re.compile(r"[\u3000-\u9fff\uff00-\uffef]")
-          files = subprocess.check_output(["git", "ls-files"], text=True).splitlines()
-          failures = []
-          for rel in files:
-              path = pathlib.Path(rel)
-              try:
-                  text = path.read_text(encoding="utf-8")
-              except (UnicodeDecodeError, OSError):
-                  continue
-              for lineno, line in enumerate(text.splitlines(), 1):
-                  match = pattern.search(line)
-                  if match:
-                      failures.append(f"{rel}:{lineno}: U+{ord(match.group(0)):04X}")
-                      break
-
-          if failures:
-              print("Found non-English (CJK) characters in tracked files:", file=sys.stderr)
-              for item in failures:
-                  print(f"  {item}", file=sys.stderr)
-              sys.exit(1)
-          print(f"Checked {len(files)} tracked files: no CJK characters found.")
-          PY
-
-  profiles:
-    name: Validate GPU profiles
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
-      - name: Install profile validator dependencies
-        run: |
-          uv venv --python 3.12
-          uv pip install --python .venv jsonschema
-      - name: Validate every profile in profiles/
-        run: |
-          .venv/bin/python - <<'PY'
-          import pathlib, sys
+          persist-credentials: false
 
-          sys.path.insert(0, "python")
-          from virtualgpu.profile import ProfileValidationError, load_profile
-
-          profile_paths = sorted(pathlib.Path("profiles").glob("*.json"))
-          if not profile_paths:
-              print("No GPU profile JSON files found in profiles/", file=sys.stderr)
-              sys.exit(1)
-
-          def collect_leaf_sources(obj, path="measured"):
-              results = []
-              if isinstance(obj, dict):
-                  if {"value", "rel_uncertainty", "unit", "method"}.issubset(obj.keys()):
-                      results.append((path, obj.get("source")))
-                      return results
-                  for k, v in obj.items():
-                      results.extend(collect_leaf_sources(v, f"{path}.{k}"))
-              elif isinstance(obj, list):
-                  for i, item in enumerate(obj):
-                      results.extend(collect_leaf_sources(item, f"{path}[{i}]"))
-              return results
-
-          errors = []
-          for path in profile_paths:
-              try:
-                  profile = load_profile(path, schema_path="schemas/gpu_profile.schema.json")
-              except (OSError, ValueError, ProfileValidationError) as exc:
-                  errors.append(f"{path}: {exc}")
-                  continue
-
-              prov = profile["provenance"]
-              top_source = prov["source"]
-              if top_source not in ("measured", "partial", "spec_derived"):
-                  errors.append(f"{path}: invalid provenance.source={top_source!r}")
-                  continue
-
-              # Required provenance metadata must be non-empty for hardware-backed profiles.
-              req_non_empty = ["profile_revision", "calibration_run_id", "timestamp_utc"]
-              if top_source in ("measured", "partial"):
-                  req_non_empty.extend(["driver_version", "toolkit_version", "suite_version", "host_os"])
-              for field in req_non_empty:
-                  val = prov.get(field)
-                  if not isinstance(val, str) or not val.strip():
-                      errors.append(f"{path}: provenance.{field} must be a non-empty string for source={top_source!r}")
-
-              # Enforce honest provenance.source against every MeasuredValue leaf.
-              leaves = collect_leaf_sources(profile["measured"])
-              if not leaves:
-                  errors.append(f"{path}: no MeasuredValue entries found under measured")
-                  continue
-              bad_leaves = [(p, s) for p, s in leaves if s not in ("measured", "estimated")]
-              if bad_leaves:
-                  sample = ", ".join(f"{p}={s!r}" for p, s in bad_leaves[:5])
-                  errors.append(f"{path}: invalid or missing leaf source(s): {sample}")
-                  continue
-
-              n_measured = sum(1 for _, s in leaves if s == "measured")
-              n_estimated = sum(1 for _, s in leaves if s == "estimated")
-              if top_source == "measured" and n_estimated > 0:
-                  errors.append(
-                      f"{path}: provenance.source is 'measured' but {n_estimated} leaf field(s) are 'estimated'"
-                  )
-              elif top_source == "spec_derived" and n_measured > 0:
-                  errors.append(
-                      f"{path}: provenance.source is 'spec_derived' but {n_measured} leaf field(s) are 'measured'"
-                  )
-              elif top_source == "partial" and (n_measured == 0 or n_estimated == 0):
-                  errors.append(
-                      f"{path}: provenance.source is 'partial' but found {n_measured} measured and {n_estimated} estimated leaves"
-                  )
-              else:
-                  ident = profile["identity"]
-                  print(
-                      f"OK: {path} ({ident['sku']}, {ident['arch']}, source={top_source}, "
-                      f"measured={n_measured}, estimated={n_estimated})"
-                  )
-
-          if errors:
-              print("Profile validation failed:", file=sys.stderr)
-              for err in errors:
-                  print(f"  - {err}", file=sys.stderr)
-              sys.exit(1)
-          PY
-
-  rust:
-    name: Rust test and clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Setup uv
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-      - name: Run cargo test
-        run: cargo test
-      - name: Run cargo clippy
+          enable-cache: false
+
+      - name: Setup Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+
+      - name: Ruff
+        run: |
+          uvx ruff@0.17.6 check .
+          uvx ruff@0.17.6 format --check .
+
+      - name: Rustfmt
+        run: cargo fmt --all --check
+
+      - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
 
+      - name: Text
+        run: python3 scripts/check_text.py
+
+      - name: Links
+        run: python3 scripts/check_links.py
+
+  rust:
+    name: Rust tests
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: Test
+        run: cargo test
+
   python:
-    name: Python and validation CPU-only tests
-    runs-on: ubuntu-latest
+    name: Python tests
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     env:
       CUDA_VISIBLE_DEVICES: ""
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: pyo3
-      - uses: astral-sh/setup-uv@v6
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
-      - name: Create virtual environment and install CPU-only test dependencies
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install dependencies
         run: |
           uv venv --python 3.12
-          uv pip install --python .venv maturin pytest jsonschema "triton==3.9.0" numpy
-      - name: Build Rust PyO3 extension
+          uv pip install --group dev
+
+      - name: Build the Rust extension
         run: .venv/bin/maturin develop --uv
-      - name: Run Python test suite
-        run: .venv/bin/python -m pytest -v python
-      - name: Run CPU-only validation tests
-        # validation/test_validation.py is strictly CPU-only (no torch/pynvml/GPU).
-        # GPU hardware runner tests in validation/runner.py are excluded from CPU CI.
+
+      - name: Package tests
+        run: .venv/bin/python -m pytest -v
+
+      # CPU only. The GPU runner tests are not run in CI.
+      - name: Validation tests
         run: .venv/bin/python -m unittest -v validation.test_validation
+
+  profiles:
+    name: Profiles
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: false
+
+      - name: Validate every profile
+        run: uv run --no-project --python 3.12 --with "jsonschema>=4" scripts/check_profiles.py
+
+  workflow-lint:
+    name: Workflow lint
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: actionlint
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+
+      - name: zizmor
+        uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
+        with:
+          version: 1.32.0
+          advanced-security: false
+          annotations: true
+          min-severity: high
+
+  supply-chain:
+    name: Supply chain
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: osv-scanner
+        uses: google/osv-scanner-action/osv-scanner-action@32d3cd482bdadfb38b186c0ad1b031902d55d932 # v2.7.1
+        with:
+          scan-args: |-
+            --lockfile=Cargo.lock

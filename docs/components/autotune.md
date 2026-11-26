@@ -1,8 +1,6 @@
-# Proposal: GPU-Free Triton Autotuning Integration
+# GPU-free autotuning
 
-Owner: Agent 2 (`s2/autotune`)  
-Status: Design proposal for review (no code written yet)  
-Target: Phase 3 user-facing integration with Triton 3.9's `Autotuner`
+How VirtualGPU plugs into Triton's autotuner, online and offline. Code: `python/virtualgpu/autotune.py` and `python/virtualgpu/cli.py`. Autotuning takes GEMM shapes today.
 
 ## 1. Scope
 
@@ -38,7 +36,7 @@ Therefore, **online mode** and **offline mode** must have distinct entry points 
 
 ## 3. User-Facing API and Mode Switching
 
-### Mode A: Online Pruning (GPU present — shortlist top-k for hardware verification)
+### Mode A: Online Pruning (GPU present, shortlist top-k for hardware verification)
 
 Two zero-monkey-patch opt-ins:
 
@@ -70,8 +68,8 @@ Works on **any** existing `@triton.autotune`-decorated kernel without modifying 
 
 ```python
 report = virtualgpu.autotune_offline(
-    matmul_kernel,               # existing @triton.autotune object (or JITFunction + configs)
-    shape=(4096, 4096, 4096),    # or explicit MockTensor/int call_args
+    matmul_kernel,  # existing @triton.autotune object (or JITFunction + configs)
+    shape=(4096, 4096, 4096),  # or explicit MockTensor/int call_args
     profile="profiles/gb10.json",
     dtype="f16",
     l2_state="cold",
@@ -122,9 +120,3 @@ Both online and offline modes produce the same structured, JSON-serializable `Au
 3. **Total modeling failure** (zero configs return `status="ok"`, e.g., persistent kernel with atomic work-stealing or unmodeled op):
    - *Online mode*: emit a visible `UserWarning` explaining why VirtualGPU could not rank the kernel, and return the full unpruned `configs` list to Triton so native hardware autotuning proceeds (note: Triton 3.9 raises `AutotunerError` if `early_config_prune` returns an empty list). If `strict=True`, raise instead of falling back.
    - *Offline mode*: return `AutotuneReport(status="unsupported", ...)` with all per-config reasons and `unsupported_features` (or raise if `strict=True`).
-
-## 6. Open Questions
-
-1. **Shortlist expansion on ties**: If more than `top_k` configs are `indistinguishable` from `#1`, should `shortlist` strictly cap at `top_k` or expand up to a `max_shortlist` (e.g., `2 * top_k`) to include the full indistinguishable band? Recommendation: strict `top_k` by default with an optional `expand_ties=False` flag, and always report the count of indistinguishable configs outside `top_k` in the advice string.
-2. **Arbitrary kernel argument binding in offline mode**: For GEMM, `shape=(M, N, K)` maps cleanly to `MockTensor` args. For arbitrary Triton kernels (e.g., attention or fused MLP), `autotune_offline` should accept `args=(MockTensor(...), ...)` / `kwargs={...}` directly, with `shape=` kept as a convenience for standard GEMM.
-3. **Target-profile mismatch in online mode**: When `VIRTUALGPU_PROFILE` targets a different GPU than the local physical GPU (e.g., tuning for `sm_121` on an `sm_89` workstation), online hardware benchmarking of the shortlist would measure the wrong GPU. Recommendation: in online mode, check `profile.identity.arch` against the local device's compute capability and emit a loud warning (or require `allow_cross_gpu_online=True` / direct the user to `autotune_offline`).

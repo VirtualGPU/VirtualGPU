@@ -1,4 +1,55 @@
-# M1 GEMM validation
+# Validation
+
+Code and records that measure how well VirtualGPU ranks kernel variants on real GPUs. How the protocol works is in [docs/components/validation.md](../docs/components/validation.md), and the results are summarized in [docs/results/](../docs/results/).
+
+The JSON and Markdown records here are evidence. Seals and fits store the paths and SHA-256 digests of the sources they used, so nothing in this folder is moved, renamed or reformatted once it is sealed. A new evaluation adds new files.
+
+## Records
+
+### v0.2
+
+| File | What it is |
+| --- | --- |
+| [v02-preregistration.md](v02-preregistration.md) | Protocol and pass criteria, fixed before any label was opened |
+| [v02-gemm-holdout.json](v02-gemm-holdout.json), [v02-attention-holdout.json](v02-attention-holdout.json) | Holdout case manifests |
+| [v02-rtx4070-gemm-seal.json](v02-rtx4070-gemm-seal.json), [v02-rtx4070-gemm-retry.json](v02-rtx4070-gemm-retry.json) | RTX 4070 GEMM seal and its recorded protocol retry |
+| [v02-gb10-gemm-seal.json](v02-gb10-gemm-seal.json), [v02-gb10-attention-seal.json](v02-gb10-attention-seal.json) | GB10 seals |
+| [attention-holdout-seal.json](attention-holdout-seal.json) | RTX 4070 attention seal |
+| [v02-frozen-fit.json](v02-frozen-fit.json), [v02-freeze-amendment.json](v02-freeze-amendment.json) | Frozen baseline fits and the freeze amendment |
+| [v02-holdout-scores.json](v02-holdout-scores.json), [v02-holdout-report.md](v02-holdout-report.md) | Scores and the report |
+
+### Attention suite
+
+| File | What it is |
+| --- | --- |
+| [attention-suite.md](attention-suite.md), [attention-suite.json](attention-suite.json) | Attention candidate space, splits and label protocol |
+
+### Phase 2 (RTX 4070 to GB10)
+
+| File | What it is |
+| --- | --- |
+| [phase2-preregistration.md](phase2-preregistration.md) | Protocol and pass criteria |
+| [phase2-aot-seal.json](phase2-aot-seal.json), [phase2-gb10-seal.json](phase2-gb10-seal.json) | Compiled artifact index and label seal |
+| [phase2-thermal-stop.md](phase2-thermal-stop.md), [phase2-thermal-audit.json](phase2-thermal-audit.json), [phase2-thermal-trend-audit.json](phase2-thermal-trend-audit.json), [phase2-thermal-prefill-1024.json](phase2-thermal-prefill-1024.json) | Thermal gate stop and its audits |
+| [phase2-acquisition-audit.md](phase2-acquisition-audit.md) | Compute contention audit |
+| [phase2-gb10-scores.json](phase2-gb10-scores.json), [phase2-gb10-report.md](phase2-gb10-report.md) | Scores and the report |
+
+### Phase 1 (RTX 4070)
+
+| File | What it is |
+| --- | --- |
+| [suite.json](suite.json) | GEMM candidate matrix and splits |
+| [m2-audit.md](m2-audit.md) | Development scoring audit |
+| [holdout-seal.json](holdout-seal.json) | Workload holdout seal |
+| [phase1-holdout-scores.json](phase1-holdout-scores.json), [phase1-holdout-report.md](phase1-holdout-report.md) | Scores and the report |
+
+### Post-hoc access
+
+| File | What it is |
+| --- | --- |
+| [post-hoc-access-log.md](post-hoc-access-log.md) | Every read of a published holdout after its decision, written by `posthoc.py` |
+
+## Running
 
 Run commands from the repository root. The scorer uses the installed
 VirtualGPU Python package to identify the current hash protocol. The runner
@@ -6,7 +57,7 @@ uses Python 3.12, PyTorch 2.8 with CUDA 12.8, Triton 3.9,
 `cuda-bindings`, `nvidia-ml-py`, and the installed VirtualGPU Python package.
 Use a worktree-local `.venv` and reuse cached CUDA wheels where available.
 
-## Run a development case
+### Run a development case
 
 ```sh
 flock /tmp/virtualgpu-gpu.lock .venv/bin/python -m validation.runner \
@@ -40,7 +91,7 @@ divided by the median, and each config's median gap to the fastest measured
 candidate. The scorer also reports these statistics across input sessions,
 resampling blocks within each session.
 
-## Compare with a prediction
+### Compare with a prediction
 
 ```sh
 python3 -m validation.baseline schemas/examples/profile_example.json \
@@ -85,7 +136,7 @@ The report records the result class. AOT IR toolchain metadata and JIT
 session reports include the generation HEAD and the dirty state of
 `python/` and `validation/`.
 
-## Run the M2 development sweep
+### Run the M2 development sweep
 
 Generate the development-only manifest using the measured 4070 profile. This
 also materializes the planned single-SM-round boundary cases from its SM
@@ -146,7 +197,7 @@ replacement directory to both `validation.predict` and `validation.experiment`
 through `--cold-results`. The experiment reads only warm samples from the
 original sessions and requires read-only eviction for every cold sample.
 
-## Sealed workload holdout
+### Sealed workload holdout
 
 Generate the holdout manifest and AOT files before measurement. The
 holdout collector checks the compiled artifacts before timing. It writes
@@ -171,7 +222,7 @@ The scorer checks the tag, the archive digest and build provenance, and the
 committed audit before it accesses the timing reports. It checks each
 report digest before parsing it and restores the no-read permissions.
 
-## GB10 transfer
+### GB10 transfer
 
 Follow [the preregistration](phase2-preregistration.md). Run the AOT and
 prediction entry points with the phase1-final checkout as the working
@@ -199,7 +250,7 @@ and power mode to calibration. Collection writes mode-zero reports and
 separate receipts. Use `validation.phase2_capture audit` to check the full
 receipt census without opening labels.
 
-## Post-hoc access to a published holdout
+### Post-hoc access to a published holdout
 
 `validation.score --post-hoc --purpose "..."` accepts the published
 `validation/holdout-seal.json` and `validation/phase2-gb10-seal.json` seals.
@@ -220,7 +271,7 @@ parsing any reports. No readable copy is retained. The output carries
 published conclusions and the formal scoring path retain their original
 release requirements.
 
-## v0.2 CPU prediction archive
+### v0.2 CPU prediction archive
 
 After the four capture receipts are published, check out the clean
 `v0.2-final` tag and load a matching formal core build. Keep the archived
@@ -255,7 +306,7 @@ contains `predictions.json`, the IR archive and AOT index, and
 The four AOT arguments identify directories of per-case compiler metadata.
 Raw timing labels are outside the command's inputs.
 
-### v0.2 formal scoring and release
+#### v0.2 formal scoring and release
 
 Publish the archive's `prediction-evidence.json` verbatim as
 `validation/v02-freeze-amendment.json` after review. The command requires

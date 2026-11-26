@@ -1,0 +1,8 @@
+# Workflow lint rules. Our own workflows and actions stay on a branch ref,
+# everything else must be pinned to a full commit SHA.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "VirtualGPU/*": ref-pin
+        "*": hash-pin
