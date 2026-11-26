@@ -8,6 +8,7 @@ To contribute a profile for a GPU you have access to, see [`docs/contributing-a-
 
 | File | SKU | Arch | Memory | Revision | Source | Clocks | Driver / Toolkit |
 |---|---|---|---|---|---|---|---|
+| [`l40s.json`](l40s.json) | NVIDIA L40S | `sm_89` | Discrete (GDDR6) | `0.21.0-posthoc` | `partial` | Locked with `nvidia-smi` on native Linux (2100 MHz SM / 9001 MHz Mem). The collector still records `locked: false`. | `595.91.07` / `13.5` |
 | [`rtx3070.json`](rtx3070.json) | NVIDIA GeForce RTX 3070 | `sm_86` | Discrete (GDDR6) | `0.21.0-posthoc` | `partial` | Unlocked (WSL2, 1770 to 2025 MHz SM / 7001 to 7201 MHz Mem) | `610.88` / `13.5` |
 | [`rtx4070.json`](rtx4070.json) | NVIDIA GeForce RTX 4070 | `sm_89` | Discrete (GDDR6X) | `0.9.0-m3` | `partial` | Unlocked (WSL2, 2550–2865 MHz SM / 10251 MHz Mem) | `610.88` / `13.5` |
 
