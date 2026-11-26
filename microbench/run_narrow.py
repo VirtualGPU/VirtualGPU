@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -33,14 +34,17 @@ MAX_FOREIGN_RSS_KIB = 8 << 20
 MIN_AVAILABLE_KIB = 16 << 20
 
 # RTX 4070 under WSL: the Windows desktop shares the GPU. Wait for GPU
-# utilization under 5% for 60 s before a capture, and void a capture whose
-# sample lists are dispersed (largest over smallest above 1.3) in more than
-# 10% of cases.
+# utilization under 5% for 60 s before a capture.
 QUIET_UTILIZATION = 5
 QUIET_SECONDS = 60
 QUIET_TIMEOUT_SECONDS = 30 * 60
-DISPERSION_RATIO = 1.3
-DISPERSION_MAX_SHARE = 0.10
+# Capture dispersion rule (all post-hoc microbenchmarks, 2026-11-27): void if
+# more than 5% of sample lists have IQR over 10% of the median, more than 15%
+# have largest over smallest above 1.5, or more than 5% of points spread more
+# than 10% in their per-process medians.
+IQR_LIMIT, IQR_MAX_SHARE = 0.10, 0.05
+SPIKE_RATIO, SPIKE_MAX_SHARE = 1.5, 0.15
+PROCESS_SPREAD, PROCESS_MAX_SHARE = 0.10, 0.05
 
 MODES = {
     "gmem-narrow": "gmem_load_narrow",
@@ -100,20 +104,37 @@ def wait_for_quiet_desktop():
 
 
 def dispersion(record):
-    lists = [
-        row["elapsed_ns"]
-        for run in record["repeats"] + record["calibration_runs"]
-        for row in run["result"]
-    ]
-    over = sum(max(v) / min(v) > DISPERSION_RATIO for v in lists)
-    share = over / len(lists) if lists else 0.0
+    runs = record["repeats"] + record["calibration_runs"]
+    lists = [row["elapsed_ns"] for run in runs for row in run["result"]]
+
+    def iqr(v):
+        q = statistics.quantiles(v, n=4, method="inclusive")
+        return q[2] - q[0]
+
+    iqr_share = sum(iqr(v) / statistics.median(v) > IQR_LIMIT for v in lists) / len(lists)
+    spike_share = sum(max(v) / min(v) > SPIKE_RATIO for v in lists) / len(lists)
+    points = {}
+    for run in record["repeats"]:
+        for row in run["result"]:
+            key = json.dumps({k: v for k, v in row.items() if k != "elapsed_ns"}, sort_keys=True)
+            points.setdefault(key, []).append(statistics.median(row["elapsed_ns"]))
+    multi = [v for v in points.values() if len(v) > 1]
+    spread_share = (
+        (sum((max(v) - min(v)) / statistics.median(v) > PROCESS_SPREAD for v in multi) / len(multi))
+        if multi
+        else 0.0
+    )
+    passed = (
+        iqr_share <= IQR_MAX_SHARE
+        and spike_share <= SPIKE_MAX_SHARE
+        and spread_share <= PROCESS_MAX_SHARE
+    )
     return {
         "sample_lists": len(lists),
-        "over_ratio": over,
-        "share": share,
-        "ratio": DISPERSION_RATIO,
-        "max_share": DISPERSION_MAX_SHARE,
-        "status": "failed" if share > DISPERSION_MAX_SHARE else "passed",
+        "iqr_share": iqr_share,
+        "spike_share": spike_share,
+        "process_spread_share": spread_share,
+        "status": "passed" if passed else "failed",
     }
 
 
@@ -212,8 +233,7 @@ def main():
         },
     )
 
-    # Under WSL the desktop can perturb the GPU unseen: a dispersed capture is void.
-    if quiet is not None and check["status"] != "passed":
+    if check["status"] != "passed":
         raise SystemExit(f"Dispersion check failed, capture void: {check}")
 
 
