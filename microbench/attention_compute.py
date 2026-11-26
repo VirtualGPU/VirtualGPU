@@ -44,7 +44,7 @@ GEMM = [
     for bm, bn, bk in ((128, 128, 32), (128, 64, 32), (64, 64, 32))
     for w in (4, 8)
 ]
-GEMM_STEPS = 2048
+GEMM_STEPS = 8192  # at least 1 ms per launch
 
 
 @triton.jit
