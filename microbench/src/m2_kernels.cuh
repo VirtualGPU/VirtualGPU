@@ -6134,7 +6134,8 @@ static int run_sync_loop_bytes(int device, int samples, int warmup) {
 // Single-buffer loop (gemm_s2 shape) where the first 1/FD of each stage's 16 B vectors come from a cold
 // DRAM region that advances every step, and the rest from a warm 4 MiB L2 region. Groups of G CTAs read
 // the same cold addresses in a step, so all but the first request of a group can merge into its fill.
-// FD = 0: no cold vectors. NOLOAD: no copies in the loop. The cold vectors are vector 0 of the lowest
+// The cold region starts at cold_start, which the host advances after every launch so no launch rereads
+// cold data within 256 MiB of its last read. FD = 0: no cold vectors. NOLOAD: no copies in the loop. The cold vectors are vector 0 of the lowest
 // threads, so each thread issues its cold copy first.
 #define MISS_MMA(acc0, acc1, acc2, acc3)                                                          \
   asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, " \
@@ -6144,7 +6145,8 @@ static int run_sync_loop_bytes(int device, int samples, int warmup) {
 
 template <bool NOLOAD, int STAGE_BYTES, int NUM_WARPS, int MI, int FD, int G>
 __global__ void miss_kernel(const uint4* __restrict__ hot, const uint4* __restrict__ cold, float* __restrict__ sink,
-                            size_t hot_mask, size_t cold_mask, int steps, double* __restrict__ out_cyc) {
+                            size_t hot_mask, size_t cold_mask, size_t cold_start, int steps,
+                            double* __restrict__ out_cyc) {
   extern __shared__ uint4 smem[];
   const uint32_t tid = threadIdx.x;
   const uint32_t warp_id = tid >> 5;
@@ -6169,7 +6171,7 @@ __global__ void miss_kernel(const uint4* __restrict__ hot, const uint4* __restri
   uint64_t t0 = static_cast<uint64_t>(clock64());
   for (int step = 0; step < steps; ++step) {
     if constexpr (!NOLOAD) {
-      const size_t cold_base = ((static_cast<size_t>(step) * groups + group) * COLD_U4) & cold_mask;
+      const size_t cold_base = (cold_start + (static_cast<size_t>(step) * groups + group) * COLD_U4) & cold_mask;
       #pragma unroll
       for (int v = 0; v < VECS; ++v) {
         size_t off = static_cast<size_t>(v) * (NUM_WARPS * 32) + tid;
@@ -6227,6 +6229,7 @@ static int run_sync_loop_miss(int device, int samples, int warmup) {
   CUDA_CHECK(cudaEventCreate(&ev_stop));
   const size_t hot_mask = hot_bytes / sizeof(uint4) - 1, cold_mask = cold_bytes / sizeof(uint4) - 1;
 
+  size_t cold_start = 0;
   std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"sync_loop_miss\": [", samples, sm_count);
   bool first = true;
   auto run_point = [&](auto noload_c, auto sb_c, auto fd_c, auto g_c, int grid) {
@@ -6241,8 +6244,10 @@ static int run_sync_loop_miss(int device, int samples, int warmup) {
     if (max_blocks != 1) { std::fprintf(stderr, "miss_kernel: %d CTAs per SM\n", max_blocks); std::exit(1); }
     auto time_ms = [&](int st) {
       CUDA_CHECK(cudaEventRecord(ev_start));
-      kernel<<<grid, 256, SMEM>>>(d_hot, d_cold, d_sink_f, hot_mask, cold_mask, st, d_cyc);
+      kernel<<<grid, 256, SMEM>>>(d_hot, d_cold, d_sink_f, hot_mask, cold_mask, cold_start, st, d_cyc);
       CUDA_CHECK(cudaEventRecord(ev_stop));
+      constexpr size_t COLD_U4 = FD == 0 ? 0 : static_cast<size_t>(SB) / sizeof(uint4) / FD;
+      cold_start = (cold_start + static_cast<size_t>(st) * static_cast<size_t>(grid / G) * COLD_U4) & cold_mask;
       CUDA_CHECK(cudaEventSynchronize(ev_stop));
       float ms = 0.0f;
       CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
@@ -6259,6 +6264,14 @@ static int run_sync_loop_miss(int device, int samples, int warmup) {
       CUDA_CHECK(cudaMemcpy(&c, d_cyc, sizeof(double), cudaMemcpyDeviceToHost));
       turn.push_back(ms * 1e6 / steps);
       cyc.push_back(c);
+    }
+    // Self-check: with every CTA reading its own cold stage, the aggregate cold rate must be of DRAM
+    // order (GB10: 264 GB/s), far below L2 (over 2 TB/s); otherwise the cold region is cached.
+    if (!NOLOAD && FD == 1 && G == 1 && grid == sm_count) {
+      std::vector<double> sorted = turn;
+      std::sort(sorted.begin(), sorted.end());
+      const double gbps = static_cast<double>(grid) * SB / sorted[sorted.size() / 2];
+      if (gbps > 600.0) { std::fprintf(stderr, "sync-loop-miss: cold rate %.0f GB/s is not DRAM\n", gbps); std::exit(1); }
     }
     if (!first) std::printf(",");
     first = false;
