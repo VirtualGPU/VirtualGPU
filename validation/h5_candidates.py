@@ -18,10 +18,11 @@ current core and GB10 profile under seven model forms:
 - `c6_sector_traffic`: loads move every byte of the sectors they touch,
   no parameter.
 
-Each parametrized form gets one constant from one calibration point
-(`CALIBRATION`) and predicts every other point. The predictions are frozen on
+Each parametrized form gets one constant from one calibration point of its
+own (`CALIBRATIONS`, chosen where its mechanism lives) and predicts every
+other point. The predictions are frozen on
 a grid of `k` before any point is measured; `evaluate` interpolates them
-log-linearly at the `k` that matches the calibration point.
+log-linearly at the `k` that matches its calibration point.
 """
 
 import argparse
@@ -39,12 +40,23 @@ PROFILE = Path(__file__).resolve().parents[1] / "profiles" / "gb10.json"
 SECTOR = 32
 ROW_ALIGN = 128
 DRAM_BYTES = 256 << 20
-L2_SET = 8 << 20
-L2_BYTES = 64 << 20
+L2_SET = 12 << 20
+L2_BYTES = 256 << 20
 
-CALIBRATION = {"bench": "gmem-narrow", "width_bytes": 2, "mask": "none", "aligned": True,
-               "cache": "default", "level": "dram", "ctas_per_sm": 1, "num_warps": 8,
-               "loads_in_flight": 16, "share": 1}
+# Each form is calibrated where its mechanism lives, from one point each:
+# the SM-side forms on hot L2 with `.cg` and one line per batch (no L1 reuse),
+# the shared-path forms with two CTAs per SM and the chain forms with one,
+# the MLP form from DRAM above the knee of the MLP curve (768 KiB in flight).
+_SM_SIDE = {"bench": "gmem-narrow", "width_bytes": 2, "mask": "none", "aligned": True,
+            "cache": "cg", "level": "l2", "num_warps": 8, "loads_in_flight": 16, "share": 1,
+            "column_step_bytes": 128}
+CALIBRATIONS = {
+    "c1_issue_shared": {**_SM_SIDE, "ctas_per_sm": 2},
+    "c2_sector_shared": {**_SM_SIDE, "ctas_per_sm": 2},
+    "c3_issue_chain": {**_SM_SIDE, "ctas_per_sm": 1},
+    "c4_sector_chain": {**_SM_SIDE, "ctas_per_sm": 1},
+    "c5_request_mlp": {**_SM_SIDE, "level": "dram", "ctas_per_sm": 2},
+}
 
 GRIDS = {
     "c1_issue_shared": [0.01 * 2 ** (i / 2) for i in range(17)],
@@ -70,20 +82,34 @@ def gmem_narrow_points():
                                     points.append(dict(
                                         bench="gmem-narrow", width_bytes=width, mask=mask,
                                         aligned=aligned, cache=cache, level=level, ctas_per_sm=cps,
-                                        num_warps=warps, loads_in_flight=depth, share=1))
+                                        num_warps=warps, loads_in_flight=depth, share=1,
+                                        column_step_bytes=32 * width))
+    for width, masks in ((1, ("none", "true")), (2, ("none", "true", "tail"))):
+        for mask in masks:
+            for cache in ("default", "cg"):
+                for level in ("l2", "dram"):
+                    for aligned in (True, False):
+                        for cps in (1, 2):
+                            for warps in (4, 8):
+                                points.append(dict(
+                                    bench="gmem-narrow", width_bytes=width, mask=mask,
+                                    aligned=aligned, cache=cache, level=level, ctas_per_sm=cps,
+                                    num_warps=warps, loads_in_flight=16, share=1,
+                                    column_step_bytes=128))
     for aligned in (True, False):
         for cps in (1, 2):
             for width in (2, 16):
                 points.append(dict(bench="gmem-narrow", width_bytes=width, mask="none",
                                    aligned=aligned, cache="default", level="dram", ctas_per_sm=cps,
-                                   num_warps=8, loads_in_flight=16, share=4))
+                                   num_warps=8, loads_in_flight=16, share=4,
+                                   column_step_bytes=32 * width))
     return points
 
 
 def sync_loop_narrow_points():
     points = []
     for width in (2, 16):
-        for mma in (0, 8):
+        for mma in (0, 8, 32):
             for rows in (32, 64, 128):
                 for level in ("l2", "dram"):
                     for aligned in ((True, False) if width == 2 else (True,)):
@@ -124,15 +150,16 @@ def geometry(p, specs):
     if p["bench"] == "gmem-narrow":
         rows_per_cta = p["num_warps"] * p["loads_in_flight"]
         seg = 32 * w
+        step = p["column_step_bytes"]
         rows = grid // p["share"] * rows_per_cta
         if p["level"] == "dram":
             iters, sweeps = max(1, DRAM_BYTES // (grid * rows_per_cta * seg)), 1
         else:
-            iters = max(1, L2_SET // (rows * seg))
+            iters = max(1, L2_SET // (rows * step))
             sweeps = max(1, L2_BYTES // (grid * rows_per_cta * seg * iters))
-        pitch = round_up(iters * seg + seg, ROW_ALIGN) + (0 if p["aligned"] else w)
+        pitch = round_up(iters * step + seg, ROW_ALIGN) + (0 if p["aligned"] else w)
         lanes = 24 if p["mask"] == "tail" else 32
-        return dict(grid=grid, rows_per_cta=rows_per_cta, row_bytes=lanes * w, inner=seg,
+        return dict(grid=grid, rows_per_cta=rows_per_cta, row_bytes=lanes * w, inner=step,
                     pitch=pitch, iters=iters, sweeps=sweeps, lanes=lanes,
                     smem=pad_bytes(specs, p["ctas_per_sm"]))
     stage = p["stage_bytes"]
@@ -319,9 +346,9 @@ def form_prediction(pred, form, k):
 def evaluate(frozen, measured):
     """measured: point key to median elapsed ns. Returns per-form calibration and held-out errors."""
     preds = frozen["points"]
-    cal = point_key(frozen["calibration"])
     result = {}
     for form in ("c0_current", *GRIDS, "c6_sector_traffic"):
+        cal = point_key(frozen["calibrations"][form]) if form in GRIDS else None
         if form in GRIDS:
             log_x = form != "c5_request_mlp"
             k, clamped = solve(GRIDS[form], preds[cal][form], measured[cal], log_x)
@@ -341,10 +368,10 @@ def main():
     raw = PROFILE.read_bytes()
     profile = json.loads(raw)
     points = gmem_narrow_points() + sync_loop_narrow_points()
-    if point_key(CALIBRATION) not in {point_key(p) for p in points}:
-        raise SystemExit("calibration point is not a benchmark point")
+    if not {point_key(c) for c in CALIBRATIONS.values()} <= {point_key(p) for p in points}:
+        raise SystemExit("a calibration point is not a benchmark point")
     frozen = {"status": "frozen before measurement", "profile_revision": profile["provenance"]["profile_revision"],
-              "profile_sha256": hashlib.sha256(raw).hexdigest(), "calibration": CALIBRATION,
+              "profile_sha256": hashlib.sha256(raw).hexdigest(), "calibrations": CALIBRATIONS,
               "grids": GRIDS, "order": [point_key(p) for p in points], "points": {}}
     with multiprocessing.Pool(args.jobs) as pool:
         results = pool.starmap(predict_point, [(p, profile) for p in points], chunksize=4)
