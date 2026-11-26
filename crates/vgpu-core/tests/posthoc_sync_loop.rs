@@ -228,3 +228,48 @@ fn sync_loop_miss() {
     }
     std::fs::write(env("OUT"), out).unwrap();
 }
+
+/// Lines: ir_path variant merged dram time_ns. For each KernelIR in IRS (comma separated, warm L2):
+/// the model as is (`ir`), without the loop's loads (`noload`), and with a fixed split of every load
+/// into resident, merged and DRAM fractions (`split`).
+#[test]
+#[ignore = "post-hoc analysis, needs PROFILE, IRS and OUT"]
+fn attention_split() {
+    use vgpu_core::from_ir::{kernel_from_ir, IrL2};
+    use vgpu_core::ir::KernelIR;
+    use vgpu_core::l2::{L2InitState, L2Options};
+    let p = Profile::from_json(&std::fs::read_to_string(env("PROFILE")).unwrap()).unwrap();
+    let mut out = String::new();
+    for path in env("IRS").split(',') {
+        let ir = KernelIR::from_json_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let k = kernel_from_ir(&ir).unwrap();
+        let m = Machine::nominal(&p, &k.mma_key).unwrap();
+        let mut l2 = IrL2::new(&ir, &p, L2InitState::Warm, L2Options::default());
+        let base = simulate(&k, &p, &m, &mut l2).unwrap();
+        out += &format!(
+            "{path} ir {:.4} {:.4} {:.1}\n",
+            base.merged_bytes / base.load_bytes,
+            0.0,
+            base.time_ns
+        );
+        let mut nl = k.clone();
+        nl.tile.per_iteration.loads.clear();
+        let mut l2 = IrL2::new(&ir, &p, L2InitState::Warm, L2Options::default());
+        out += &format!(
+            "{path} noload 0 0 {:.1}\n",
+            simulate(&nl, &p, &m, &mut l2).unwrap().time_ns
+        );
+        for merged in [0.0, 0.25, 0.5, 0.75, 0.9, 1.0] {
+            for dram in [0.0, 1.0 / 16.0] {
+                if merged + dram > 1.0 {
+                    continue;
+                }
+                let t = simulate(&k, &p, &m, &mut FixedSplit(merged, dram))
+                    .unwrap()
+                    .time_ns;
+                out += &format!("{path} split {merged} {dram} {t:.1}\n");
+            }
+        }
+    }
+    std::fs::write(env("OUT"), out).unwrap();
+}
