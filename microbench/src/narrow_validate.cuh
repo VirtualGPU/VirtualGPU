@@ -502,3 +502,64 @@ static int run_stage_narrow_batched(int device, int samples, int warmup) {
   std::printf("\n  ]\n}\n");
   return 0;
 }
+
+namespace narrow {
+
+// Last H5 staging round: new points for b1 + b2 (4 warps, 6 and 10 KiB
+// stages, 2 and 4 CTAs per SM, 1 to 16 B, MMA chains of 0 and 8).
+template <int VARIANT, int W, int ROWS, int MMA_ITERS>
+void staging_k1_point(const cudaDeviceProp& prop, Timer& timer, const Buffers& b, int samples,
+                      int warmup, bool& first) {
+  for (int cps : {2, 4})
+    stage_batched_point<VARIANT, W, ROWS, MMA_ITERS, 4>(prop, timer, b, cps, samples, warmup, first);
+}
+
+template <int VARIANT, int W>
+void staging_k1_width(const cudaDeviceProp& prop, Timer& timer, const Buffers& b, int samples,
+                      int warmup, bool& first) {
+  staging_k1_point<VARIANT, W, 48, 0>(prop, timer, b, samples, warmup, first);
+  staging_k1_point<VARIANT, W, 48, 8>(prop, timer, b, samples, warmup, first);
+  staging_k1_point<VARIANT, W, 80, 0>(prop, timer, b, samples, warmup, first);
+  staging_k1_point<VARIANT, W, 80, 8>(prop, timer, b, samples, warmup, first);
+}
+
+template <int VARIANT>
+void staging_k1_variant(const cudaDeviceProp& prop, Timer& timer, const Buffers& b, int samples,
+                        int warmup, bool& first) {
+  staging_k1_width<VARIANT, 1>(prop, timer, b, samples, warmup, first);
+  staging_k1_width<VARIANT, 2>(prop, timer, b, samples, warmup, first);
+  staging_k1_width<VARIANT, 4>(prop, timer, b, samples, warmup, first);
+  staging_k1_width<VARIANT, 16>(prop, timer, b, samples, warmup, first);
+}
+
+}  // namespace narrow
+
+static int run_stage_narrow_k1(int device, int samples, int warmup) {
+  using namespace narrow;
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  Buffers b;
+  Timer timer;
+  bool first = true;
+  std::printf("{\n  \"samples\": %d,\n  \"stage_narrow\": [", samples);
+  staging_k1_variant<kLoadOnly>(prop, timer, b, samples, warmup, first);
+  staging_k1_variant<kStoreOnly>(prop, timer, b, samples, warmup, first);
+  staging_k1_variant<kLoadStore>(prop, timer, b, samples, warmup, first);
+  std::printf("\n  ]\n}\n");
+  return 0;
+}
+
+// The two calibration points of b1 and b2, run as their own process.
+static int run_stage_narrow_k1_calibrate(int device, int samples, int warmup) {
+  using namespace narrow;
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  Buffers b;
+  Timer timer;
+  bool first = true;
+  std::printf("{\n  \"samples\": %d,\n  \"stage_narrow\": [", samples);
+  stage_batched_point<kStoreOnly, 2, 128, 0>(prop, timer, b, 3, samples, warmup, first);
+  stage_batched_point<kLoadOnly, 2, 32, 0>(prop, timer, b, 1, samples, warmup, first);
+  std::printf("\n  ]\n}\n");
+  return 0;
+}
