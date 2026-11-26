@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import subprocess
 import tempfile
@@ -50,7 +51,15 @@ except ImportError:  # imported as microbench.capture_posthoc
         write_json,
     )
 
-MODES = ("wave-rescan", "b-stream", "staged-mma", "dram-probe-sweep")
+MODES = (
+    "wave-rescan",
+    "b-stream",
+    "staged-mma",
+    "dram-probe-sweep",
+    "sync-loop-delta",
+    "sync-loop-delta-flag",
+    "l2-paths",
+)
 POWERSHELL = Path("/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe")
 QUIET_PERCENT = 5
 QUIET_SECONDS = 60
@@ -201,6 +210,7 @@ def capture(args):
         "device_query": query,
         "mode": args.mode,
         "command": run_args,
+        "environment": {k: v for k, v in os.environ.items() if k.startswith("VGPU_")},
         "host": platform.node(),
         "platform": platform.platform(),
         "started_utc": started,
