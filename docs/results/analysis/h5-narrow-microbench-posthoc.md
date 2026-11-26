@@ -63,3 +63,5 @@ Both follow from observations made on these points, so these points are no longe
 
 - **DRAM-side narrow request cost.** Fix the form and one calibration point first, then validate on new GB10 points (in-flight depths, CTAs per SM and working sets not measured here, listed and predicted before measurement), with the hot-L2 predictions required to stay unchanged; then on the RTX 4070 as a cross-GPU holdout.
 - **Per-element register staging.** A new benchmark that separates shared memory store width from global load width (stores only, loads only, both; 2, 4 and 16 B; 1 to 3 CTAs per SM; with and without MMA), measured first to place the cost on the shared memory pipe or the CTA's chain. Candidate forms are proposed and frozen only after that, and validated on another set of points.
+
+Follow-ups: [h5-followups-gb10-posthoc.md](h5-followups-gb10-posthoc.md).
