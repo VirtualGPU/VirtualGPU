@@ -86,11 +86,12 @@ class Fixture:
         self.manifest = {
             "binary": "vgpu_bench",
             "samples": lc.SAMPLES,
-            "device": {"name": "test", "l2_size_bytes": 0},
+            "device": {"name": "test", "l2_size_bytes": 0, "integrated": True},
             "modes": modes,
         }
         self.gates = 0
         self.round = 0
+        self.host = {}  # (round, mode) -> host check, passed when absent
 
     def run(self, cmd):
         mode = cmd[cmd.index("--mode") + 1]
@@ -100,7 +101,7 @@ class Fixture:
             raise RuntimeError("process could not run")
         return {
             "stdout": json.dumps(chain_raw([first, first, STEADY])),
-            "host_check": {"status": "passed"},
+            "host_check": self.host.get((self.round, mode), {"status": "passed"}),
         }
 
     def gate(self):
@@ -132,6 +133,21 @@ class LongCaptureTests(unittest.TestCase):
             state = capture(fx)
             self.assertEqual((state["status"], len(state["rounds"]), fx.gates), ("passed", 5, 5))
             self.assertEqual(fx.calls, ["a", "b"] * 5)
+
+    def test_host_check_voids_a_round_only_on_an_integrated_gpu(self):
+        # long-launch-capture.md section 6: the host gate applies to GPUs sharing memory with
+        # the CPU; elsewhere the host check is recorded and does not judge.
+        failed = {"status": "failed", "max_busy_share": 0.37}
+        for integrated, status, rounds in ((True, "void", 6), (False, "valid", 5)):
+            with tempfile.TemporaryDirectory() as tmp:
+                fx = Fixture(tmp, {})
+                fx.host = {(1, "a"): failed}
+                fx.manifest["device"]["integrated"] = integrated
+                state = capture(fx)
+                first = state["rounds"][0]["results"]["a"]
+                self.assertEqual(first["status"], status)
+                self.assertEqual(first["host_check"], failed)
+                self.assertEqual((state["status"], len(state["rounds"])), ("passed", rounds))
 
     def test_void_round_adds_a_round_for_that_mode_only(self):
         with tempfile.TemporaryDirectory() as tmp:

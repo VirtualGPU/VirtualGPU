@@ -146,7 +146,7 @@ def test_bracketed_capture_preserves_raw_mlp_and_freeze(tmp_path):
     manifest = {
         "binary": "fake",
         "samples": 15,
-        "device": {"name": "NVIDIA GB10", "l2_size_bytes": 24 * 1024**2},
+        "device": {"name": "NVIDIA GB10", "integrated": True, "l2_size_bytes": 24 * 1024**2},
         "dram_reference": OPTS,
         "modes": {"mlp": {"schedule": "mlp.schedule", "record": "mlp.freeze.json"}},
     }
