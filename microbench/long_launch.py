@@ -123,6 +123,8 @@ DESIGN_FIELDS = {
     "l2-rescan": {"points": ("working_set_bytes",)},
     # Diagnostic (docs/results/analysis/v0.3-barrier-sync-plan.md); not in a profile.
     "barrier-step": {"points": ("barriers_per_step", "work_per_step", "num_warps", "grid")},
+    # Diagnostic (docs/results/analysis/v0.3-local-pipe-bw-plan.md); not in a profile.
+    "local-bw": {"points": ("op", "width_bytes", "tier", "num_warps", "frame_bytes_per_thread")},
     "mma-chain": {
         "mma_chain_latency": (
             "variant",
@@ -250,6 +252,9 @@ def pilot_target(mode, point):
     twice the capture floor (v0.3-spill-allocation-redo-registration.md)."""
     if mode == "spill-latency" and point.get("reload_count", 0) > 0:
         return 2 * CAPTURE_MIN_NS
+    # local-bw's L2 points, for the same reason (v0.3-local-pipe-bw-plan.md).
+    if mode == "local-bw" and point.get("tier") == "l2":
+        return 2 * CAPTURE_MIN_NS
     return PILOT_MIN_NS
 
 
@@ -300,14 +305,15 @@ GROUPS = {"l2-merge": 9}
 # Modes whose points with reloads are read in several local memory allocations
 # (v0.3-spill-allocation-design-registration.md): the number of allocations, kept in
 # `allocation_launch_ns` as one list of samples per allocation.
-ALLOCATIONS = {"spill-latency": 15}
+ALLOCATIONS = {"spill-latency": 15, "local-bw": 15}
 
 
 def check_allocations(mode, point, samples):
     """Every launch of every allocation is present, finite and positive; returns the shortest."""
     n = ALLOCATIONS.get(mode)
     lists = point.get("allocation_launch_ns")
-    wanted = n is not None and point.get("reload_count", 0) > 0
+    # spill-latency reads only its points with reloads in several allocations; local-bw all.
+    wanted = n is not None and (mode != "spill-latency" or point.get("reload_count", 0) > 0)
     if not wanted:
         if lists is not None:
             raise ValueError(f"{mode}: allocation_launch_ns on a point read in one allocation")
