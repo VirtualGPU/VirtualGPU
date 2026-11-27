@@ -82,7 +82,7 @@ Fix what made v0.2 miss on the RTX 4070 and GB10, and fix the profiles we alread
 - [x] Do not charge local memory bandwidth on a phase's chain on top of the measured reload latency (#15)
 - [x] Take the per-launch frame cost out of `extra_ns_vs_zero` in `spill-latency` (#15)
 - [ ] Recollect `spill_reload_latency_by_count` on the RTX 4070 and GB10 with the launch cost taken out
-- [ ] Build the GB10 0.23.0 profile with `collect_profile.py --long-launch --carry-from`, after one locked session for the device query and the `cta-dispatch` trace
+- [x] Build the [GB10 0.23.0 profile](profiles/gb10-0.23.0.json) with `collect_profile.py --long-launch --carry-from`, after one locked session for the device query and the `cta-dispatch` trace
 - [ ] Capture the RTX 4070 0.23.0 long-launch profile
 - [x] Register a decision rule and freeze predictions for the spill mechanisms before `spill-latency` is recaptured with long launches (#15, [v0.3-spill-decision-registration.md](docs/results/analysis/v0.3-spill-decision-registration.md))
 - [ ] Score the spill decision on the RTX 4070 long-launch profile with `scripts/spill_decision.py` and report it, with GB10 as not run since its `spill-latency` failed rule 3 (#21)
