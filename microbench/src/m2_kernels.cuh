@@ -4625,11 +4625,43 @@ static int run_spill_latency(int device, int samples, int warmup, LaunchSchedule
         std::printf(
             "\n    {\"regime\": \"%s\", \"dependency_mode\": \"%s\", \"num_warps\": 4, "
             "\"resident_threads_per_sm\": %d, \"frame_bytes_per_thread\": %d, "
-            "\"reload_count\": %d, \"iter_time_ns_samples\": [",
-            regime, dep_mode, resident_threads_per_sm, fb, rc);
+            "\"reload_count\": %d, \"steps\": %d, \"iter_time_ns_samples\": [",
+            regime, dep_mode, resident_threads_per_sm, fb, rc, steps);
         for (size_t i = 0; i < ns_samples.size(); ++i) { if (i) std::printf(", "); std::printf("%.3f", ns_samples[i]); }
         std::printf("]}");
       }
+    }
+  }
+  std::printf("\n  ],\n  \"launch_cost_by_frame\": [");
+
+  // A launch with no steps still initializes the frame. Its time is the fixed cost every
+  // point above carries once per launch, so collect_profile.py can take it out per step.
+  // One launch is a few us, so each sample is the mean of a batch of launches.
+  constexpr int cost_batch = 256;
+  first = true;
+  for (int fb : spill_frame_bytes) {
+    for (bool serial : {true, false}) {
+      auto launch_once = [&]() {
+        if (serial) dispatch_spill_frame<true>(fb, sm_count, d_sink, 0, 1, 0);
+        else dispatch_spill_frame<false>(fb, sm_count, d_sink, 0, 1, 0);
+      };
+      for (int w = 0; w < warmup; ++w) launch_once();
+      CUDA_CHECK(cudaGetLastError());
+      CUDA_CHECK(cudaDeviceSynchronize());
+      std::printf("%s\n    {\"dependency_mode\": \"%s\", \"frame_bytes_per_thread\": %d, "
+                  "\"launches_per_sample\": %d, \"launch_cost_ns_samples\": [",
+                  first ? "" : ",", serial ? "serial_chain" : "batch_before_dep", fb, cost_batch);
+      first = false;
+      for (int s = 0; s < samples; ++s) {
+        CUDA_CHECK(cudaEventRecord(ev_start));
+        for (int k = 0; k < cost_batch; ++k) launch_once();
+        CUDA_CHECK(cudaEventRecord(ev_stop));
+        CUDA_CHECK(cudaEventSynchronize(ev_stop));
+        float ms = 0.0f;
+        CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
+        std::printf("%s%.1f", s ? ", " : "", static_cast<double>(ms) * 1e6 / cost_batch);
+      }
+      std::printf("]}");
     }
   }
   std::printf("\n  ]\n}\n");

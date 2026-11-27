@@ -399,6 +399,30 @@ def estimate_l2_knee(sweep: list[dict[str, Any]], l2_spec_bytes: int) -> tuple[f
     return float(l2_spec_bytes) * 0.85, 0.20
 
 
+def spill_step_samples(raw: dict[str, Any]) -> list[list[float]]:
+    """Per-step time of each spill-latency point, without the fixed cost of a launch.
+
+    Each launch initializes the local frame once, so a point's per-step time carries
+    that cost divided by its steps. `launch_cost_by_frame` times launches with no steps;
+    its median per frame and mode is taken out. Captures without it stay as they are.
+    """
+    cost = {
+        (int(c["frame_bytes_per_thread"]), str(c["dependency_mode"])): statistics.median(
+            float(x) for x in c["launch_cost_ns_samples"]
+        )
+        for c in raw.get("launch_cost_by_frame", [])
+    }
+    out = []
+    for pt in raw["reload_latency_by_count"]:
+        samples = [float(x) for x in pt["iter_time_ns_samples"]]
+        key = (int(pt.get("frame_bytes_per_thread", 0)), str(pt["dependency_mode"]))
+        if key in cost and "steps" in pt:
+            share = cost[key] / int(pt["steps"])
+            samples = [x - share for x in samples]
+        out.append(samples)
+    return out
+
+
 def build_profile(
     query: dict[str, Any],
     dram_raw: dict[str, Any],
@@ -1189,16 +1213,18 @@ def build_profile(
             }
         )
 
-    # Compute spill reload extra_ns_vs_zero and ns_per_reload relative to reload_count=0 baseline.
+    # extra_ns_vs_zero and ns_per_reload against the reload_count 0 point, per step and
+    # without the fixed cost of each launch.
+    spill_steps = spill_step_samples(spill_lat_raw)
     spill_zero_med: dict[tuple[int, str], float] = {}
-    for pt in spill_lat_raw["reload_latency_by_count"]:
+    for pt, step_s in zip(spill_lat_raw["reload_latency_by_count"], spill_steps):
         if int(pt["reload_count"]) == 0:
             spill_zero_med[
                 (int(pt.get("frame_bytes_per_thread", 0)), str(pt["dependency_mode"]))
-            ] = float(statistics.median([float(x) for x in pt["iter_time_ns_samples"]]))
+            ] = float(statistics.median(step_s))
 
     reload_latency_by_count: list[dict[str, Any]] = []
-    for pt in spill_lat_raw["reload_latency_by_count"]:
+    for pt, step_s in zip(spill_lat_raw["reload_latency_by_count"], spill_steps):
         regime = str(pt["regime"])
         dep_mode = str(pt["dependency_mode"])
         fb = int(pt.get("frame_bytes_per_thread", 0))
@@ -1206,7 +1232,7 @@ def build_profile(
         rc = int(pt["reload_count"])
         raw_s = [float(x) for x in pt["iter_time_ns_samples"]]
         base_ns = spill_zero_med.get((fb, dep_mode), 0.0)
-        extra_s = [max(0.0, x - base_ns) for x in raw_s]
+        extra_s = [max(0.0, x - base_ns) for x in step_s]
         per_r_s = [e / rc for e in extra_s] if rc > 0 else [0.0 for _ in extra_s]
         p_grp = "spill_l1" if regime == "l1_hit" else "spill_l2"
         entry: dict[str, Any] = {
