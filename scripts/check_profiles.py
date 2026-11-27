@@ -49,6 +49,9 @@ UNTIMED_LEAVES = {
 DRAM_WRITE_TO_READ_MAX_RATIO = 1.15
 ACTIVE_SM_STEP_FLOOR = 0.90
 FULL_CHIP_PEAK_FLOOR = 0.90
+MMA_WARP_STEP_FLOOR = 0.90
+# Past the L2 size a rescan cannot hit more than the lowest point before it plus this much.
+RESCAN_RISE_PAST_L2_MAX = 0.10
 
 
 def leaf_sources(obj: Any, path: str = "measured") -> list[tuple[str, Any]]:
@@ -200,6 +203,32 @@ def sanity_errors(profile: dict[str, Any]) -> list[str]:
             f"full-chip L2 active-SM curve ceiling ({best_l2_end:.1f} GB/s) "
             f"is below {FULL_CHIP_PEAK_FLOOR:.2f}x l2_bw_read_gbps ({l2_read:.1f} GB/s)"
         )
+
+    mma_curves = profile["measured"]["compute"].get("mma_tflops_per_sm_by_warps", {})
+    for instr, curve in mma_curves.items():
+        for idx in range(1, len(curve)):
+            prev = float(curve[idx - 1]["tflops_per_sm"]["value"])
+            cur = float(curve[idx]["tflops_per_sm"]["value"])
+            if prev > 0 and cur < MMA_WARP_STEP_FLOOR * prev:
+                errors.append(
+                    f"measured.compute.mma_tflops_per_sm_by_warps[{instr!r}][{idx}] ({cur:.3f} "
+                    f"TFLOP/s at {curve[idx]['mma_warps_per_sm']} warps) drops below "
+                    f"{MMA_WARP_STEP_FLOOR:.2f}x previous point ({prev:.3f} TFLOP/s at "
+                    f"{curve[idx - 1]['mma_warps_per_sm']} warps)"
+                )
+
+    lowest = None
+    for idx, point in enumerate(mem.get("l2_rescan_hit_rate_by_working_set", [])):
+        if point["working_set_ratio_to_l2"] < 1.0:
+            continue
+        hit = float(point["estimated_hit_rate"]["value"])
+        if lowest is not None and hit > lowest + RESCAN_RISE_PAST_L2_MAX:
+            errors.append(
+                f"measured.memory.l2_rescan_hit_rate_by_working_set[{idx}].estimated_hit_rate "
+                f"({hit:.2f} at {point['working_set_ratio_to_l2']}x L2) rises more than "
+                f"{RESCAN_RISE_PAST_L2_MAX:.2f} over a smaller working set past L2 ({lowest:.2f})"
+            )
+        lowest = hit if lowest is None else min(lowest, hit)
 
     l1_size = int(specs["l1_size_bytes"])
     l1_unified = int(specs["l1_smem_unified_bytes"])

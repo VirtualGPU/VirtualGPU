@@ -29,6 +29,24 @@ Everything comes from public specs and small benchmarks we wrote ourselves. Noth
 
 <br />
 
+## What it is for
+
+A kernel like a matrix multiply (GEMM) or attention has settings that change its speed but not its result: tile size, number of warps and number of pipeline stages. Each combination is a config. The fastest config changes from shape to shape and from GPU to GPU, so today you time every candidate on the real card, which is what `@triton.autotune` does. That ties up the GPU, and you can't do it at all for a card you don't have.
+
+VirtualGPU tries to rule out most candidates on a CPU first, so only a few need to run on the GPU.
+
+We test this honestly: the pass rules are written down first, and the real GPU timings stay sealed until every prediction is archived. Each round is scored on how well the predicted order matches the real one (Kendall tau-b), how much slower the best of the top 5 picks is than the true fastest (top-5 regret), and how often the GPU agrees when VirtualGPU says one config is faster. It is compared against a roofline model and a learned NeuSight-style predictor.
+
+In the latest round, [v0.2](docs/results/v0.2.md), the GPU agreed with 87% to 94% of VirtualGPU's "A is faster than B" calls, against 54% to 76% for the baselines. RTX 4070 GEMM passed, but the other kernel and GPU pairs missed the top-5 regret limit or the ranking margin, so the formal result is Fail. In short, when it orders two configs it is usually right, but you should still time the top few on the card. Earlier rounds are in [Phase 1](docs/results/phase1.md) and [Phase 2](docs/results/phase2.md).
+
+Limits:
+
+- It ranks configs of one kernel and shape against each other. It does not predict run times.
+- It needs a profile of the GPU you are tuning for. Another card's profile says nothing about yours.
+- Only the `rtx4070` and `gb10` profiles have been checked against sealed GPU timings. The Ascend 910B3 has its own test in [docs/results/ascend910b3-holdout.md](docs/results/ascend910b3-holdout.md). The other bundled profiles have not been checked.
+
+<br />
+
 ## How it works
 
 VirtualGPU compiles each config with Triton for the GPU you picked, without needing that GPU. It reads the compiler's output to see the tile sizes, how many pipeline stages the loop really got, how much memory each block touches, and how many registers it uses or spills.

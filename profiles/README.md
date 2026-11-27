@@ -13,7 +13,7 @@ To add your GPU, see [contributing a profile](../docs/guides/contributing-a-prof
 | [`gb10.json`](gb10.json) | NVIDIA GB10 (DGX Spark) | `sm_121` | Unified (LPDDR5X) | `0.21.0-posthoc` | `partial` | Unlocked (2411 to 2561 MHz SM / 8533 MHz Mem) | `580.173.02` / `13.0` |
 | [`l4.json`](l4.json) | NVIDIA L4 | `sm_89` | Discrete (GDDR6) | `0.21.0-posthoc` | `partial` | Unlocked (Linux, 1845 to 2040 MHz SM / 6251 MHz Mem) | `580.82.07` / `13.0` |
 | [`l40s.json`](l40s.json) | NVIDIA L40S | `sm_89` | Discrete (GDDR6) | `0.21.0-posthoc` | `partial` | Locked with `nvidia-smi` on native Linux (2100 MHz SM / 9001 MHz Mem). The collector still records `locked: false` | `595.91.07` / `13.5` |
-| [`rtx3070.json`](rtx3070.json) | NVIDIA GeForce RTX 3070 | `sm_86` | Discrete (GDDR6) | `0.21.0-posthoc` | `partial` | Unlocked (WSL2, 1770 to 2025 MHz SM / 7001 to 7201 MHz Mem) | `610.88` / `13.5` |
+| [`rtx3070.json`](rtx3070.json) | NVIDIA GeForce RTX 3070 | `sm_86` | Discrete (GDDR6) | `0.21.0-posthoc` | `partial` | Unlocked (WSL2, 1770 to 2025 MHz SM / 7001 to 7201 MHz Mem) | `610.88` / `13.2` |
 | [`rtx4070.json`](rtx4070.json) | NVIDIA GeForce RTX 4070 | `sm_89` | Discrete (GDDR6X) | `0.21.0-posthoc` | `partial` | Unlocked (WSL2, 2550 to 2865 MHz SM / 10251 MHz Mem) | `610.88` / `13.5` |
 | [`rtx4090.json`](rtx4090.json) | NVIDIA GeForce RTX 4090 | `sm_89` | Discrete (GDDR6X) | `0.21.0-posthoc` | `partial` | Unlocked (Windows, 2610 to 2790 MHz SM / 10501 MHz Mem) | `621.24` / `13.5` |
 | [`rtxpro5000-72gb.json`](rtxpro5000-72gb.json) | NVIDIA RTX PRO 5000 72GB Blackwell | `sm_120` | Discrete (GDDR7) | `0.21.0-posthoc` | `partial` | Unlocked (Linux, 2370 to 2640 MHz SM / 13365 to 14001 MHz Mem) | `615.78.08` / `13.5` |
