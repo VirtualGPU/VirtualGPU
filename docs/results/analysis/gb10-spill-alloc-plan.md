@@ -45,3 +45,9 @@ Verdict by the frozen reading: **placement: the level moves with the local memor
 - The stack limit read before the first block was the default 1 KiB; the runtime raised it to 4 KiB for the first 4 KiB frame launch, so allocation 0 is the one the first launch made. The raises then went to 5 and 6 KiB (allocations 1, 2) and, after the reset, again from the default (3 to 5).
 
 This differs from the capacity sweep of the L2 buffer experiment, where a buffer did not keep its level. For the spill frames the level is fixed for the life of the local memory allocation, which a process normally keeps for all its launches: that is why the capture's rounds each had one level. A measurement design that reads the spill points in several allocations per process and takes their median would average over this; any such change is registered before a recapture.
+
+### Post-hoc note: the stack limit itself changes some points
+
+Read after the result, not part of the frozen reading. The batched 512 B control at 128 reloads is not random across allocations: in all three processes it takes 1.74 to 1.77 ms at stack limits of 4 and 5 KiB and 1.28 to 1.29 ms at 6 KiB (allocations 2 and 5), the value the capture measured at the default 1 KiB limit (1.29 to 1.31 ms). The stack limit sets the size of each thread's local memory and so the stride between frames, which changes this L1-resident point by about 35%. A stack-limit raise is therefore not a neutral way to get a new allocation.
+
+The 4 KiB result stands on allocations with the same stack limit: allocations 0 and 3 (4 KiB), 1 and 4 (5 KiB) and 2 and 5 (6 KiB) differ by 0.00 to 0.28 in level across the three processes, so a new allocation at the same stride still draws a new level. A measurement design built on this should take new allocations by a new context at the default stack limit, not by raising the limit.
