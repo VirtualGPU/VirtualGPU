@@ -116,6 +116,9 @@ criteria in effect.
 [Long-launch protocol](../docs/components/long-launch-capture.md)
 [GB10 cold DRAM evidence](../docs/results/analysis/v0.3-gb10-mlp-wall-order-posthoc.md)
 
+The [near-L2 reporting amendment](v03-holdout-near-l2-amendment.md)
+records the descriptive case flags and their interpretation.
+
 ## Evaluation design
 
 | Device | GEMM | Attention |
