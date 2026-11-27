@@ -19,3 +19,16 @@ In the first GB10 0.23.0 capture (main `42e039d`), `spill-latency` failed rule 1
 - The two states are gone when, in all 3 `max_l1` processes, none of the 4 serial 1 KiB points has a slow sample and each has an interquartile range of at most 10% of its median.
 - Otherwise they remain. A failed host check voids the run.
 - Also reported, not judged: the batched 1 KiB points' interquartile ranges, and the serial medians per arm (a different carveout may move the medians).
+
+## Result
+
+Captured 2026-11-27 04:48:43 to 04:49:08 UTC on Spark 1 under the GPU lock, binary `6751b791...` built from `0b4d34c`, schedule `603cd013...` (the `42e039d` freeze); `spill-carveout-1.json` `28a0a1a1...`. All six processes passed the host check (busiest second 5.3% to 6.0%); SM clock 2533 to 2540 MHz.
+
+Verdict by the frozen reading: **two states remain with the maximum-L1 carveout.** The control reproduced them.
+
+| Arm | Slow samples per process, serial 1 KiB at 8 / 32 / 68 / 128 reloads | Interquartile range / median, serial | Batched 68 / 128 reloads, interquartile range / median |
+|---|---|---|---|
+| default | 0,1,5 / 4,1,1 / 2,1,4 / 6,5,6 | 1.5% to 105% | 10% to 11% / 6% to 18% |
+| max_l1 | 3,6,4 / 2,5,5 / 3,4,3 / 9,6,6 | 5.7% to 123% | 13% / 10% to 16% |
+
+The explicit maximum-L1 carveout does not remove the two states; if anything the `max_l1` processes show more slow samples. A launch-to-launch choice of carveout by the driver is not their cause. No further run is planned under this plan.
