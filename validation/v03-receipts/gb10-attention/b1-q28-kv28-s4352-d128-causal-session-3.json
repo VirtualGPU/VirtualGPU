@@ -1,0 +1,26 @@
+{
+  "timestamp_utc": "2026-11-27T18:42:54.305938+00:00",
+  "release_sha256": "60ba5804b59f6b8825423d43fbde6414756078aa396a8f070c250ac062a85c32",
+  "capture_approval_sha256": "f92fb3ccfb50b63df91ef592bdf28c65f840c456680e883e3a85a34b9e3d8689",
+  "retry_approval_sha256": null,
+  "repeat_of_receipt_sha256": null,
+  "device": "gb10",
+  "family": "attention",
+  "case_id": "b1-q28-kv28-s4352-d128-causal",
+  "session": 3,
+  "attempt": 1,
+  "source_commit": "4ecde308dc086a073f8242c6f35fbb91d96a1161",
+  "manifest_sha256": "aea8e303eb9a01943b7e762fc853d174c87721f70d104c33d530d247b942bb5d",
+  "aot_sha256": "aa1059611300d5b0b2755795a7e199f66bcaa061ecd10f76da9b83c7c4704293",
+  "profile_sha256": "10625fa4832c864fcba4d81c9b99480e58f69c81644a9950083b702488442471",
+  "host_sha256": "7bb20f0a23b6280530d5104723129aa496857a450f507fc77b66887972010695",
+  "status": "complete",
+  "failure_reasons": [],
+  "sha256": "57d8fb2d9fdc10c4af42fc729653e97fea5e14f643ad5b319dd2d7eaaab03b4d",
+  "complete_blocks": 10,
+  "kernel_key": "5392dc945577188c854fbb4ed930db2f3c6f2525ee61fbc44333369fafc5cf84",
+  "config_status_counts": {
+    "ok": 22,
+    "resource_exceeded": 8
+  }
+}

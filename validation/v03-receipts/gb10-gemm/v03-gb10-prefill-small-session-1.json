@@ -1,0 +1,25 @@
+{
+  "timestamp_utc": "2026-11-27T09:15:37.603104+00:00",
+  "release_sha256": "60ba5804b59f6b8825423d43fbde6414756078aa396a8f070c250ac062a85c32",
+  "capture_approval_sha256": "f92fb3ccfb50b63df91ef592bdf28c65f840c456680e883e3a85a34b9e3d8689",
+  "retry_approval_sha256": null,
+  "repeat_of_receipt_sha256": null,
+  "device": "gb10",
+  "family": "gemm",
+  "case_id": "v03-gb10-prefill-small",
+  "session": 1,
+  "attempt": 1,
+  "source_commit": "4ecde308dc086a073f8242c6f35fbb91d96a1161",
+  "manifest_sha256": "fa03257073857afb940eb477171db6bb8b91a93af4385c77445d41e21982608b",
+  "aot_sha256": "366df1ffc385251ac1105619093a626ff304c68b6dc407362ba553a15f66603a",
+  "profile_sha256": "10625fa4832c864fcba4d81c9b99480e58f69c81644a9950083b702488442471",
+  "host_sha256": "c5caa75001a66724b6f30a5eb8e2795f877a6dd561ac968fa48b5f2d938c2d19",
+  "status": "complete",
+  "failure_reasons": [],
+  "sha256": "8098ab1f3cc4de1d05c6af134b46b0b200bec35502043483375adac0648f14c4",
+  "complete_blocks": 10,
+  "kernel_key": "23dbb49dab9a60ed185a37b20f38f553723a63f98bf1c7b3eb895bee48e174bb",
+  "config_status_counts": {
+    "ok": 36
+  }
+}

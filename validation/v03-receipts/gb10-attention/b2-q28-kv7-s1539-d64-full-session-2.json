@@ -1,0 +1,25 @@
+{
+  "timestamp_utc": "2026-11-27T18:28:54.753817+00:00",
+  "release_sha256": "60ba5804b59f6b8825423d43fbde6414756078aa396a8f070c250ac062a85c32",
+  "capture_approval_sha256": "f92fb3ccfb50b63df91ef592bdf28c65f840c456680e883e3a85a34b9e3d8689",
+  "retry_approval_sha256": null,
+  "repeat_of_receipt_sha256": null,
+  "device": "gb10",
+  "family": "attention",
+  "case_id": "b2-q28-kv7-s1539-d64-full",
+  "session": 2,
+  "attempt": 1,
+  "source_commit": "4ecde308dc086a073f8242c6f35fbb91d96a1161",
+  "manifest_sha256": "aea8e303eb9a01943b7e762fc853d174c87721f70d104c33d530d247b942bb5d",
+  "aot_sha256": "ddd4e5b689d78b01ebd16746c4b34e961fac6ec7a24ffe989bbe583d38d550f1",
+  "profile_sha256": "10625fa4832c864fcba4d81c9b99480e58f69c81644a9950083b702488442471",
+  "host_sha256": "5f2541bc6861e3033612ec3b8b60e3de2b020324cd00f7b852a14a7584f81200",
+  "status": "complete",
+  "failure_reasons": [],
+  "sha256": "2ba2b67c720a35e358332f7c4eb8f4f86dbd6eb0f35d83d63c948186197c4da7",
+  "complete_blocks": 10,
+  "kernel_key": "5392dc945577188c854fbb4ed930db2f3c6f2525ee61fbc44333369fafc5cf84",
+  "config_status_counts": {
+    "ok": 24
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "timestamp_utc": "2026-11-27T10:29:37.663915+00:00",
+  "release_sha256": "60ba5804b59f6b8825423d43fbde6414756078aa396a8f070c250ac062a85c32",
+  "capture_approval_sha256": "f92fb3ccfb50b63df91ef592bdf28c65f840c456680e883e3a85a34b9e3d8689",
+  "retry_approval_sha256": "df55fd452b48f22bebc87a1b41c62889e4fa74d400dbcea1e7bf142f65b789c6",
+  "repeat_of_receipt_sha256": "fbe9e1f7a87ac154690fb91ec455bee3bf5cf2bd0dc79fd17328673fe61b696e",
+  "device": "gb10",
+  "family": "gemm",
+  "case_id": "v03-gb10-prefill-wide",
+  "session": 3,
+  "attempt": 2,
+  "source_commit": "4ecde308dc086a073f8242c6f35fbb91d96a1161",
+  "manifest_sha256": "fa03257073857afb940eb477171db6bb8b91a93af4385c77445d41e21982608b",
+  "aot_sha256": "f6c992db7118b692a37b01968a976a82acb6c8ae6cf69a0a5f95957bf705443a",
+  "profile_sha256": "10625fa4832c864fcba4d81c9b99480e58f69c81644a9950083b702488442471",
+  "host_sha256": "31fe0a8e41f0e037d2a3b21a52444e9e6cdc6e2eba1372690cd365c12916e74e",
+  "status": "complete",
+  "failure_reasons": [],
+  "sha256": "152764ad0764063f2eadf38556954fdb04a45e73083aeac34f3075b6ae3e9f0d",
+  "complete_blocks": 10,
+  "kernel_key": "23dbb49dab9a60ed185a37b20f38f553723a63f98bf1c7b3eb895bee48e174bb",
+  "config_status_counts": {
+    "ok": 36
+  }
+}
