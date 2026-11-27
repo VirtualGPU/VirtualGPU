@@ -42,9 +42,9 @@ NOT_EXPRESSED = {
     "interpolation, not a core run) and are not re-run here",
     "cross_wave_reuse": "its microbenchmarks are not in the profile",
     "address_arithmetic": "loop and address instructions are not counted in any kernel",
-    "spill_footprint": "the core sizes the spill frames' footprint at full residency (sim.rs, "
-    "simulate), so the one-CTA-per-SM spill-latency kernel is charged the frames of every CTA "
-    "the SM could hold; the IR states the real kernel and the error includes this",
+    "spill_footprint": "the synthetic spill kernel runs one CTA per SM. The core takes the "
+    "actual footprint at phase entry and retains the initial peak L2 spill pressure. The legacy "
+    "reload table and estimated local pipe rate remain provisional",
 }
 
 
