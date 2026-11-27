@@ -1,0 +1,10 @@
+--- control.json
++++ candidate.json
+@@ -1,6 +1,6 @@
+ {
+  "core": {
+-  "commit": "cd5f35f8d490427726c4c08b5e573fe06c64ddff",
++  "commit": "01190e9efad04348e3c411eb65b61902f4ebcbc6",
+   "dirty": false,
+   "result_class": "formal"
+  },

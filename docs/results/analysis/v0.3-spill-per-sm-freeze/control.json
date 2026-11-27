@@ -1,0 +1,380 @@
+{
+ "core": {
+  "commit": "cd5f35f8d490427726c4c08b5e573fe06c64ddff",
+  "dirty": false,
+  "result_class": "formal"
+ },
+ "script_sha256": "ff9427ece9e8ce91574bb7f40b09de138e0fb93605ffe7dc8bcf5b432e551b3b",
+ "profiles": {
+  "gb10": {
+   "path": "profiles/gb10.json",
+   "sha256": "10625fa4832c864fcba4d81c9b99480e58f69c81644a9950083b702488442471",
+   "revision": "0.22.0-posthoc",
+   "extra_ns_vs_zero": {
+    "l1_hit serial_chain 128B x0": 0.0,
+    "l1_hit serial_chain 128B x8": 192.764,
+    "l1_hit serial_chain 128B x32": 609.146,
+    "l1_hit serial_chain 128B x68": 1262.75,
+    "l1_hit serial_chain 128B x128": 2300.89,
+    "l1_hit batch_before_dep 128B x0": 0.0,
+    "l1_hit batch_before_dep 128B x8": 112.461,
+    "l1_hit batch_before_dep 128B x32": 204.434,
+    "l1_hit batch_before_dep 128B x68": 437.705,
+    "l1_hit batch_before_dep 128B x128": 614.435,
+    "l1_hit serial_chain 256B x0": 0.0,
+    "l1_hit serial_chain 256B x8": 194.247,
+    "l1_hit serial_chain 256B x32": 615.521,
+    "l1_hit serial_chain 256B x68": 1276.482,
+    "l1_hit serial_chain 256B x128": 2326.325,
+    "l1_hit batch_before_dep 256B x0": 0.0,
+    "l1_hit batch_before_dep 256B x8": 114.031,
+    "l1_hit batch_before_dep 256B x32": 224.073,
+    "l1_hit batch_before_dep 256B x68": 437.277,
+    "l1_hit batch_before_dep 256B x128": 694.415,
+    "l1_hit serial_chain 512B x0": 0.0,
+    "l1_hit serial_chain 512B x8": 194.744,
+    "l1_hit serial_chain 512B x32": 615.413,
+    "l1_hit serial_chain 512B x68": 1276.721,
+    "l1_hit serial_chain 512B x128": 2344.388,
+    "l1_hit batch_before_dep 512B x0": 0.0,
+    "l1_hit batch_before_dep 512B x8": 114.055,
+    "l1_hit batch_before_dep 512B x32": 224.249,
+    "l1_hit batch_before_dep 512B x68": 437.838,
+    "l1_hit batch_before_dep 512B x128": 696.198,
+    "l1_boundary serial_chain 1024B x0": 0.0,
+    "l1_boundary serial_chain 1024B x8": 911.548,
+    "l1_boundary serial_chain 1024B x32": 3090.414,
+    "l1_boundary serial_chain 1024B x68": 4488.664,
+    "l1_boundary serial_chain 1024B x128": 7553.164,
+    "l1_boundary batch_before_dep 1024B x0": 0.0,
+    "l1_boundary batch_before_dep 1024B x8": 224.367,
+    "l1_boundary batch_before_dep 1024B x32": 586.964,
+    "l1_boundary batch_before_dep 1024B x68": 1278.317,
+    "l1_boundary batch_before_dep 1024B x128": 2124.436,
+    "l2_spill serial_chain 2048B x0": 0.0,
+    "l2_spill serial_chain 2048B x8": 1119.21,
+    "l2_spill serial_chain 2048B x32": 4505.906,
+    "l2_spill serial_chain 2048B x68": 9290.156,
+    "l2_spill serial_chain 2048B x128": 17170.156,
+    "l2_spill batch_before_dep 2048B x0": 0.0,
+    "l2_spill batch_before_dep 2048B x8": 234.768,
+    "l2_spill batch_before_dep 2048B x32": 995.324,
+    "l2_spill batch_before_dep 2048B x68": 2117.766,
+    "l2_spill batch_before_dep 2048B x128": 3814.734,
+    "l2_spill serial_chain 4096B x0": 0.0,
+    "l2_spill serial_chain 4096B x8": 2474.452,
+    "l2_spill serial_chain 4096B x32": 10108.977,
+    "l2_spill serial_chain 4096B x68": 17363.726,
+    "l2_spill serial_chain 4096B x128": 31041.977,
+    "l2_spill batch_before_dep 4096B x0": 0.0,
+    "l2_spill batch_before_dep 4096B x8": 421.744,
+    "l2_spill batch_before_dep 4096B x32": 1824.787,
+    "l2_spill batch_before_dep 4096B x68": 3941.154,
+    "l2_spill batch_before_dep 4096B x128": 6971.357
+   },
+   "leave_one_out": {
+    "l1_hit": [
+     {
+      "point": "128B x32",
+      "measured": 204.434,
+      "predicted": 242.5586,
+      "error": 0.18648854887151844
+     },
+     {
+      "point": "128B x68",
+      "measured": 437.705,
+      "predicted": 358.184375,
+      "error": -0.18167630024788384
+     },
+     {
+      "point": "256B x32",
+      "measured": 224.073,
+      "predicted": 243.3294,
+      "error": 0.08593806482708755
+     },
+     {
+      "point": "256B x68",
+      "measured": 437.277,
+      "predicted": 400.45124999999996,
+      "error": -0.08421606899059408
+     },
+     {
+      "point": "512B x32",
+      "measured": 224.249,
+      "predicted": 243.56820000000002,
+      "error": 0.08615066287921036
+     },
+     {
+      "point": "512B x68",
+      "measured": 437.838,
+      "predicted": 401.229875,
+      "error": -0.08361111872427707
+     }
+    ],
+    "l2_spill": [
+     {
+      "point": "2048B x32",
+      "measured": 995.324,
+      "predicted": 987.9672000000002,
+      "error": -0.007391362008752678
+     },
+     {
+      "point": "2048B x68",
+      "measured": 2117.766,
+      "predicted": 2052.60275,
+      "error": -0.030769806484758022
+     },
+     {
+      "point": "4096B x32",
+      "measured": 1824.787,
+      "predicted": 1829.5079999999998,
+      "error": 0.00258715126751774
+     },
+     {
+      "point": "4096B x68",
+      "measured": 3941.154,
+      "predicted": 3754.75075,
+      "error": -0.047296616676232306
+     }
+    ]
+   },
+   "boundary_lookup": [
+    {
+     "point": "1024B x8",
+     "measured": 224.367,
+     "predicted": 181.2679984,
+     "error": -0.19209153574277849
+    },
+    {
+     "point": "1024B x32",
+     "measured": 586.964,
+     "predicted": 653.5835599999999,
+     "error": 0.11349854505557389
+    },
+    {
+     "point": "1024B x68",
+     "measured": 1278.317,
+     "predicted": 1373.2219104,
+     "error": 0.07424207798222193
+    },
+    {
+     "point": "1024B x128",
+     "measured": 2124.436,
+     "predicted": 2432.5988448,
+     "error": 0.1450563089685919
+    }
+   ],
+   "boundary_whole_core": [
+    {
+     "point": "1024B x8",
+     "measured": 224.367,
+     "predicted": 234.76799999999992,
+     "error": 0.04635708459800214
+    },
+    {
+     "point": "1024B x32",
+     "measured": 586.964,
+     "predicted": 995.3239999999996,
+     "error": 0.695715580512603
+    },
+    {
+     "point": "1024B x68",
+     "measured": 1278.317,
+     "predicted": 2117.7660000000005,
+     "error": 0.656682966744556
+    },
+    {
+     "point": "1024B x128",
+     "measured": 2124.436,
+     "predicted": 3814.734000000001,
+     "error": 0.7956455266244784
+    }
+   ]
+  },
+  "rtx4070": {
+   "path": "profiles/rtx4070.json",
+   "sha256": "589579415b2c05b2e7d70be6b2616936bcdbfad4c8cb3c43e9febaacd6dbb8b6",
+   "revision": "0.21.0-posthoc",
+   "extra_ns_vs_zero": {
+    "l1_hit serial_chain 128B x0": 0.0,
+    "l1_hit serial_chain 128B x8": 208.495,
+    "l1_hit serial_chain 128B x32": 644.118,
+    "l1_hit serial_chain 128B x68": 1296.642,
+    "l1_hit serial_chain 128B x128": 2390.815,
+    "l1_hit batch_before_dep 128B x0": 0.0,
+    "l1_hit batch_before_dep 128B x8": 94.672,
+    "l1_hit batch_before_dep 128B x32": 288.877,
+    "l1_hit batch_before_dep 128B x68": 583.181,
+    "l1_hit batch_before_dep 128B x128": 1068.356,
+    "l1_hit serial_chain 256B x0": 0.0,
+    "l1_hit serial_chain 256B x8": 201.894,
+    "l1_hit serial_chain 256B x32": 636.008,
+    "l1_hit serial_chain 256B x68": 1288.368,
+    "l1_hit serial_chain 256B x128": 2374.396,
+    "l1_hit batch_before_dep 256B x0": 0.0,
+    "l1_hit batch_before_dep 256B x8": 98.453,
+    "l1_hit batch_before_dep 256B x32": 293.144,
+    "l1_hit batch_before_dep 256B x68": 584.129,
+    "l1_hit batch_before_dep 256B x128": 1073.473,
+    "l1_hit serial_chain 512B x0": 0.0,
+    "l1_hit serial_chain 512B x8": 203.687,
+    "l1_hit serial_chain 512B x32": 638.543,
+    "l1_hit serial_chain 512B x68": 1292.756,
+    "l1_hit serial_chain 512B x128": 2383.736,
+    "l1_hit batch_before_dep 512B x0": 0.0,
+    "l1_hit batch_before_dep 512B x8": 83.5,
+    "l1_hit batch_before_dep 512B x32": 256.877,
+    "l1_hit batch_before_dep 512B x68": 516.073,
+    "l1_hit batch_before_dep 512B x128": 949.698,
+    "l1_boundary serial_chain 1024B x0": 0.0,
+    "l1_boundary serial_chain 1024B x8": 950.988,
+    "l1_boundary serial_chain 1024B x32": 3382.75,
+    "l1_boundary serial_chain 1024B x68": 5622.75,
+    "l1_boundary serial_chain 1024B x128": 12078.75,
+    "l1_boundary batch_before_dep 1024B x0": 0.0,
+    "l1_boundary batch_before_dep 1024B x8": 216.405,
+    "l1_boundary batch_before_dep 1024B x32": 701.472,
+    "l1_boundary batch_before_dep 1024B x68": 1486.605,
+    "l1_boundary batch_before_dep 1024B x128": 2722.162,
+    "l2_spill serial_chain 2048B x0": 0.0,
+    "l2_spill serial_chain 2048B x8": 841.626,
+    "l2_spill serial_chain 2048B x32": 3487.25,
+    "l2_spill serial_chain 2048B x68": 7231.25,
+    "l2_spill serial_chain 2048B x128": 13471.25,
+    "l2_spill batch_before_dep 2048B x0": 0.0,
+    "l2_spill batch_before_dep 2048B x8": 265.712,
+    "l2_spill batch_before_dep 2048B x32": 972.666,
+    "l2_spill batch_before_dep 2048B x68": 2041.67,
+    "l2_spill batch_before_dep 2048B x128": 3844.481,
+    "l2_spill serial_chain 4096B x0": 0.0,
+    "l2_spill serial_chain 4096B x8": 985.558,
+    "l2_spill serial_chain 4096B x32": 4576.766,
+    "l2_spill serial_chain 4096B x68": 8279.766,
+    "l2_spill serial_chain 4096B x128": 16744.765,
+    "l2_spill batch_before_dep 4096B x0": 0.0,
+    "l2_spill batch_before_dep 4096B x8": 320.441,
+    "l2_spill batch_before_dep 4096B x32": 1260.002,
+    "l2_spill batch_before_dep 4096B x68": 2584.387,
+    "l2_spill batch_before_dep 4096B x128": 4558.403
+   },
+   "leave_one_out": {
+    "l1_hit": [
+     {
+      "point": "128B x32",
+      "measured": 288.877,
+      "predicted": 290.0756,
+      "error": 0.004149170754334852
+     },
+     {
+      "point": "128B x68",
+      "measured": 583.181,
+      "predicted": 581.181625,
+      "error": -0.003428395300944298
+     },
+     {
+      "point": "256B x32",
+      "measured": 293.144,
+      "predicted": 292.7234,
+      "error": -0.00143478972791522
+     },
+     {
+      "point": "256B x68",
+      "measured": 584.129,
+      "predicted": 585.7673749999999,
+      "error": 0.0028048170866363797
+     },
+     {
+      "point": "512B x32",
+      "measured": 256.877,
+      "predicted": 256.5292,
+      "error": -0.0013539553949944994
+     },
+     {
+      "point": "512B x68",
+      "measured": 516.073,
+      "predicted": 516.6848749999999,
+      "error": 0.0011856365281655012
+     }
+    ],
+    "l2_spill": [
+     {
+      "point": "2048B x32",
+      "measured": 972.666,
+      "predicted": 976.0952,
+      "error": 0.0035255678722192485
+     },
+     {
+      "point": "2048B x68",
+      "measured": 2041.67,
+      "predicted": 2049.596625,
+      "error": 0.003882422232780014
+     },
+     {
+      "point": "4096B x32",
+      "measured": 1260.002,
+      "predicted": 1226.0194000000001,
+      "error": -0.026970274650357506
+     },
+     {
+      "point": "4096B x68",
+      "measured": 2584.387,
+      "predicted": 2496.902375,
+      "error": -0.033851209203575205
+     }
+    ]
+   },
+   "boundary_lookup": [
+    {
+     "point": "1024B x8",
+     "measured": 216.405,
+     "predicted": 224.44098199999996,
+     "error": 0.03713399413137397
+    },
+    {
+     "point": "1024B x32",
+     "measured": 701.472,
+     "predicted": 810.5397915000001,
+     "error": 0.15548416971739454
+    },
+    {
+     "point": "1024B x68",
+     "measured": 1486.605,
+     "predicted": 1696.1222795,
+     "error": 0.14093675152444662
+    },
+    {
+     "point": "1024B x128",
+     "measured": 2722.162,
+     "predicted": 3188.8126505,
+     "error": 0.17142648031233998
+    }
+   ],
+   "boundary_whole_core": [
+    {
+     "point": "1024B x8",
+     "measured": 216.405,
+     "predicted": 265.67555760000005,
+     "error": 0.22767753794967782
+    },
+    {
+     "point": "1024B x32",
+     "measured": 701.472,
+     "predicted": 972.5228422,
+     "error": 0.38640293867752384
+    },
+    {
+     "point": "1024B x68",
+     "measured": 1486.605,
+     "predicted": 2041.3648806000003,
+     "error": 0.3731723494808643
+    },
+    {
+     "point": "1024B x128",
+     "measured": 2722.162,
+     "predicted": 3843.9020434000004,
+     "error": 0.41207688719481084
+    }
+   ]
+  }
+ }
+}
