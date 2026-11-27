@@ -4765,6 +4765,7 @@ static int run_spill_latency(int device, int samples, int warmup, LaunchSchedule
                       "\"resident_threads_per_sm\": %d, \"frame_bytes_per_thread\": %d, \"reload_count\": %d",
                       first ? "" : ",", regime, dep_mode, resident_threads_per_sm, fb, rc);
           first = false;
+          schedule->launch_target_ns = rc > 0 ? 2.0e6 : LaunchSchedule::pilot_min_ns;
           auto timed = schedule->time_point(steps, 1, 1 << 24, warmup, samples, ev_start, ev_stop, [] {},
                                             [&](int length) { steps = length; launch_once(); });
           std::printf(", \"iter_time_ns_samples\": [");
@@ -4802,6 +4803,7 @@ static int run_spill_latency(int device, int samples, int warmup, LaunchSchedule
     }
   }
   std::printf("\n  ],\n  \"launch_cost_by_frame\": [");
+  if (schedule) schedule->launch_target_ns = LaunchSchedule::pilot_min_ns;
 
   // A launch with no steps still initializes the frame. Its time is the fixed cost every
   // point above carries once per launch, so collect_profile.py can take it out per step.

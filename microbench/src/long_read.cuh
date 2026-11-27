@@ -11,6 +11,9 @@ struct LaunchSchedule {
   // raise it for points whose window varies between processes by a known factor (GB10's
   // L2 bistable band), so the frozen length still clears the capture floor in either state.
   double observed_target_ns = pilot_min_ns;
+  // What the pilot sizes a launch to; a mode may raise it per point (spill-latency's reload
+  // points, v0.3-spill-allocation-redo-registration.md).
+  double launch_target_ns = pilot_min_ns;
   // A mode may repeat its measured unit: with group k above 1, a capture sample is the median
   // of k consecutive launches (prepare and launch each time) and every launch is printed as
   // `launch_ns_each`; the pilot still sizes and prints single launches.
@@ -121,7 +124,7 @@ struct LaunchSchedule {
     }
     std::vector<double> durations, observed;
     if (pilot) {
-      const double target = windowed ? std::max(pilot_min_ns, observed_target_ns) : pilot_min_ns;
+      const double target = windowed ? std::max(pilot_min_ns, observed_target_ns) : launch_target_ns;
       std::printf(", \"sizing_trials\": [");
       for (int attempt = 0; ; ++attempt) {
         observed.clear();

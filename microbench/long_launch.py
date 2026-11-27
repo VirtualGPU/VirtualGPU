@@ -243,6 +243,14 @@ def check_samples(mode, point, count):
         raise ValueError(f"{mode}: CUDA event samples must be finite and positive")
 
 
+def pilot_target(mode, point):
+    """The fastest pilot launch a point must reach: spill-latency's reload points are sized to
+    twice the capture floor (v0.3-spill-allocation-redo-registration.md)."""
+    if mode == "spill-latency" and point.get("reload_count", 0) > 0:
+        return 2 * CAPTURE_MIN_NS
+    return PILOT_MIN_NS
+
+
 def freeze(mode, pilot):
     rows = list(points(pilot))
     if not rows:
@@ -253,7 +261,7 @@ def freeze(mode, pilot):
         check_diagnostics(mode, point)
         # A probe timed inside the kernel is sized by the shorter of its launch and window.
         fastest = min(point["launch_ns_samples"] + point.get("window_ns_samples", []))
-        if fastest < PILOT_MIN_NS:
+        if fastest < pilot_target(mode, point):
             raise ValueError(
                 f"{mode} {identity(mode, path, point)}: pilot reached only {fastest:.0f} ns"
             )

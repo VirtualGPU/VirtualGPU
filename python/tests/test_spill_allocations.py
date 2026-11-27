@@ -40,11 +40,36 @@ def capture_point(rc, launches, steps=200, mode="serial_chain", frame=4096):
 def record_for(points):
     pilot = {
         "samples": 3,
-        "reload_latency_by_count": [{**p, "launch_ns_samples": [1.3e6] * 3} for p in points],
+        "reload_latency_by_count": [
+            {**p, "launch_ns_samples": [2.1e6 if p["reload_count"] else 1.3e6] * 3} for p in points
+        ],
     }
     for p in pilot["reload_latency_by_count"]:
         p.pop("allocation_launch_ns", None)
     return long_launch.freeze("spill-latency", pilot)[1]
+
+
+def test_pilot_sizes_reload_points_to_twice_the_floor():
+    # v0.3-spill-allocation-redo-registration.md: every reload point at 2.0 ms, nothing else.
+    def pilot(rc_ns, zero_ns, cost_ns):
+        cost = {"dependency_mode": "serial_chain", "frame_bytes_per_thread": 1024, "steps": 256}
+        return {
+            "samples": 3,
+            "reload_latency_by_count": [
+                {**capture_point(0, None), "launch_ns_samples": [zero_ns] * 3},
+                {**capture_point(128, None, frame=1024), "launch_ns_samples": [rc_ns] * 3},
+            ],
+            "launch_cost_by_frame": [{**cost, "launch_ns_samples": [cost_ns] * 3}],
+        }
+
+    long_launch.freeze("spill-latency", pilot(2.0e6, 1.25e6, 1.25e6))
+    with pytest.raises(ValueError, match="reload_count': 128.*pilot reached only 1990000"):
+        long_launch.freeze("spill-latency", pilot(1.99e6, 1.3e6, 1.3e6))
+    with pytest.raises(ValueError, match="pilot reached only"):
+        long_launch.freeze("spill-latency", pilot(2.0e6, 1.2e6, 1.3e6))
+    with pytest.raises(ValueError, match="pilot reached only"):
+        long_launch.freeze("spill-latency", pilot(2.0e6, 1.3e6, 1.2e6))
+    assert long_launch.pilot_target("l2", {"reload_count": 8}) == long_launch.PILOT_MIN_NS
 
 
 def test_verify_checks_every_launch_of_every_allocation():
