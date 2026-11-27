@@ -337,7 +337,7 @@ def pilot(binary, run_dir, modes):
         raw = json.loads(out["stdout"])
         write_new(run_dir / f"pilot-{mode}.json", raw)
         schedule, record = long_launch.freeze(mode, raw)
-        (run_dir / f"{mode}.schedule").write_text(schedule)
+        (run_dir / f"{mode}.schedule").write_text(schedule, newline="\n")
         write_new(run_dir / f"{mode}.freeze.json", record)
         entries[mode] = {
             "schedule": f"{mode}.schedule",

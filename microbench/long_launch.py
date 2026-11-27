@@ -231,7 +231,7 @@ def main():
             if path.exists():
                 raise FileExistsError(path)
         schedule, record = freeze(args.mode, json.loads(args.pilot.read_text()))
-        args.schedule.write_text(schedule)
+        args.schedule.write_text(schedule, newline="\n")
         args.record.write_text(json.dumps(record, indent=1) + "\n")
     elif args.action == "check-schedule":
         check_schedule(json.loads(args.record.read_text()), args.schedule.read_bytes())

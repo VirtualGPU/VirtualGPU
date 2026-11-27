@@ -68,7 +68,7 @@ class Fixture:
         schedule, record = long_launch.freeze("mma-chain", chain_raw([[1.3e6] * 3] * 3))
         modes = {}
         for mode in ("a", "b"):
-            (self.dir / f"{mode}.schedule").write_text(schedule)
+            (self.dir / f"{mode}.schedule").write_text(schedule, newline="\n")
             (self.dir / f"{mode}.freeze.json").write_text(json.dumps({**record, "mode": mode}))
             modes[mode] = {"schedule": f"{mode}.schedule", "record": f"{mode}.freeze.json"}
         self.manifest = {
@@ -164,7 +164,7 @@ class LongCaptureTests(unittest.TestCase):
     def test_schedule_mismatch_stops_before_running(self):
         with tempfile.TemporaryDirectory() as tmp:
             fx = Fixture(tmp, {})
-            (fx.dir / "a.schedule").write_text("1\n2\n3\n")
+            (fx.dir / "a.schedule").write_text("1\n2\n3\n", newline="\n")
             with self.assertRaisesRegex(ValueError, "differs from the freeze"):
                 capture(fx)
             self.assertEqual(fx.calls, [])
