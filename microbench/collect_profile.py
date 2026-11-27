@@ -231,18 +231,27 @@ def peak_rate_samples(points: list[dict[str, Any]]) -> list[float]:
 
 def non_mma_issue_rate(
     sfu_shfl_raw: dict[str, Any],
+    fp32_fma_tflops_samples: list[float],
+    sm_count: int,
     sm_clock_ghz: float,
     clock_range: list[float] | None,
     throttle_events: int,
 ) -> dict[str, Any]:
-    """Peak of the FFMA and LOP3 curve, or 4 per clock when the binary predates it."""
+    """Highest non-MMA rate measured on the card, a lower bound on the issue ceiling.
+
+    The larger of the FFMA and LOP3 mix peak and the pure FFMA rate (64 FLOP per warp
+    instruction). Falls back to 4 per clock when the binary predates the mix curve.
+    """
     points = sfu_shfl_raw.get("alu_issue_rate_per_sm_gips")
     if not points:
         return make_estimated(4.0 * sm_clock_ghz, "Ginst/s", "m2_estimated", None)
+    mix = peak_rate_samples(points)
+    ffma = [float(x) * 1e3 / (sm_count * 64.0) for x in fp32_fma_tflops_samples]
+    use_ffma = bool(ffma) and statistics.median(ffma) > statistics.median(mix)
     return make_measured(
-        peak_rate_samples(points),
+        ffma if use_ffma else mix,
         unit="Ginst/s",
-        method="cuda_ptx_ffma_lop3_mix",
+        method="cuda_fp32_fma_unrolled" if use_ffma else "cuda_ptx_ffma_lop3_mix",
         perturb_group=None,
         clock_range=clock_range,
         locked=False,
@@ -1566,7 +1575,12 @@ def build_profile(
             "compute": {
                 "mma_tflops_per_sm_by_warps": mma_curves,
                 "non_mma_issue_rate_per_sm_gips": non_mma_issue_rate(
-                    sfu_shfl_raw, sm_clock_ghz, sm_range, throttle_events
+                    sfu_shfl_raw,
+                    mma_raw["fp32_fma_tflops_samples"],
+                    sm_count,
+                    sm_clock_ghz,
+                    sm_range,
+                    throttle_events,
                 ),
                 "fp32_fma_tflops": fp32_fma_mv,
                 "sfu_tflops": sfu_tflops_mv,
