@@ -1,0 +1,7 @@
+{
+  "status": "capture_approved",
+  "device": "rtx4070",
+  "timestamp_utc": "2026-11-27T22:26:57.460390+00:00",
+  "release_sha256": "60ba5804b59f6b8825423d43fbde6414756078aa396a8f070c250ac062a85c32",
+  "desktop_window_confirmed": true
+}
