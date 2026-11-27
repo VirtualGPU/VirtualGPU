@@ -39,7 +39,7 @@
 - `spill-latency` times the fixed cost of each launch, and `collect_profile.py` takes it out of `extra_ns_vs_zero` and `ns_per_reload`, which ran up to 11% high on large frames by the GB10 estimate
 - A profile without the L1 miss curves gets a hard step at `l1_to_l2_spill_threshold_bytes_per_sm` instead of the linear overflow (`ascend910b3` and profiles older than these curves)
 - Causal attention spill traffic and reloads are split between its two loops (`spill_loop_count` in the Kernel IR) instead of charged in full on every iteration
-- Spill frames take L1 space only for the CTAs an SM actually holds, so grids under one wave are no longer charged for full residency
+- Spill frames take L1 space only for the CTAs each SM holds when a phase starts, so grids under one wave and tail waves are no longer charged for full residency
 - The spill counter capture runs on any NVIDIA GPU and builds for its compute capability, not only the RTX 4070
 
 ### Fixed
