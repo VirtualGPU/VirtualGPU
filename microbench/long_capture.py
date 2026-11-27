@@ -291,6 +291,8 @@ def merge(raws):
                 values = [n[key] for n in nodes]
                 if key.endswith("_samples") and isinstance(value, list):
                     out[key] = [statistics.median(v) for v in values]
+                elif key.endswith("_each") or key == "slow_launch_share":
+                    out[key] = values  # per round, in round order
                 elif isinstance(value, (dict, list)):
                     out[key] = walk(values)
                 elif key.startswith("sm_mhz_"):
@@ -302,7 +304,9 @@ def merge(raws):
                 else:
                     raise ValueError(f"{key} differs between rounds")
             if "launch_ns_samples" in first:
-                launches = [n["launch_ns_samples"] for n in nodes]
+                # A grouped point's shortest launch is its shortest real launch, not group median.
+                key = "launch_ns_each" if "launch_ns_each" in first else "launch_ns_samples"
+                launches = [n[key] for n in nodes]
                 out["launch"] = {
                     "length": first["steps"],
                     "min_ns": min(min(v) for v in launches),

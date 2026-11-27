@@ -626,3 +626,28 @@ class LongLaunchTests(unittest.TestCase):
         self.assertEqual(
             record["points"][1]["point"], {"field": "points", "working_set_bytes": 2**25}
         )
+
+    def test_grouped_l2_merge_points_check_every_launch(self):
+        def merge_point(each):
+            return {
+                "active_ctas": 96,
+                "sharing": 8,
+                "bytes_per_cta": 16384,
+                "stagger_stages": 16,
+                "steps": 1464,
+                "launch_ns_samples": [1.3e6] * 3,
+                **({"launch_ns_each": each} if each is not None else {}),
+            }
+
+        pilot = {"samples": 3, "l2_merge_by_sharing": [merge_point(None)]}
+        _, record = long_launch.freeze("l2-merge", pilot)
+        good = {"samples": 3, "l2_merge_by_sharing": [merge_point([1.3e6] * 27)]}
+        self.assertEqual(long_launch.verify(record, good)["points"], 1)
+        for each, message in (
+            ([1.3e6] * 26, "3 x 9 launches"),
+            ([1.3e6] * 26 + [0.9e6], "a launch took 900000"),
+            (None, "3 x 9 launches"),
+        ):
+            bad = {"samples": 3, "l2_merge_by_sharing": [merge_point(each)]}
+            with self.assertRaisesRegex(ValueError, message):
+                long_launch.verify(record, bad)

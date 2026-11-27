@@ -224,6 +224,27 @@ class LongCaptureTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "variant differs"):
             lc.merge(rounds)
 
+    def test_merge_keeps_grouped_launches_per_round_and_their_floor(self):
+        def point(n):
+            each = [1.3e6] * 134 + [1.01e6 + n]
+            return {
+                "active_ctas": 96,
+                "sharing": 8,
+                "bytes_per_cta": 16384,
+                "stagger_stages": 16,
+                "steps": 1464,
+                "launch_ns_samples": [1.3e6] * 15,
+                "launch_ns_each": each,
+                "turnaround_ns_each": [850.0] * 135,
+                "slow_launch_share": 0.1 + n / 100,
+            }
+
+        merged = lc.merge([{"samples": 15, "l2_merge_by_sharing": [point(n)]} for n in range(5)])
+        p = merged["l2_merge_by_sharing"][0]
+        self.assertEqual(p["launch"]["min_ns"], 1.01e6)
+        self.assertEqual(len(p["launch_ns_each"]), 5)
+        self.assertEqual(p["slow_launch_share"], [0.1 + n / 100 for n in range(5)])
+
     def test_merged_points_name_their_exceptions(self):
         curve = {
             "samples": 5,

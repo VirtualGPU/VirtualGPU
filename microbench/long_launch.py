@@ -282,6 +282,24 @@ def check_schedule(record, schedule_bytes):
         raise ValueError(f"{record['mode']}: schedule file differs from the freeze")
 
 
+# Modes whose capture sample is the median of a group of launches, with every launch kept in
+# `launch_ns_each` (docs/results/analysis/v0.3-l2-merge-groups-registration.md).
+GROUPS = {"l2-merge": 9}
+
+
+def check_group(mode, point, samples):
+    """Every launch of a grouped point is present and at the capture floor; returns the shortest."""
+    group = GROUPS.get(mode)
+    each = point.get("launch_ns_each")
+    if group is None:
+        if each is not None:
+            raise ValueError(f"{mode}: launch_ns_each without a registered group")
+        return None
+    if not isinstance(each, list) or len(each) != samples * group:
+        raise ValueError(f"{mode}: expected {samples} x {group} launches in launch_ns_each")
+    return min(each)
+
+
 def verify(record, capture):
     """After a capture: same points in order, frozen lengths, complete samples, launches of 1 ms."""
     mode = record["mode"]
@@ -301,6 +319,9 @@ def verify(record, capture):
         if work(point) != {k: frozen[k] for k in WORK_FIELDS if k in frozen}:
             raise ValueError(f"{mode} {frozen['point']}: work differs from the freeze")
         fastest = min(point["launch_ns_samples"])
+        each = check_group(mode, point, capture["samples"])
+        if each is not None:
+            fastest = min(fastest, each)
         if fastest < record["capture_min_ns"]:
             raise ValueError(f"{mode} {frozen['point']}: a launch took {fastest:.0f} ns")
         # A probe timed inside the kernel also needs its own window at the floor.
