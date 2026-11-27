@@ -145,17 +145,30 @@ def test_check_profiles_skips_carried_launches_and_requires_their_records():
     assert any("provisional outside carried_over" in e for e in check.carried_errors(stray))
 
 
+# The spill decision's scorer is frozen by SHA-256 in its registration (ad1d505).
+SPILL_DECISION_SHA256 = "ff9427ece9e8ce91574bb7f40b09de138e0fb93605ffe7dc8bcf5b432e551b3b"
+
+
+def test_spill_decision_scorer_is_the_registered_file():
+    registration = (ROOT / "docs/results/analysis/v0.3-spill-decision-registration.md").read_text()
+    assert SPILL_DECISION_SHA256 in registration
+    digest = hashlib.sha256((ROOT / "scripts/spill_decision.py").read_bytes()).hexdigest()
+    assert digest == SPILL_DECISION_SHA256
+
+
 def test_spill_decision_does_not_run_on_carried_spill_fields(tmp_path):
+    # The carried mode is chosen because its rule 3 did not pass, and collect_profile records
+    # that result as judged, so the scorer's existing rule 3 check returns not run.
     sd = load("spill_decision")
     profile, _ = carried_profile()
     raw = tmp_path / "merged-spill-latency.json"
     raw.write_text(json.dumps({"launch_cost_by_frame": [{}]}))
-    assert sd.eligible(profile, raw) == (
-        "spill fields carried over from another profile, marked provisional"
-    )
-    # Even a rule 3 result rewritten to passed does not make carried values eligible.
+    assert sd.eligible(profile, raw) == "spill-latency did not pass the capture rules"
+    judged = state({"spill-latency": "failed"})
+    assert judged["rule_three"][cp.carried_mode(judged)]["status"] != "passed"
+    # A carried profile whose rule 3 result reads passed fails check_profiles.
     profile["provenance"]["capture_protocol"]["rule_three"]["spill-latency"]["status"] = "passed"
-    assert "carried over" in sd.eligible(profile, raw)
+    assert load("check_profiles").carried_errors(profile)
 
 
 def test_recheck_marks_a_mechanism_on_carried_values_as_not_rechecked():

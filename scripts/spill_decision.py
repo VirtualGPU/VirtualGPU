@@ -201,16 +201,6 @@ def eligible(profile, raw_path):
     protocol = profile["provenance"].get("capture_protocol")
     if protocol is None:
         return "not a long-launch profile"
-    carried = [
-        v
-        for point in profile.get("measured", {})
-        .get("memory", {})
-        .get("spill_reload_latency_by_count", [])
-        for v in point.values()
-        if isinstance(v, dict) and "provisional" in v
-    ]
-    if carried:
-        return "spill fields carried over from another profile, marked provisional"
     if protocol.get("rule_three", {}).get("spill-latency", {}).get("status") != "passed":
         return "spill-latency did not pass the capture rules"
     if raw_path is None:
