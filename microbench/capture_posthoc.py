@@ -69,6 +69,7 @@ MODES = (
     "l2-paths",
     "mma-ilp",
     "l2-buffer-diag",
+    "l2-merge-timing",
 )
 POWERSHELL = Path("/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe")
 QUIET_PERCENT = 5

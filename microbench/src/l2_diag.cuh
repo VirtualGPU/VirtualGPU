@@ -1,5 +1,7 @@
 #pragma once
 
+#include <chrono>
+
 // Diagnostic, not a profile mode: GB10's L2 capacity sweep near 1.5 times L2 per buffer and
 // fill (docs/results/analysis/v0.3-gb10-first-capture-l2-diagnosis.md, section 3). Six
 // separate buffers per process, each read at the sweep's sizes with its kernel and the
@@ -140,5 +142,76 @@ static int run_l2_buffer_diag(int device, int samples, bool clock_probe) {
   for (auto b : bufs) CUDA_CHECK(cudaFree(b));
   CUDA_CHECK(cudaFree(d_flush));
   CUDA_CHECK(cudaFree(d_sink));
+  return 0;
+}
+
+// Diagnostic, not a profile mode: wall-clock timing of GB10's DRAM slow episodes on one
+// l2-merge point (96 CTAs, sharing 8, 16 KiB, stagger 16) at its frozen length and half of it,
+// each sample stamped with the host monotonic clock just before its flush (section 5 of the
+// diagnosis).
+static int run_l2_merge_timing(int device, int samples, bool clock_probe) {
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  const int sm_count = prop.multiProcessorCount;
+  const int n = 96, r = 8, k = 16384, stagger = 16;
+  const size_t flush_bytes = 256ULL << 20, dram_bytes = 1024ULL << 20;
+  const size_t dram_mask = dram_bytes / sizeof(uint4) - 1, flush_vec4 = flush_bytes / sizeof(uint4);
+  uint4 *d_dram = nullptr, *d_flush = nullptr, *d_sink = nullptr;
+  double* d_turn = nullptr;
+  CUDA_CHECK(cudaMalloc(&d_dram, dram_bytes));
+  CUDA_CHECK(cudaMalloc(&d_flush, flush_bytes));
+  CUDA_CHECK(cudaMalloc(&d_sink, 1024 * sizeof(uint4)));
+  CUDA_CHECK(cudaMalloc(&d_turn, 256 * sizeof(double)));
+  CUDA_CHECK(cudaMemset(d_dram, 21, dram_bytes));
+  CUDA_CHECK(cudaMemset(d_flush, 22, flush_bytes));
+  cudaEvent_t e0, e1;
+  CUDA_CHECK(cudaEventCreate(&e0));
+  CUDA_CHECK(cudaEventCreate(&e1));
+  const double cycles_per_ns = measure_cycles_per_ns(e0, e1);
+  const uint64_t stag_cyc = static_cast<uint64_t>(stagger * 300.0 * cycles_per_ns);
+  if (n != 2 * sm_count) std::fprintf(stderr, "warning: 96 CTAs is not 2 per SM here\n");
+  auto mhz = [&]() { return clock_probe ? 1e3 * measure_cycles_per_ns(e0, e1) : 0.0; };
+  const auto origin = std::chrono::steady_clock::now();
+
+  std::printf("{\n  \"samples\": %d,\n  \"cycles_per_ns\": %.4f,\n  \"active_ctas\": %d, \"sharing\": %d, "
+              "\"bytes_per_cta\": %d, \"stagger_stages\": %d,\n  \"blocks\": [",
+              samples, cycles_per_ns, n, r, k, stagger);
+  const int lengths[4] = {1464, 732, 1464, 732};
+  for (int blk = 0; blk < 4; ++blk) {
+    const int steps = lengths[blk];
+    auto sample = [&]() {
+      l2_read_cg_kernel<<<sm_count * 4, 512>>>(d_flush, d_sink, flush_vec4, 1);
+      CUDA_CHECK(cudaEventRecord(e0));
+      l2_merge_cp_async_kernel<4><<<n, 256, k>>>(d_dram, d_sink, d_turn, dram_mask, steps, r, stag_cyc);
+      CUDA_CHECK(cudaEventRecord(e1));
+      CUDA_CHECK(cudaEventSynchronize(e1));
+      float ms = 0.0f;
+      CUDA_CHECK(cudaEventElapsedTime(&ms, e0, e1));
+      return static_cast<double>(ms) * 1e6;
+    };
+    for (int w = 0; w < 3; ++w) sample();
+    const double before = mhz();
+    std::vector<double> ns, host_ms;
+    for (int s = 0; s < samples; ++s) {
+      host_ms.push_back(
+          std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - origin).count());
+      ns.push_back(sample());
+    }
+    const double after = mhz();
+    std::printf("%s\n    {\"block\": %d, \"steps\": %d, \"sm_mhz_before\": %.1f, \"sm_mhz_after\": %.1f, "
+                "\"launch_ns_samples\": [",
+                blk ? "," : "", blk + 1, steps, before, after);
+    for (int s = 0; s < samples; ++s) std::printf("%s%.1f", s ? ", " : "", ns[s]);
+    std::printf("], \"host_start_ms\": [");
+    for (int s = 0; s < samples; ++s) std::printf("%s%.4f", s ? ", " : "", host_ms[s]);
+    std::printf("]}");
+  }
+  std::printf("\n  ]\n}\n");
+  CUDA_CHECK(cudaEventDestroy(e0));
+  CUDA_CHECK(cudaEventDestroy(e1));
+  CUDA_CHECK(cudaFree(d_dram));
+  CUDA_CHECK(cudaFree(d_flush));
+  CUDA_CHECK(cudaFree(d_sink));
+  CUDA_CHECK(cudaFree(d_turn));
   return 0;
 }

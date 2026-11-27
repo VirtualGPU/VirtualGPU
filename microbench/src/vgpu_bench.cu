@@ -585,6 +585,10 @@ int main(int argc, char** argv) {
     CUDA_CHECK(cudaSetDevice(device));
     return run_l2_buffer_diag(device, samples, clock_probe);
   }
+  if (mode == "l2-merge-timing") {  // likewise a diagnostic
+    CUDA_CHECK(cudaSetDevice(device));
+    return run_l2_merge_timing(device, samples, clock_probe);
+  }
   if (clock_probe && !schedule) {
     std::fprintf(stderr, "--clock-probe needs a launch schedule\n");
     return 2;
