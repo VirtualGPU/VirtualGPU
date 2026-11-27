@@ -31,6 +31,55 @@ static int run_l2_buffer_diag(int device, int samples, bool clock_probe) {
   const int grid = sm_count * 4;
   const int threads = 512;
 
+  // Control arm: a single-buffer replica of the capture's sweep (one 60 MiB buffer, its
+  // 12 sizes in order, frozen passes, two warm-ups each), run first and then freed.
+  const std::vector<std::pair<size_t, int>> sweep = {
+      {2ULL << 20, 1299}, {6ULL << 20, 388}, {12ULL << 20, 201}, {15ULL << 20, 160},
+      {18ULL << 20, 136}, {20ULL << 20, 125}, {22ULL << 20, 108}, {25ULL << 20, 98},
+      {28ULL << 20, 80},  {36ULL << 20, 43},  {48ULL << 20, 10},  {60ULL << 20, 8}};
+  std::vector<std::string> control_rows;
+  {
+    uint4* ctl = nullptr;
+    uint4* ctl_sink = nullptr;
+    CUDA_CHECK(cudaMalloc(&ctl, 60ULL << 20));
+    CUDA_CHECK(cudaMalloc(&ctl_sink, 1024 * sizeof(uint4)));
+    CUDA_CHECK(cudaMemset(ctl, 3, 60ULL << 20));
+    cudaEvent_t c0, c1;
+    CUDA_CHECK(cudaEventCreate(&c0));
+    CUDA_CHECK(cudaEventCreate(&c1));
+    for (const auto& [ws, passes] : sweep) {
+      const size_t n_vec4 = ws / sizeof(uint4);
+      for (int w = 0; w < 2; ++w) l2_read_cg_kernel<<<grid, threads>>>(ctl, ctl_sink, n_vec4, 2);
+      CUDA_CHECK(cudaDeviceSynchronize());
+      const double before = clock_probe ? 1e3 * measure_cycles_per_ns(c0, c1) : 0.0;
+      std::string ns_list, bw_list;
+      for (int s = 0; s < samples; ++s) {
+        CUDA_CHECK(cudaEventRecord(c0));
+        l2_read_cg_kernel<<<grid, threads>>>(ctl, ctl_sink, n_vec4, passes);
+        CUDA_CHECK(cudaEventRecord(c1));
+        CUDA_CHECK(cudaEventSynchronize(c1));
+        float ms = 0.0f;
+        CUDA_CHECK(cudaEventElapsedTime(&ms, c0, c1));
+        char x[64];
+        std::snprintf(x, sizeof(x), "%s%.1f", s ? ", " : "", ms * 1e6);
+        ns_list += x;
+        std::snprintf(x, sizeof(x), "%s%.3f", s ? ", " : "", static_cast<double>(ws) * passes / (ms * 1e6));
+        bw_list += x;
+      }
+      const double after = clock_probe ? 1e3 * measure_cycles_per_ns(c0, c1) : 0.0;
+      char head[200];
+      std::snprintf(head, sizeof(head),
+                    "\n    {\"working_set_bytes\": %zu, \"passes\": %d, \"sm_mhz_before\": %.1f, "
+                    "\"sm_mhz_after\": %.1f, \"launch_ns_samples\": [",
+                    ws, passes, before, after);
+      control_rows.push_back(std::string(head) + ns_list + "], \"gbps_samples\": [" + bw_list + "]}");
+    }
+    CUDA_CHECK(cudaEventDestroy(c0));
+    CUDA_CHECK(cudaEventDestroy(c1));
+    CUDA_CHECK(cudaFree(ctl));
+    CUDA_CHECK(cudaFree(ctl_sink));
+  }
+
   std::vector<uint4*> bufs(kBuffers, nullptr);
   for (auto& b : bufs) {
     CUDA_CHECK(cudaMalloc(&b, kBufferBytes));
@@ -62,7 +111,9 @@ static int run_l2_buffer_diag(int device, int samples, bool clock_probe) {
   std::printf("{\n  \"samples\": %d,\n  \"buffers\": %d,\n  \"buffer_bytes\": %zu,\n  \"l2_bytes\": %d,\n",
               samples, kBuffers, kBufferBytes, prop.l2CacheSize);
   bool first_steady = true;
-  std::printf("  \"steady\": [");
+  std::printf("  \"control\": [");
+  for (size_t i = 0; i < control_rows.size(); ++i) std::printf("%s%s", i ? "," : "", control_rows[i].c_str());
+  std::printf("\n  ],\n  \"steady\": [");
   auto steady_visit = [&](const char* fill, int visit, int b) {
     for (const auto& [ws, passes] : sizes) {
       const size_t n_vec4 = ws / sizeof(uint4);
