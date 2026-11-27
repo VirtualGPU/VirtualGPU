@@ -4556,11 +4556,12 @@ static int run_spill_counters(int device, bool probe_only) {
   return 0;
 }
 
-// Diagnostic (GB10 spill study): spill points at their frozen steps, read in several local
-// memory allocations of one process. Each line of `path` is `dependency_mode
-// frame_bytes_per_thread reload_count steps`. Allocations in order: the first launch's,
-// two after raising the stack limit (which makes the driver allocate local memory anew),
-// then a new context (cudaDeviceReset) and two more raises. Each allocation is read twice.
+// Diagnostic (GB10 spill study): spill points at their frozen steps, read in blocks within one
+// process. Each line of `path` is `dependency_mode frame_bytes_per_thread reload_count steps`.
+// Blocks in order, each reading every point twice: a block in a new local memory
+// allocation (the first launch's; after raising the stack limit, which makes the driver
+// allocate local memory anew; or in a new context after cudaDeviceReset), then a block in
+// the same allocation with nothing changed, one block's time later.
 static int run_spill_alloc_diag(int device, int samples, int warmup, const std::string& path) {
   struct Point {
     std::string mode;
@@ -4573,28 +4574,40 @@ static int run_spill_alloc_diag(int device, int samples, int warmup, const std::
     std::fprintf(stderr, "spill-alloc-diag: cannot read %s\n", path.c_str());
     return 2;
   }
-  const char* actions[] = {"first", "stack", "stack", "context", "stack", "stack"};
-  std::printf("{\n  \"samples\": %d,\n  \"allocations\": [", samples);
-  for (int a = 0; a < 6; ++a) {
-    const std::string action = actions[a];
-    if (action == "context") CUDA_CHECK(cudaDeviceReset());
+  const char* actions[] = {"first", "same", "stack", "same",  "stack", "same",
+                           "context", "same", "stack", "same", "stack", "same"};
+  int sm_count = 0;
+  uint32_t* d_sink = nullptr;
+  cudaEvent_t ev_start, ev_stop, cal_start, cal_stop;
+  auto open_context = [&]() {
     CUDA_CHECK(cudaSetDevice(device));
     cudaDeviceProp prop{};
     CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
-    const int sm_count = prop.multiProcessorCount;
+    sm_count = prop.multiProcessorCount;
+    CUDA_CHECK(cudaMalloc(&d_sink, static_cast<size_t>(sm_count) * 128 * sizeof(uint32_t)));
+    for (cudaEvent_t* e : {&ev_start, &ev_stop, &cal_start, &cal_stop}) CUDA_CHECK(cudaEventCreate(e));
+  };
+  open_context();
+  int allocation = -1;
+  std::printf("{\n  \"samples\": %d,\n  \"blocks\": [", samples);
+  for (int b = 0; b < 12; ++b) {
+    const std::string action = actions[b];
+    if (action == "context") {
+      for (cudaEvent_t e : {ev_start, ev_stop, cal_start, cal_stop}) CUDA_CHECK(cudaEventDestroy(e));
+      CUDA_CHECK(cudaFree(d_sink));
+      CUDA_CHECK(cudaDeviceReset());
+      open_context();
+    }
     size_t stack = 0;
     CUDA_CHECK(cudaDeviceGetLimit(&stack, cudaLimitStackSize));
     if (action == "stack") {
-      stack += 1024;
-      CUDA_CHECK(cudaDeviceSetLimit(cudaLimitStackSize, stack));
+      CUDA_CHECK(cudaDeviceSetLimit(cudaLimitStackSize, stack + 1024));
       CUDA_CHECK(cudaDeviceGetLimit(&stack, cudaLimitStackSize));
     }
-    uint32_t* d_sink = nullptr;
-    CUDA_CHECK(cudaMalloc(&d_sink, static_cast<size_t>(sm_count) * 128 * sizeof(uint32_t)));
-    cudaEvent_t ev_start, ev_stop, cal_start, cal_stop;
-    for (cudaEvent_t* e : {&ev_start, &ev_stop, &cal_start, &cal_stop}) CUDA_CHECK(cudaEventCreate(e));
-    std::printf("%s\n    {\"allocation\": %d, \"action\": \"%s\", \"stack_limit_bytes\": %zu, \"visits\": [",
-                a ? "," : "", a, action.c_str(), stack);
+    if (action != "same") ++allocation;
+    std::printf("%s\n    {\"block\": %d, \"allocation\": %d, \"action\": \"%s\", \"stack_limit_bytes\": %zu, "
+                "\"start_monotonic_ns\": %lld, \"visits\": [",
+                b ? "," : "", b, allocation, action.c_str(), stack, monotonic_ns());
     for (int v = 0; v < 2; ++v) {
       std::printf("%s\n      [", v ? "," : "");
       for (size_t pi = 0; pi < points.size(); ++pi) {
@@ -4628,10 +4641,10 @@ static int run_spill_alloc_diag(int device, int samples, int warmup, const std::
       std::printf("]");
     }
     std::printf("]}");
-    for (cudaEvent_t e : {ev_start, ev_stop, cal_start, cal_stop}) CUDA_CHECK(cudaEventDestroy(e));
-    CUDA_CHECK(cudaFree(d_sink));
   }
   std::printf("\n  ]\n}\n");
+  for (cudaEvent_t e : {ev_start, ev_stop, cal_start, cal_stop}) CUDA_CHECK(cudaEventDestroy(e));
+  CUDA_CHECK(cudaFree(d_sink));
   return 0;
 }
 

@@ -31,7 +31,7 @@ POINTS = [(m, 4096, rc) for m in MODES for rc in RELOADS] + [
     ("batch_before_dep", 512, 0),
     ("batch_before_dep", 512, 128),
 ]
-CONTEXTS = ((0, 1, 2), (3, 4, 5))
+CONTEXTS = ((0, 1, 2), (3, 4, 5))  # allocations in the first and the second context
 
 
 def points_file(freeze):
@@ -47,26 +47,31 @@ def points_file(freeze):
 
 
 def medians(result):
-    """{(allocation, visit, point): median launch ns}."""
+    """{(block, visit, point): median launch ns}."""
     out = {}
-    for alloc in result["allocations"]:
-        for v, visit in enumerate(alloc["visits"]):
+    for block in result["blocks"]:
+        for v, visit in enumerate(block["visits"]):
             for p in visit:
                 key = (p["dependency_mode"], p["frame_bytes_per_thread"], p["reload_count"])
-                out[(alloc["allocation"], v, key)] = statistics.median(p["launch_ns_samples"])
+                out[(block["block"], v, key)] = statistics.median(p["launch_ns_samples"])
     return out
 
 
-def levels(result, select):
-    """Per allocation and visit: the median over the selected points of each point's median
-    over that process's median of the point."""
+def block_levels(result, select):
+    """Per block: the median over the selected points of each point's median over that
+    process's median of the point, averaged over the block's two visits; and the two
+    visits' difference."""
     m = medians(result)
     keys = [k for k in POINTS if select(k)]
-    ref = {k: statistics.median(v for (a, vi, kk), v in m.items() if kk == k) for k in keys}
-    return {
-        (a, v): statistics.median(m[(a, v, k)] / ref[k] for k in keys)
-        for a in range(6)
+    ref = {k: statistics.median(v for (b, vi, kk), v in m.items() if kk == k) for k in keys}
+    visit = {
+        (b, v): statistics.median(m[(b, v, k)] / ref[k] for k in keys)
+        for b in range(len(result["blocks"]))
         for v in range(2)
+    }
+    return {
+        b: ((visit[(b, 0)] + visit[(b, 1)]) / 2, abs(visit[(b, 0)] - visit[(b, 1)]))
+        for b in range(len(result["blocks"]))
     }
 
 
@@ -79,18 +84,22 @@ def judge(record):
     procs = []
     for run in record["runs"]:
         res = run["result"]
-        reload_ = levels(res, lambda k: k[1] == 4096 and k[2] > 0)
-        zero = levels(res, lambda k: k[1] == 4096 and k[2] == 0)
-        level = [(reload_[(a, 0)] + reload_[(a, 1)]) / 2 for a in range(6)]
-        stable = [abs(reload_[(a, 0)] - reload_[(a, 1)]) <= 0.03 for a in range(6)]
-        zero_level = [(zero[(a, 0)] + zero[(a, 1)]) / 2 for a in range(6)]
+        blocks = res["blocks"]
+        first = {b["allocation"]: b["block"] for b in reversed(blocks) if b["action"] != "same"}
+        again = {b["allocation"]: b["block"] for b in blocks if b["action"] == "same"}
+        reload_ = block_levels(res, lambda k: k[1] == 4096 and k[2] > 0)
+        zero = block_levels(res, lambda k: k[1] == 4096 and k[2] == 0)
+        level = [reload_[first[a]][0] for a in range(6)]
+        zero_level = [zero[first[a]][0] for a in range(6)]
+        drift = [abs(reload_[again[a]][0] - reload_[first[a]][0]) for a in range(6)]
         ctx = [statistics.mean(level[a] for a in c) for c in CONTEXTS]
         procs.append(
             {
                 "host_check": run["host_check"]["status"],
                 "levels": [round(x, 4) for x in level],
-                "stable": stable,
                 "zero_levels": [round(x, 4) for x in zero_level],
+                "stable": [reload_[first[a]][1] <= 0.03 for a in range(6)],
+                "same_allocation_drift": [round(x, 4) for x in drift],
                 "span": round(span(level), 4),
                 "zero_span": round(span(zero_level), 4),
                 "context_spans": [round(span([level[a] for a in c]), 4) for c in CONTEXTS],
@@ -98,13 +107,15 @@ def judge(record):
             }
         )
     raw = [medians(r["result"]) for r in record["runs"]]
-    reload_points = [k for k in POINTS if k[1] == 4096 and k[2] > 0]
     between = []
-    for k in reload_points:
-        per_proc = [statistics.median(v for (a, vi, kk), v in m.items() if kk == k) for m in raw]
+    for k in [k for k in POINTS if k[1] == 4096 and k[2] > 0]:
+        per_proc = [statistics.median(v for (b, vi, kk), v in m.items() if kk == k) for m in raw]
         between.append(span(per_proc) / statistics.median(per_proc))
+    steady = sum(d <= 0.03 for p in procs for d in p["same_allocation_drift"]) >= 15
+    drifting = sum(sum(d > 0.03 for d in p["same_allocation_drift"]) >= 3 for p in procs) >= 2
     placement = (
-        sum(p["span"] >= 0.12 and p["zero_span"] <= 0.03 for p in procs) >= 2
+        steady
+        and sum(p["span"] >= 0.12 and p["zero_span"] <= 0.03 for p in procs) >= 2
         and sum(sum(p["stable"]) for p in procs) >= 15
     )
     context = sum(max(p["context_spans"]) <= 0.03 and p["context_gap"] >= 0.08 for p in procs) >= 2
@@ -116,6 +127,8 @@ def judge(record):
         verdict = "not reproduced"
     elif placement:
         verdict = "placement: the level moves with the local memory allocation"
+    elif drifting:
+        verdict = "drift: the level moves within one allocation over time"
     elif context:
         verdict = "context: the level is set per context"
     elif session:
@@ -124,6 +137,7 @@ def judge(record):
         verdict = "neither supported"
     return {
         "verdict": verdict,
+        "same_allocation_steady": steady,
         "processes": procs,
         "between_process_spread": [round(b, 4) for b in between],
     }
