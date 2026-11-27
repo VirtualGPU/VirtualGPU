@@ -32,7 +32,15 @@ EXCEPTIONS = {
             "per_l2": True,
             "fields": {
                 "l2_rescan_hit_rate_by_working_set": ("working_set_bytes", 0.75, 1.25),
-                "l2_capacity_sweep": ("working_set_bytes", 0.75, 1.25),
+            },
+        },
+        {
+            "name": "l2_near_capacity_unstable",
+            "rules": (3,),
+            "evidence": "docs/results/analysis/v0.3-gb10-l2-near-capacity-exception-registration.md",
+            "per_l2": True,
+            "fields": {
+                "l2_capacity_sweep": ("working_set_bytes", 0.75, 2.0),
             },
         },
     )

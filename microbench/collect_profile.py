@@ -376,27 +376,59 @@ def arch_unified_l1_bytes(major: int, minor: int, smem_per_sm: int) -> int:
     return smem_per_sm
 
 
-def estimate_l2_knee(sweep: list[dict[str, Any]], l2_spec_bytes: int) -> tuple[float, float]:
-    """Locate the effective L2 capacity where bandwidth first drops below 85% of the L2 plateau."""
+def l2_knee_crossing(sweep: list[dict[str, Any]]) -> int | None:
+    """Index of the first sweep point below 85% of the L2 plateau (median of the first two
+    points), with its predecessor above it; None if the sweep has no usable cliff."""
     if len(sweep) < 3:
-        return float(l2_spec_bytes) * 0.85, 0.20
+        return None
     bw_l2 = statistics.median(pt["median_gbps"] for pt in sweep[:2])
     bw_dram = statistics.median(pt["median_gbps"] for pt in sweep[-2:])
     if bw_l2 <= bw_dram * 1.1:
-        return float(l2_spec_bytes) * 0.85, 0.20
+        return None
     thresh = bw_l2 * 0.85
     for i in range(1, len(sweep)):
-        prev_ws, prev_bw = (
-            float(sweep[i - 1]["working_set_bytes"]),
-            float(sweep[i - 1]["median_gbps"]),
-        )
-        cur_ws, cur_bw = float(sweep[i]["working_set_bytes"]), float(sweep[i]["median_gbps"])
+        prev_bw, cur_bw = float(sweep[i - 1]["median_gbps"]), float(sweep[i]["median_gbps"])
         if cur_bw <= thresh <= prev_bw and prev_bw > cur_bw:
-            frac = (prev_bw - thresh) / (prev_bw - cur_bw)
-            knee = min(float(l2_spec_bytes), prev_ws + frac * (cur_ws - prev_ws))
-            step_rel = (cur_ws - prev_ws) / (2.0 * knee) if knee > 0 else 0.10
-            return knee, round(max(0.10, min(step_rel, 0.50)), 4)
-    return float(l2_spec_bytes) * 0.85, 0.20
+            return i
+    return None
+
+
+def estimate_l2_knee(sweep: list[dict[str, Any]], l2_spec_bytes: int) -> tuple[float, float]:
+    """Locate the effective L2 capacity where bandwidth first drops below 85% of the L2 plateau."""
+    i = l2_knee_crossing(sweep)
+    if i is None:
+        return float(l2_spec_bytes) * 0.85, 0.20
+    thresh = statistics.median(pt["median_gbps"] for pt in sweep[:2]) * 0.85
+    prev_ws, prev_bw = float(sweep[i - 1]["working_set_bytes"]), float(sweep[i - 1]["median_gbps"])
+    cur_ws, cur_bw = float(sweep[i]["working_set_bytes"]), float(sweep[i]["median_gbps"])
+    frac = (prev_bw - thresh) / (prev_bw - cur_bw)
+    knee = min(float(l2_spec_bytes), prev_ws + frac * (cur_ws - prev_ws))
+    step_rel = (cur_ws - prev_ws) / (2.0 * knee) if knee > 0 else 0.10
+    return knee, round(max(0.10, min(step_rel, 0.50)), 4)
+
+
+NEAR_CAPACITY = "l2_near_capacity_unstable"
+
+
+def near_capacity_knee(value: dict[str, Any], sweep: list[dict[str, Any]], l2_size: int) -> None:
+    """GB10 near-capacity exception (v0.3-gb10-l2-near-capacity-exception-registration.md):
+    when the merged sweep has points the exception covers, widen the knee's uncertainty to
+    cover each round's knee (from that round's medians) and flag a knee whose bracketing
+    points are covered."""
+    if not any(NEAR_CAPACITY in pt.get("exceptions", ()) for pt in sweep):
+        return
+    knee = float(value["value"])
+    spread = 0.0
+    for r in range(len(sweep[0]["gbps_samples"])):
+        rounds = [
+            {"working_set_bytes": pt["working_set_bytes"], "median_gbps": pt["gbps_samples"][r]}
+            for pt in sweep
+        ]
+        spread = max(spread, abs(estimate_l2_knee(rounds, l2_size)[0] - knee) / knee)
+    value["rel_uncertainty"] = round(min(0.5, max(float(value["rel_uncertainty"]), spread)), 4)
+    i = l2_knee_crossing(sweep)
+    if i is not None and any(NEAR_CAPACITY in sweep[j].get("exceptions", ()) for j in (i - 1, i)):
+        value[NEAR_CAPACITY] = True
 
 
 def spill_step_samples(raw: dict[str, Any]) -> list[list[float]]:
@@ -1750,6 +1782,11 @@ def long_launch_profile(binary: Path, device: int, run_dir: Path) -> dict[str, A
         query, merged["dram-bw"], dispatch, *[merged[m] for m in BUILD_MODES[1:]], smi_samples
     )
     profile_launch.attach_all(profile, merged)
+    near_capacity_knee(
+        profile["measured"]["memory"]["l2_effective_capacity_bytes"],
+        merged["l2"].get("capacity_sweep", []),
+        profile["specs"]["l2_size_bytes"],
+    )
     profile["provenance"]["profile_revision"] = LONG_LAUNCH_REVISION
     profile["provenance"]["capture_protocol"] = {
         "minimum_launch_ns": 1e6,

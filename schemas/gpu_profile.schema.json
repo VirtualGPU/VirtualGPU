@@ -689,6 +689,7 @@
           "enum": ["measured", "estimated", "spec_derived"]
         },
         "perturb_group": { "type": ["string", "null"] },
+        "l2_near_capacity_unstable": { "type": "boolean" },
         "launch": {
           "type": "object",
           "additionalProperties": false,

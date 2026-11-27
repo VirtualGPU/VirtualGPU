@@ -10,12 +10,12 @@ from microbench import long_capture as lc
 from microbench import long_launch
 
 
-def test_l2_capacity_sweep_bistability_exempts_only_gb10_rule_three():
+def test_l2_capacity_sweep_near_capacity_exempts_only_gb10_rule_three():
     mib = 1024**2
     raw = {
         "capacity_sweep": [
             {"working_set_bytes": size * mib, "launch_ns_samples": [1.3e6]}
-            for size in (17, 18, 24, 30, 31)
+            for size in (17, 18, 36, 48, 49)
         ],
         "write_full": {"working_set_bytes": 24 * mib, "launch_ns_samples": [1.3e6]},
     }
@@ -24,13 +24,25 @@ def test_l2_capacity_sweep_bistability_exempts_only_gb10_rule_three():
     judged = lc.judged("l2", raw, "NVIDIA GB10", 3, 24 * mib)
     assert [point["working_set_bytes"] for point in judged["capacity_sweep"]] == [
         17 * mib,
-        31 * mib,
+        49 * mib,
     ]
     assert judged["write_full"] == raw["write_full"]
+    name = ["l2_near_capacity_unstable"]
     assert [
         point.get("exceptions")
         for point in lc.mark_exceptions("l2", raw, "NVIDIA GB10", 24 * mib)["capacity_sweep"]
-    ] == [None, ["bistable_band"], ["bistable_band"], ["bistable_band"], None]
+    ] == [None, name, name, name, None]
+
+
+def test_l2_rescan_keeps_the_bistable_band():
+    mib = 1024**2
+    raw = {
+        "points": [
+            {"working_set_bytes": size * mib, "launch_ns_samples": [1.3e6]} for size in (17, 30, 31)
+        ]
+    }
+    marked = lc.mark_exceptions("l2-rescan", raw, "NVIDIA GB10", 24 * mib)["points"]
+    assert [p.get("exceptions") for p in marked] == [None, ["bistable_band"], None]
 
 
 STEADY = [1.3e6] * lc.SAMPLES
@@ -240,7 +252,7 @@ class LongCaptureTests(unittest.TestCase):
             return {
                 "capacity_sweep": [
                     {"working_set_bytes": ws, "steps": 9, "launch_ns_samples": [v] * 15}
-                    for ws, v in zip((12 << 20, 24 << 20, 48 << 20), values)
+                    for ws, v in zip((12 << 20, 24 << 20, 60 << 20), values)
                 ]
             }
 
