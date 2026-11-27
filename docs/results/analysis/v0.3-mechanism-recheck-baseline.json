@@ -1,6 +1,6 @@
 {
  "core": {
-  "commit": "c2e920c3d4a9c93985f0192bd1676c956b3f3967",
+  "commit": "3b7e2607de3d56483ed250471e0c55b185261cb7",
   "dirty": false,
   "result_class": "formal"
  },
@@ -14,8 +14,7 @@
   "dependent_chain": "instruction counts from the CUDA source, not SASS: per warp per step 2 x mma_per_half MMAs, softmax_ops / 2 ex2, 4 shuffles, softmax_ops + 15 other",
   "pipes": "sfu and shfl rates are the profile's own curves (their check is leave-one-out interpolation, not a core run) and are not re-run here",
   "cross_wave_reuse": "its microbenchmarks are not in the profile",
-  "address_arithmetic": "loop and address instructions are not counted in any kernel",
-  "spill_footprint": "the core sizes the spill frames' footprint at full residency (sim.rs, simulate), so the one-CTA-per-SM spill-latency kernel is charged the frames of every CTA the SM could hold; the IR states the real kernel and the error includes this"
+  "address_arithmetic": "loop and address instructions are not counted in any kernel"
  },
  "expected_shift": {
   "closed_loop_dram": "turnaround +0.2% (DRAM -1.0% to +2.8%)",
@@ -8327,37 +8326,37 @@
     },
     "spill_l1_boundary": {
      "points": 4,
-     "median_abs_error": 2.095968546318435,
-     "mape": 1.8382881623708138,
-     "signed_median": 2.095968546318435,
+     "median_abs_error": 0.6761992736285795,
+     "mape": 0.5486002896199098,
+     "signed_median": 0.6761992736285795,
      "worst": {
       "point": "1024B x128",
-      "error": 2.2815095394730642
+      "error": 0.7956455266244784
      },
      "rows": [
       {
        "point": "1024B x8",
        "measured": 224.367,
-       "predicted": 421.7439999999999,
-       "error": 0.8797060173733211
+       "predicted": 234.76799999999992,
+       "error": 0.04635708459800214
       },
       {
        "point": "1024B x32",
        "measured": 586.964,
-       "predicted": 1824.7869999999998,
-       "error": 2.1088567612323748
+       "predicted": 995.3239999999996,
+       "error": 0.695715580512603
       },
       {
        "point": "1024B x68",
        "measured": 1278.317,
-       "predicted": 3941.154,
-       "error": 2.0830803314044952
+       "predicted": 2117.7660000000005,
+       "error": 0.656682966744556
       },
       {
        "point": "1024B x128",
        "measured": 2124.436,
-       "predicted": 6971.356999999999,
-       "error": 2.2815095394730642
+       "predicted": 3814.734000000001,
+       "error": 0.7956455266244784
       }
      ]
     }
@@ -17051,41 +17050,42 @@
     },
     "spill_l1_boundary": {
      "points": 4,
-     "median_abs_error": 0.7065007246694155,
-     "mape": 0.6724934621341327,
-     "signed_median": 0.7065007246694155,
+     "median_abs_error": 0.3797876440791941,
+     "mape": 0.3498324283257192,
+     "signed_median": 0.3797876440791941,
      "worst": {
-      "point": "1024B x32",
-      "error": 0.7962256512020436
+      "point": "1024B x128",
+      "error": 0.41207688719481084
      },
      "rows": [
       {
        "point": "1024B x8",
        "measured": 216.405,
-       "predicted": 320.44100000000003,
-       "error": 0.4807467479956564
+       "predicted": 265.67555760000005,
+       "error": 0.22767753794967782
       },
       {
        "point": "1024B x32",
        "measured": 701.472,
-       "predicted": 1260.002,
-       "error": 0.7962256512020436
+       "predicted": 972.5228422,
+       "error": 0.38640293867752384
       },
       {
        "point": "1024B x68",
        "measured": 1486.605,
-       "predicted": 2584.387,
-       "error": 0.7384490163829667
+       "predicted": 2041.3648806000003,
+       "error": 0.3731723494808643
       },
       {
        "point": "1024B x128",
        "measured": 2722.162,
-       "predicted": 4558.403000000001,
-       "error": 0.6745524329558643
+       "predicted": 3843.9020434000004,
+       "error": 0.41207688719481084
       }
      ]
     }
    }
   }
- }
+ },
+ "core_source_sha256": "46aaaad36bcdc68ca70205f7ba7a4e71a55982c9fc6db771552e0ac7eb399f01"
 }
