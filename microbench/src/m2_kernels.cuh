@@ -3306,6 +3306,7 @@ static int run_closed_loop_mma(int device, int samples, int warmup, LaunchSchedu
       size_t dyn_smem = static_cast<size_t>(tokens) * static_cast<size_t>(stage_bytes);
       for (double target_tc : target_tc_ns_list) {
         int mma_iters = (target_tc <= 0.0) ? 0 : std::max(1, static_cast<int>(target_tc / ns_per_mma_iter + 0.5));
+        if (schedule) mma_iters = schedule->parameter(mma_iters);  // frozen at the pilot's calibration
         double solo_tc_ns = static_cast<double>(mma_iters) * ns_per_mma_iter;
         int steps = 256;
 
@@ -3399,6 +3400,7 @@ static int run_closed_loop_mma(int device, int samples, int warmup, LaunchSchedu
         size_t dyn_smem = static_cast<size_t>(tokens) * static_cast<size_t>(stage_bytes);
         for (double target_tc : target_tc_ns_list) {
           int mma_iters = (target_tc <= 0.0) ? 0 : std::max(1, static_cast<int>(target_tc / ns_per_mma_iter_8w + 0.5));
+          if (schedule) mma_iters = schedule->parameter(mma_iters);  // frozen at the pilot's calibration
           double solo_tc_ns = static_cast<double>(mma_iters) * ns_per_mma_iter_8w;
           int steps = 256;
 

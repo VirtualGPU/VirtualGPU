@@ -21,6 +21,15 @@ struct LaunchSchedule {
     if (!input.eof() || lengths.empty()) fail("Invalid launch schedule");
   }
 
+  // A point parameter derived at run time (from a clock calibration, say): the pilot uses
+  // its own value and prints it with the point, a frozen schedule supplies the pilot's,
+  // on the line before the point's length, so every round runs the same work.
+  int parameter(int derived) {
+    if (pilot) return derived;
+    if (next == lengths.size()) fail("Missing parameter in launch schedule");
+    return lengths[next++];
+  }
+
   void finish() const {
     if (!pilot && next != lengths.size()) fail("Unused lengths in launch schedule");
   }

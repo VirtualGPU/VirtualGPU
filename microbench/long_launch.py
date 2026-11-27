@@ -201,6 +201,17 @@ def identity(mode, path, point):
     return {"field": "/".join(path), **{k: point[k] for k in fields}}
 
 
+# Point parameters derived at run time that the schedule freezes, on lines ahead of each
+# point's length, in this order (LaunchSchedule::parameter); they are design fields too.
+FROZEN_PARAMETERS = {"closed-loop-mma": {"dram_closed_loop_mma": ("mma_iters_per_stage",)}}
+
+
+def schedule_lines(mode, path, point):
+    """The schedule lines of one point: its frozen parameters, then its length."""
+    names = FROZEN_PARAMETERS.get(mode, {}).get(path[0], ())
+    return "".join(f"{point[name]}\n" for name in names) + f"{point['steps']}\n"
+
+
 # Work a frozen length implies; bound in the freeze so the same steps cannot do other work.
 WORK_FIELDS = ("transfer_bytes", "source_buffer_bytes")
 
@@ -252,7 +263,7 @@ def freeze(mode, pilot):
                 **work(point),
             }
         )
-    schedule = "".join(f"{row['steps']}\n" for row in frozen)
+    schedule = "".join(schedule_lines(mode, path, point) for path, point in rows)
     record = {
         "mode": mode,
         "pilot_min_ns": PILOT_MIN_NS,

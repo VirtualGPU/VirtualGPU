@@ -240,6 +240,43 @@ class LongLaunchTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "work differs"):
             long_launch.verify(record, capture)
 
+    def test_closed_loop_mma_freezes_its_mma_iterations_ahead_of_each_length(self):
+        def row(iters, steps, samples=3):
+            return {
+                "ctas_per_sm": 1,
+                "active_ctas": 48,
+                "tokens": 1,
+                "num_warps": 4,
+                "stage_bytes": 8192,
+                "ldmatrix_bytes_per_stage": 0,
+                "mma_iters_per_stage": iters,
+                "solo_compute_ns": iters * 27.278,
+                "steps": steps,
+                "launch_ns_samples": [1.3e6] * samples,
+            }
+
+        pilot = {"samples": 3, "dram_closed_loop_mma": [row(0, 1000), row(37, 400)]}
+        schedule, record = long_launch.freeze("closed-loop-mma", pilot)
+        self.assertEqual(schedule, "0\n1000\n37\n400\n")
+        long_launch.check_schedule(record, schedule.encode())
+        capture = {"samples": 15, "dram_closed_loop_mma": [row(0, 1000, 15), row(37, 400, 15)]}
+        capture["dram_closed_loop_mma"][1]["solo_compute_ns"] = (
+            37 * 27.9
+        )  # recalibrated, not a design field
+        long_launch.verify(record, capture)
+        capture["dram_closed_loop_mma"][1]["mma_iters_per_stage"] = 36
+        with self.assertRaisesRegex(ValueError, "differs from the freeze"):
+            long_launch.verify(record, capture)
+        with self.assertRaisesRegex(ValueError, "differs from the freeze"):
+            long_launch.check_schedule(record, b"0\n1000\n36\n400\n")
+
+    def test_frozen_parameters_are_design_fields(self):
+        for mode, fields in long_launch.FROZEN_PARAMETERS.items():
+            for field, names in fields.items():
+                self.assertTrue(
+                    set(names) <= set(long_launch.DESIGN_FIELDS[mode][field]), (mode, field)
+                )
+
     def test_unregistered_field_is_refused(self):
         pilot = {"samples": 3, "other": [{"steps": 1, "launch_ns_samples": [1.3e6] * 3}]}
         with self.assertRaisesRegex(ValueError, "other: no design fields"):
