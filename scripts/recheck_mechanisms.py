@@ -11,9 +11,10 @@ error, MAPE, signed median error and the worst point.
         --profile new=NEW.json --out OUT.json [--markdown OUT.md]
     python scripts/recheck_mechanisms.py --check BASELINE.json   # after a core change
 
-`--check` re-runs on the baseline's profiles (about 1.5 s for the two reference profiles) and
-fails on a changed point set or a median absolute error or MAPE that grew by more than the
-tolerance; a deliberate change updates the baseline in the same change.
+`--check` requires a clean core built from the current checkout and the exact
+compiled-source SHA recorded in the baseline. Docs-only commits keep that SHA.
+It then re-runs on the baseline's profiles and checks the point counts and
+error tolerance. Refresh the baseline when the compiled inputs change.
 
 What the IR cannot express is left out and listed in NOT_EXPRESSED; it is the same for every
 profile, so a column-to-column change comes from the profile alone.
@@ -22,12 +23,18 @@ profile, so a column-to-column change comes from the profile alone.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import re
 import statistics as st
+import subprocess
 from pathlib import Path
 
 from virtualgpu import _core
 
+ROOT = Path(__file__).resolve().parents[1]
+# The build identity in crates/vgpu-core/build.rs covers these same paths.
+COMPILED_PATHS = ("crates", "schemas", "Cargo.toml", "Cargo.lock")
 LENGTHS = (256, 512)
 FLOPS_PER_MMA = 2 * 16 * 8 * 16
 NOT_EXPRESSED = {
@@ -533,15 +540,80 @@ def markdown(result):
     return "\n".join(lines) + "\n"
 
 
+def git_output(root, *args):
+    return subprocess.check_output(["git", "-C", str(root), *args], stderr=subprocess.DEVNULL)
+
+
+def compiled_source_sha(root, commit):
+    entries = git_output(root, "ls-tree", "-z", commit, "--", *COMPILED_PATHS)
+    return hashlib.sha256(entries).hexdigest()
+
+
+def clean_build(build):
+    return (
+        isinstance(build, dict)
+        and build.get("dirty") is False
+        and build.get("result_class") == "formal"
+        and isinstance(build.get("commit"), str)
+        and re.fullmatch(r"[0-9a-f]{40}", build["commit"]) is not None
+    )
+
+
+def check_core_revision(baseline, build, root=ROOT):
+    if not clean_build(build):
+        raise ValueError("The installed core must be a clean formal build.")
+    if not clean_build(baseline.get("core")) or "core_source_sha256" not in baseline:
+        raise ValueError(
+            "The baseline lacks a clean core build or compiled-source SHA. Refresh it."
+        )
+
+    try:
+        head = git_output(root, "rev-parse", "HEAD").decode().strip()
+        if build["commit"] != head:
+            raise ValueError(
+                f"Installed core {build['commit']} differs from checkout {head}. Rebuild the core."
+            )
+        if git_output(root, "status", "--porcelain", "--untracked-files=no", "--", *COMPILED_PATHS):
+            raise ValueError("The checkout has uncommitted compiled-source changes.")
+        current_sha = compiled_source_sha(root, head)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ValueError(
+            "Unable to verify the compiled sources in the current Git checkout."
+        ) from exc
+
+    recorded_sha = baseline["core_source_sha256"]
+    if current_sha != recorded_sha:
+        raise ValueError(
+            f"Baseline core SHA {recorded_sha} differs from current {current_sha}. Refresh it."
+        )
+
+    # If the recorded commit is available, also bind the SHA to its origin.
+    # Shallow checkouts can still verify the exact compiled inputs against HEAD.
+    try:
+        origin_sha = compiled_source_sha(root, baseline["core"]["commit"])
+    except subprocess.CalledProcessError:
+        return
+    if origin_sha != recorded_sha:
+        raise ValueError("The baseline core SHA does not match its recorded commit. Refresh it.")
+
+
 def run(profiles):
     """The re-check of every mechanism on each (name, path) profile."""
+    build = _core.build_info()
     result = {
-        "core": _core.build_info(),
+        "core": build,
         "lengths": LENGTHS,
         "not_expressed": NOT_EXPRESSED,
         "expected_shift": EXPECTED,
         "profiles": {},
     }
+    if clean_build(build):
+        try:
+            result["core_source_sha256"] = compiled_source_sha(ROOT, build["commit"])
+        except (OSError, subprocess.CalledProcessError):
+            # An archived build may come from another checkout. It can still
+            # produce a report, while --check requires a bound baseline.
+            pass
     for name, path in profiles:
         text = Path(path).read_text()
         profile = json.loads(text)
@@ -590,7 +662,7 @@ def main():
         "--check",
         type=Path,
         metavar="BASELINE",
-        help="re-run on the baseline's profiles and fail if a mechanism got worse",
+        help="check the baseline core SHA and re-run on the baseline's profiles",
     )
     ap.add_argument(
         "--tolerance",
@@ -602,8 +674,11 @@ def main():
     args = ap.parse_args()
     if args.check:
         baseline = json.loads(args.check.read_text())
-        root = Path(__file__).resolve().parents[1]
-        profiles = [(n, root / b["path"]) for n, b in baseline["profiles"].items()]
+        try:
+            check_core_revision(baseline, _core.build_info())
+        except ValueError as exc:
+            raise SystemExit(f"FAIL {exc}") from None
+        profiles = [(n, ROOT / b["path"]) for n, b in baseline["profiles"].items()]
         lines, failures = compare(baseline, run(profiles), args.tolerance)
         print("\n".join(lines))
         for f in failures:
