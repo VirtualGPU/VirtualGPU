@@ -28,6 +28,17 @@ struct LaunchSchedule {
   // A point parameter derived at run time (from a clock calibration, say): the pilot uses
   // its own value and prints it with the point, a frozen schedule supplies the pilot's,
   // on the line before the point's length, so every round runs the same work.
+  bool is_pilot() const { return pilot; }
+
+  // The next frozen length, for a mode that times a point itself (outside time_point).
+  int frozen_length(int minimum, int maximum) {
+    if (pilot) fail("A pilot has no frozen lengths");
+    if (next == lengths.size()) fail("Missing point in launch schedule");
+    const int length = lengths[next++];
+    if (length < minimum || length > maximum) fail("Launch length outside bounds");
+    return length;
+  }
+
   int parameter(int derived) {
     if (pilot) return derived;
     if (next == lengths.size()) fail("Missing parameter in launch schedule");

@@ -1059,7 +1059,9 @@
         "reload_count": { "type": "integer", "minimum": 0 },
         "iter_time_ns": { "$ref": "#/$defs/MeasuredValue" },
         "extra_ns_vs_zero": { "$ref": "#/$defs/MeasuredValue" },
-        "ns_per_reload": { "$ref": "#/$defs/MeasuredValue" }
+        "ns_per_reload": { "$ref": "#/$defs/MeasuredValue" },
+        "allocation_span": { "type": "number", "minimum": 0 },
+        "l1_boundary_two_state": { "type": "boolean" }
       }
     },
     "StridedBytesInFlightBwPoint": {

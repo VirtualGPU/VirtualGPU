@@ -4577,7 +4577,155 @@ static int run_spill_counters(int device, bool probe_only) {
   return 0;
 }
 
+// Local memory allocations a frozen spill-latency capture reads its reload points in
+// (docs/results/analysis/v0.3-spill-allocation-design-registration.md).
+constexpr int kSpillAllocations = 15;
+
+// spill-latency under a frozen schedule: every point with reloads is read in
+// kSpillAllocations local memory allocations, each in a new context (cudaDeviceReset) at the
+// default stack limit, at its frozen length; the points without reloads and the launch-cost
+// points are read once, in the first. A point's sample j is the mean over allocations of
+// their j-th smallest sample, so the median of its samples is the mean of the per-allocation
+// medians; every allocation's samples are kept in `allocation_launch_ns`.
+static int run_spill_allocations(int device, int samples, int warmup, LaunchSchedule* schedule) {
+  struct Point {
+    int frame, reloads;
+    bool serial;
+    const char* regime;
+    int length;
+    std::vector<std::vector<double>> launch_ns;  // per allocation
+    std::vector<double> mhz_before, mhz_after;
+  };
+  const int resident_threads_per_sm = 128;
+  std::vector<Point> points, costs;
+  for (int fb : spill_frame_bytes) {
+    const int total = fb * resident_threads_per_sm;
+    const char* regime = (total <= 65536) ? "l1_hit" : ((total >= 262144) ? "l2_spill" : "l1_boundary");
+    for (bool serial : {true, false})
+      for (int rc : spill_reload_counts) points.push_back({fb, rc, serial, regime, 0, {}, {}, {}});
+  }
+  for (Point& p : points) p.length = schedule->frozen_length(1, 1 << 24);
+  for (int fb : spill_frame_bytes)
+    for (bool serial : {true, false}) costs.push_back({fb, 0, serial, "", schedule->frozen_length(1, 1 << 20), {}, {}, {}});
+
+  int sm_count = 0;
+  uint32_t* d_sink = nullptr;
+  cudaEvent_t ev_start, ev_stop, cal_start, cal_stop;
+  auto open_context = [&]() {
+    CUDA_CHECK(cudaSetDevice(device));
+    cudaDeviceProp prop{};
+    CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+    sm_count = prop.multiProcessorCount;
+    CUDA_CHECK(cudaMalloc(&d_sink, static_cast<size_t>(sm_count) * resident_threads_per_sm * sizeof(uint32_t)));
+    for (cudaEvent_t* e : {&ev_start, &ev_stop, &cal_start, &cal_stop}) CUDA_CHECK(cudaEventCreate(e));
+  };
+  auto close_context = [&]() {
+    for (cudaEvent_t e : {ev_start, ev_stop, cal_start, cal_stop}) CUDA_CHECK(cudaEventDestroy(e));
+    CUDA_CHECK(cudaFree(d_sink));
+  };
+  // Time one point: warm-ups, then `samples` launches; records the SM clock around it.
+  auto read = [&](Point& p, auto launch) {
+    p.mhz_before.push_back(1e3 * measure_cycles_per_ns(cal_start, cal_stop));
+    for (int w = 0; w < warmup; ++w) launch();
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+    std::vector<double> ns;
+    for (int i = 0; i < samples; ++i) {
+      CUDA_CHECK(cudaEventRecord(ev_start));
+      launch();
+      CUDA_CHECK(cudaEventRecord(ev_stop));
+      CUDA_CHECK(cudaEventSynchronize(ev_stop));
+      float ms = 0.0f;
+      CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
+      ns.push_back(static_cast<double>(ms) * 1e6);
+    }
+    CUDA_CHECK(cudaGetLastError());
+    p.mhz_after.push_back(1e3 * measure_cycles_per_ns(cal_start, cal_stop));
+    p.launch_ns.push_back(ns);
+  };
+  auto frame_launch = [&](const Point& p, int reloads, int steps) {
+    return [&, reloads, steps]() {
+      if (p.serial) dispatch_spill_frame<true>(p.frame, sm_count, d_sink, reloads, 1, steps);
+      else dispatch_spill_frame<false>(p.frame, sm_count, d_sink, reloads, 1, steps);
+    };
+  };
+
+  open_context();
+  for (int a = 0; a < kSpillAllocations; ++a) {
+    if (a > 0) {
+      close_context();
+      CUDA_CHECK(cudaDeviceReset());
+      open_context();
+    }
+    for (Point& p : points)
+      if (a == 0 || p.reloads > 0) read(p, frame_launch(p, p.reloads, p.length));
+    if (a == 0)
+      for (Point& c : costs) {
+        auto once = frame_launch(c, 0, 0);
+        read(c, [&]() { for (int k = 0; k < c.length; ++k) once(); });
+      }
+  }
+  close_context();
+
+  auto mean = [](const std::vector<double>& v) {
+    double t = 0.0;
+    for (double x : v) t += x;
+    return t / static_cast<double>(v.size());
+  };
+  auto list = [](const char* key, const std::vector<double>& v, double scale, const char* fmt) {
+    std::printf(", \"%s\": [", key);
+    for (size_t i = 0; i < v.size(); ++i) {
+      if (i) std::printf(", ");
+      std::printf(fmt, v[i] / scale);
+    }
+    std::printf("]");
+  };
+  std::printf("{\n  \"samples\": %d,\n  \"resident_threads_per_sm\": %d,\n  \"allocations\": %d,\n"
+              "  \"reload_latency_by_count\": [",
+              samples, resident_threads_per_sm, kSpillAllocations);
+  for (size_t i = 0; i < points.size(); ++i) {
+    Point& p = points[i];
+    for (auto& v : p.launch_ns) std::sort(v.begin(), v.end());
+    std::vector<double> rank(samples, 0.0);
+    for (int j = 0; j < samples; ++j) {
+      for (auto& v : p.launch_ns) rank[j] += v[j];
+      rank[j] /= static_cast<double>(p.launch_ns.size());
+    }
+    std::printf("%s\n    {\"regime\": \"%s\", \"dependency_mode\": \"%s\", \"num_warps\": 4, "
+                "\"resident_threads_per_sm\": %d, \"frame_bytes_per_thread\": %d, \"reload_count\": %d, "
+                "\"sm_mhz_before\": %.1f, \"sm_mhz_after\": %.1f, \"steps\": %d",
+                i ? "," : "", p.regime, p.serial ? "serial_chain" : "batch_before_dep", resident_threads_per_sm,
+                p.frame, p.reloads, mean(p.mhz_before), mean(p.mhz_after), p.length);
+    list("launch_ns_samples", rank, 1.0, "%.1f");
+    list("iter_time_ns_samples", rank, p.length, "%.3f");
+    if (p.reloads > 0) {
+      std::printf(", \"allocation_launch_ns\": [");
+      for (size_t a = 0; a < p.launch_ns.size(); ++a) {
+        std::printf("%s[", a ? ", " : "");
+        for (int j = 0; j < samples; ++j) std::printf("%s%.1f", j ? ", " : "", p.launch_ns[a][j]);
+        std::printf("]");
+      }
+      std::printf("]");
+    }
+    std::printf("}");
+  }
+  std::printf("\n  ],\n  \"launch_cost_by_frame\": [");
+  for (size_t i = 0; i < costs.size(); ++i) {
+    const Point& c = costs[i];
+    std::printf("%s\n    {\"dependency_mode\": \"%s\", \"frame_bytes_per_thread\": %d, "
+                "\"sm_mhz_before\": %.1f, \"sm_mhz_after\": %.1f, \"steps\": %d",
+                i ? "," : "", c.serial ? "serial_chain" : "batch_before_dep", c.frame, c.mhz_before[0],
+                c.mhz_after[0], c.length);
+    list("launch_ns_samples", c.launch_ns[0], 1.0, "%.1f");
+    list("launch_cost_ns_samples", c.launch_ns[0], c.length, "%.1f");
+    std::printf("}");
+  }
+  std::printf("\n  ]\n}\n");
+  return 0;
+}
+
 static int run_spill_latency(int device, int samples, int warmup, LaunchSchedule* schedule = nullptr) {
+  if (schedule && !schedule->is_pilot()) return run_spill_allocations(device, samples, warmup, schedule);
   cudaDeviceProp prop{};
   CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
   const int sm_count = prop.multiProcessorCount;

@@ -293,10 +293,10 @@ def merge(raws):
                     out[key] = [statistics.median(v) for v in values]
                 elif key.endswith("_each") or key == "slow_launch_share":
                     out[key] = values  # per round, in round order
+                elif key.startswith(("sm_mhz_", "allocation_")):  # one per round
+                    out[key] = values
                 elif isinstance(value, (dict, list)):
                     out[key] = walk(values)
-                elif key.startswith("sm_mhz_"):
-                    out[key] = values
                 elif all(v == value for v in values):
                     out[key] = value
                 elif all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values):
@@ -309,7 +309,12 @@ def merge(raws):
                 launches = [n[key] for n in nodes]
                 out["launch"] = {
                     "length": first["steps"],
-                    "min_ns": min(min(v) for v in launches),
+                    # the shortest real launch: a point read in several allocations has
+                    # each allocation's launches in `allocation_launch_ns`
+                    "min_ns": min(
+                        [min(v) for v in launches]
+                        + [min(one) for n in nodes for one in n.get("allocation_launch_ns", [])]
+                    ),
                     "median_ns": statistics.median(statistics.median(v) for v in launches),
                     "sm_mhz_before": [n.get("sm_mhz_before") for n in nodes],
                     "sm_mhz_after": [n.get("sm_mhz_after") for n in nodes],

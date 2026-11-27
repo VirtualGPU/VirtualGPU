@@ -159,7 +159,13 @@ OVERRIDE_ORDER = ("sync-loop", "sync-loop-multicta", "sync-loop-reconcile")
 COMPUTE = {"tflops_per_sm", "fp32_fma_tflops", "issue_rate_gwarp_inst_per_sm", "rate"}
 # Design fields the profile names differently.
 ALIAS = {"target_sms": "active_sms"}
-FLAG = {"low_in_flight_unstable": "low_in_flight_unstable", "bistable_band": "bistable_band"}
+FLAG = {
+    "low_in_flight_unstable": "low_in_flight_unstable",
+    "bistable_band": "bistable_band",
+    "l1_boundary_two_state": "l1_boundary_two_state",
+}
+# Exceptions whose registration widens the uncertainty to cover the round medians.
+WIDEN = {"low_in_flight_unstable", "bistable_band"}
 
 
 def metric(mode, key):
@@ -207,6 +213,28 @@ def annotate(value, rounds, launch, compute):
     value["round_median_range"] = [min(rounds), max(rounds)]
     if compute:
         value["per_cycle"] = per_cycle(rounds, launch, value["unit"])
+
+
+def cover_allocations(entry, point):
+    """A spill point read in several local memory allocations: store the span of its
+    per-allocation medians (per step, pooled over the valid rounds) over their median, and
+    widen the uncertainty of its per-step time and of the values derived from it to at least
+    half that span (v0.3-spill-allocation-design-registration.md)."""
+    steps = point["steps"]
+    medians = [
+        statistics.median(one) / steps for rnd in point["allocation_launch_ns"] for one in rnd
+    ]
+    half = (max(medians) - min(medians)) / 2
+    entry["allocation_span"] = round((max(medians) - min(medians)) / statistics.median(medians), 4)
+
+    def widen(value, rel):
+        value["rel_uncertainty"] = round(min(1.0, max(value["rel_uncertainty"], rel)), 4)
+
+    widen(entry["iter_time_ns"], half / entry["iter_time_ns"]["value"])
+    extra = entry["extra_ns_vs_zero"]["value"]
+    rel = half / extra if extra > 0 else 1.0
+    widen(entry["extra_ns_vs_zero"], rel)
+    widen(entry["ns_per_reload"], rel)  # extra over the reload count: the same relative spread
 
 
 def cover(value):
@@ -291,9 +319,12 @@ def attach(profile, mode, merged, skip=frozenset()):
         targets = {name: entry[name] for name in values}
         for name, rounds in values.items():
             annotate(targets[name], rounds, point["launch"], name in COMPUTE)
+        if "allocation_launch_ns" in point:
+            cover_allocations(entry, point)
         for name in point.get("exceptions", ()):
             if scalar is None:
                 entry[FLAG[name]] = True
-            for value in targets.values():
-                cover(value)
+            if name in WIDEN:
+                for value in targets.values():
+                    cover(value)
     return profile

@@ -287,6 +287,28 @@ def check_schedule(record, schedule_bytes):
 GROUPS = {"l2-merge": 9}
 
 
+# Modes whose points with reloads are read in several local memory allocations
+# (v0.3-spill-allocation-design-registration.md): the number of allocations, kept in
+# `allocation_launch_ns` as one list of samples per allocation.
+ALLOCATIONS = {"spill-latency": 15}
+
+
+def check_allocations(mode, point, samples):
+    """Every launch of every allocation is present, finite and positive; returns the shortest."""
+    n = ALLOCATIONS.get(mode)
+    lists = point.get("allocation_launch_ns")
+    wanted = n is not None and point.get("reload_count", 0) > 0
+    if not wanted:
+        if lists is not None:
+            raise ValueError(f"{mode}: allocation_launch_ns on a point read in one allocation")
+        return None
+    if not isinstance(lists, list) or len(lists) != n:
+        raise ValueError(f"{mode}: expected {n} allocations in allocation_launch_ns")
+    for one in lists:
+        check_samples(mode, {"launch_ns_samples": one}, samples)
+    return min(min(one) for one in lists)
+
+
 def check_group(mode, point, samples):
     """Every launch of a grouped point is present and at the capture floor; returns the shortest."""
     group = GROUPS.get(mode)
@@ -319,9 +341,12 @@ def verify(record, capture):
         if work(point) != {k: frozen[k] for k in WORK_FIELDS if k in frozen}:
             raise ValueError(f"{mode} {frozen['point']}: work differs from the freeze")
         fastest = min(point["launch_ns_samples"])
-        each = check_group(mode, point, capture["samples"])
-        if each is not None:
-            fastest = min(fastest, each)
+        for each in (
+            check_group(mode, point, capture["samples"]),
+            check_allocations(mode, point, capture["samples"]),
+        ):
+            if each is not None:
+                fastest = min(fastest, each)
         if fastest < record["capture_min_ns"]:
             raise ValueError(f"{mode} {frozen['point']}: a launch took {fastest:.0f} ns")
         # A probe timed inside the kernel also needs its own window at the floor.
