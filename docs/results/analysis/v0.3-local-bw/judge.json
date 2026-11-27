@@ -1,0 +1,333 @@
+{
+ "status": "judged",
+ "rules_1_2_per_process": [
+  {
+   "iqr": {
+    "failing": 2,
+    "allowed": 1,
+    "share": 0.09523809523809523,
+    "limit": 0.05,
+    "ratio": 0.1
+   },
+   "spike": {
+    "failing": 0,
+    "allowed": 3,
+    "share": 0.0,
+    "limit": 0.15,
+    "ratio": 1.5
+   }
+  },
+  {
+   "iqr": {
+    "failing": 1,
+    "allowed": 1,
+    "share": 0.047619047619047616,
+    "limit": 0.05,
+    "ratio": 0.1
+   },
+   "spike": {
+    "failing": 0,
+    "allowed": 3,
+    "share": 0.0,
+    "limit": 0.15,
+    "ratio": 1.5
+   }
+  },
+  {
+   "iqr": {
+    "failing": 1,
+    "allowed": 1,
+    "share": 0.047619047619047616,
+    "limit": 0.05,
+    "ratio": 0.1
+   },
+   "spike": {
+    "failing": 0,
+    "allowed": 3,
+    "share": 0.0,
+    "limit": 0.15,
+    "ratio": 1.5
+   }
+  }
+ ],
+ "rule_3": {
+  "status": "passed",
+  "runs": 3,
+  "points": 21,
+  "failing": 0,
+  "allowed": 1,
+  "share": 0.0,
+  "limit": 0.05,
+  "range": 0.1
+ },
+ "curves": {
+  "load4": {
+   "value_gbps_per_sm": 143.81165851664167,
+   "saturated": true,
+   "by_warps": {
+    "1": 18.707760034799303,
+    "2": 37.42171421074641,
+    "4": 62.05902164693913,
+    "8": 115.99854674946737,
+    "16": 143.66883623287822,
+    "32": 143.81165851664167
+   }
+  },
+  "store4": {
+   "reading": "not resolved: a point fails a rule"
+  },
+  "load16": {
+   "value_gbps_per_sm": 263.2980253466725,
+   "saturated": false,
+   "by_warps": {
+    "1": 53.67353622663412,
+    "2": 105.18411922620881,
+    "4": 172.4122957614836,
+    "8": 263.2980253466725
+   }
+  }
+ },
+ "frame_independence": "clean",
+ "tiers": {
+  "reading": "not resolved: a point fails a rule"
+ },
+ "one_rate_for_loads_and_stores": "not resolved",
+ "points": {
+  "load/4/l1/1/128": {
+   "value_gbps_per_sm": 18.707760034799303,
+   "allocation_spans": [
+    0.0002706093630839627,
+    0.000737948658023496,
+    0.007896990626845037
+   ],
+   "fails_a_rule": false,
+   "allocation": "independent",
+   "pooled_half_span": 0.004206668675736109
+  },
+  "load/4/l1/2/128": {
+   "value_gbps_per_sm": 37.42171421074641,
+   "allocation_spans": [
+    0.0002705893928957985,
+    0.00017219325002459904,
+    0.007933989209774674
+   ],
+   "fails_a_rule": false,
+   "allocation": "independent",
+   "pooled_half_span": 0.004009544191080609
+  },
+  "load/4/l1/4/128": {
+   "value_gbps_per_sm": 62.05902164693913,
+   "allocation_spans": [
+    0.0014763779527559055,
+    0.007968906597570217,
+    0.0015643714404438903
+   ],
+   "fails_a_rule": false,
+   "allocation": "independent",
+   "pooled_half_span": 0.004620236145402987
+  },
+  "load/4/l1/8/128": {
+   "value_gbps_per_sm": 115.99854674946737,
+   "allocation_spans": [
+    0.009832528259323738,
+    0.012001075452790068,
+    0.004815213140398905
+   ],
+   "fails_a_rule": false,
+   "allocation": "independent",
+   "pooled_half_span": 0.006269554165037153
+  },
+  "load/4/l1/16/64": {
+   "value_gbps_per_sm": 143.66883623287822,
+   "allocation_spans": [
+    0.008115985727926026,
+    0.0012557134964086595,
+    0.0013311565992716312
+   ],
+   "fails_a_rule": false,
+   "allocation": "independent",
+   "pooled_half_span": 0.0040563620836891546
+  },
+  "load/4/l1/32/32": {
+   "value_gbps_per_sm": 143.81165851664167,
+   "allocation_spans": [
+    0.0007485029940119761,
+    0.0007485029940119761,
+    0.000474063724144814
+   ],
+   "fails_a_rule": false,
+   "allocation": "independent",
+   "pooled_half_span": 0.0004116766467065868
+  },
+  "store/4/l1/1/128": {
+   "value_gbps_per_sm": 13.897132525915605,
+   "allocation_spans": [
+    0.1962602259446825,
+    0.244422161173794,
+    0.15608486167236557
+   ],
+   "fails_a_rule": true,
+   "allocation": "dependent",
+   "pooled_half_span": 0.12109603462393262
+  },
+  "store/4/l1/2/128": {
+   "value_gbps_per_sm": 15.318275596944899,
+   "allocation_spans": [
+    0.16880371027145,
+    0.14613649851632046,
+    0.2353236785600073
+   ],
+   "fails_a_rule": true,
+   "allocation": "dependent",
+   "pooled_half_span": 0.12188759244026134
+  },
+  "store/4/l1/4/128": {
+   "value_gbps_per_sm": 17.031740518151015,
+   "allocation_spans": [
+    0.19384160610912674,
+    0.23682370910401743,
+    0.13910960873803052
+   ],
+   "fails_a_rule": true,
+   "allocation": "dependent",
+   "pooled_half_span": 0.12981847520034817
+  },
+  "store/4/l1/8/128": {
+   "value_gbps_per_sm": 18.404249705352,
+   "allocation_spans": [
+    0.18784351762043325,
+    0.2579423204300231,
+    0.27013401881753973
+   ],
+   "fails_a_rule": true,
+   "allocation": "dependent",
+   "pooled_half_span": 0.15485787017394995
+  },
+  "store/4/l1/16/64": {
+   "value_gbps_per_sm": 18.543520143063873,
+   "allocation_spans": [
+    0.14601735119125625,
+    0.1373284734133791,
+    0.1253774166394225
+   ],
+   "fails_a_rule": false,
+   "allocation": "dependent",
+   "pooled_half_span": 0.0851092097571345
+  },
+  "store/4/l1/32/32": {
+   "value_gbps_per_sm": 19.659129204398045,
+   "allocation_spans": [
+    0.20804695917078425,
+    0.093587157791112,
+    0.09524081694863588
+   ],
+   "fails_a_rule": false,
+   "allocation": "dependent",
+   "pooled_half_span": 0.10820503191888847
+  },
+  "load/16/l1/1/128": {
+   "value_gbps_per_sm": 53.67353622663412,
+   "allocation_spans": [
+    0.0001270699464100503,
+    0.007947120115044025,
+    0.0011338725527250738
+   ],
+   "fails_a_rule": false,
+   "allocation": "independent",
+   "pooled_half_span": 0.004024017963014355
+  },
+  "load/16/l1/2/128": {
+   "value_gbps_per_sm": 105.18411922620881,
+   "allocation_spans": [
+    0.0038134130808218304,
+    0.0073083691826359015,
+    0.001490968640774326
+   ],
+   "fails_a_rule": false,
+   "allocation": "independent",
+   "pooled_half_span": 0.0045588990197755995
+  },
+  "load/16/l1/4/128": {
+   "value_gbps_per_sm": 172.4122957614836,
+   "allocation_spans": [
+    0.00862851952770209,
+    0.0015770114151249677,
+    0.0002753510726175874
+   ],
+   "fails_a_rule": false,
+   "allocation": "independent",
+   "pooled_half_span": 0.004280564734154401
+  },
+  "load/16/l1/8/128": {
+   "value_gbps_per_sm": 263.2980253466725,
+   "allocation_spans": [
+    0.013879821061540322,
+    0.0075086313044737925,
+    0.0053192775453951985
+   ],
+   "fails_a_rule": false,
+   "allocation": "independent",
+   "pooled_half_span": 0.007599188131252114
+  },
+  "load/4/l1/8/32": {
+   "value_gbps_per_sm": 115.46527366975144,
+   "allocation_spans": [
+    0.000977766984206641,
+    0.0014289295562797694,
+    0.0009776886437703686
+   ],
+   "fails_a_rule": false,
+   "allocation": "independent",
+   "pooled_half_span": 0.0007897107671095878
+  },
+  "load/4/l1/8/64": {
+   "value_gbps_per_sm": 115.64635776061323,
+   "allocation_spans": [
+    0.001513734704175529,
+    0.0019174613385808375,
+    0.00209176054740655
+   ],
+   "fails_a_rule": false,
+   "allocation": "independent",
+   "pooled_half_span": 0.0010469092938772055
+  },
+  "load/4/l2/16/1024": {
+   "value_gbps_per_sm": 36.82956234212712,
+   "allocation_spans": [
+    0.049471604885340296,
+    0.04480788256035974,
+    0.03639679576019473
+   ],
+   "fails_a_rule": true,
+   "allocation": "independent",
+   "pooled_half_span": 0.029034888013782918
+  },
+  "load/4/l2/8/2048": {
+   "value_gbps_per_sm": 24.293508516295763,
+   "allocation_spans": [
+    0.09093360426546639,
+    0.11488871510265376,
+    0.17840167310982952
+   ],
+   "fails_a_rule": true,
+   "allocation": "dependent",
+   "pooled_half_span": 0.09042275814835345
+  },
+  "load/4/l2/4/4096": {
+   "value_gbps_per_sm": 11.57468859698023,
+   "allocation_spans": [
+    0.26222676228785385,
+    0.3153433735796465,
+    0.23554994714001368
+   ],
+   "fails_a_rule": true,
+   "allocation": "dependent",
+   "pooled_half_span": 0.1669904231274207
+  }
+ },
+ "estimates": {
+  "local_mem_l1_hit_bw_per_sm_gbps": 150.0,
+  "local_mem_l1_miss_bw_per_sm_gbps": 40.0,
+  "smem_bw_per_sm_gbps": 321.23
+ }
+}

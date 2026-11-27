@@ -1,0 +1,150 @@
+{
+ "binary_sha256": "2a94b217574c3d3e23542b9e6ee246ba3ea173ad401f4b5ca73c78cd37b2bb17",
+ "arch": "sm_121a",
+ "nvcc": "/usr/local/cuda-13.0/bin/nvcc",
+ "source": "16c5df4",
+ "check": "microbench/local_bw.py sass",
+ "status": "passed",
+ "instances": {
+  "load4_F32": {
+   "status": "passed",
+   "local_ops": [
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL"
+   ],
+   "expected": "8 x LDL"
+  },
+  "load4_F64": {
+   "status": "passed",
+   "local_ops": [
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL"
+   ],
+   "expected": "8 x LDL"
+  },
+  "load4_F128": {
+   "status": "passed",
+   "local_ops": [
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL"
+   ],
+   "expected": "8 x LDL"
+  },
+  "load4_F1024": {
+   "status": "passed",
+   "local_ops": [
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL"
+   ],
+   "expected": "8 x LDL"
+  },
+  "load4_F2048": {
+   "status": "passed",
+   "local_ops": [
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL"
+   ],
+   "expected": "8 x LDL"
+  },
+  "load4_F4096": {
+   "status": "passed",
+   "local_ops": [
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL",
+    "LDL"
+   ],
+   "expected": "8 x LDL"
+  },
+  "store4_F32": {
+   "status": "passed",
+   "local_ops": [
+    "STL",
+    "STL",
+    "STL",
+    "STL",
+    "STL",
+    "STL",
+    "STL",
+    "STL"
+   ],
+   "expected": "8 x STL"
+  },
+  "store4_F64": {
+   "status": "passed",
+   "local_ops": [
+    "STL",
+    "STL",
+    "STL",
+    "STL",
+    "STL",
+    "STL",
+    "STL",
+    "STL"
+   ],
+   "expected": "8 x STL"
+  },
+  "store4_F128": {
+   "status": "passed",
+   "local_ops": [
+    "STL",
+    "STL",
+    "STL",
+    "STL",
+    "STL",
+    "STL",
+    "STL",
+    "STL"
+   ],
+   "expected": "8 x STL"
+  },
+  "load16_F128": {
+   "status": "passed",
+   "local_ops": [
+    "LDL.128",
+    "LDL.128",
+    "LDL.128",
+    "LDL.128",
+    "LDL.128",
+    "LDL.128",
+    "LDL.128",
+    "LDL.128"
+   ],
+   "expected": "8 x LDL.128"
+  }
+ }
+}
