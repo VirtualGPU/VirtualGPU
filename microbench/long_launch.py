@@ -30,6 +30,17 @@ CAPTURE_MIN_NS = 1_000_000
 CLOSED_LOOP = ("issue_mode", "tokens", "active_ctas", "stage_bytes", "compute_ns")
 MLP = ("issue_mode", "bytes_in_flight", "active_ctas", "bytes_per_cta")
 DESIGN_FIELDS = {
+    # Diagnostic (v0.3-gb10-decode-compression.md), not a profile mode.
+    "decode-closed-loop": {
+        "decode_closed_loop": (
+            "access",
+            "segment_bytes",
+            "stride_bytes",
+            "active_ctas",
+            "stage_bytes",
+            "tokens",
+        )
+    },
     "mlp": {"dram_bw_by_bytes_in_flight": MLP, "l2_bw_by_bytes_in_flight": MLP},
     "strided-mlp": {
         "dram_bw_by_bytes_in_flight_strided": (
@@ -250,6 +261,8 @@ def pilot_target(mode, point):
     twice the capture floor (v0.3-spill-allocation-redo-registration.md)."""
     if mode == "spill-latency" and point.get("reload_count", 0) > 0:
         return 2 * CAPTURE_MIN_NS
+    if mode == "decode-closed-loop":  # v0.3-gb10-decode-compression.md: twice the pilot floor
+        return 2 * PILOT_MIN_NS
     return PILOT_MIN_NS
 
 
