@@ -87,7 +87,7 @@ Fix what made v0.2 miss on the RTX 4070 and GB10, and fix the profiles we alread
 - [ ] Narrow register-staged loads on unaligned shapes (H5): redo both forms with launches over 1 ms and captures that pass the dispersion rule, then decide
 - [ ] Synchronous load GEMM (`num_stages = 1`, +9.1% warm): find the missing mechanism with a microbenchmark
 - [ ] GB10 decode shapes are predicted too compressed: find out why
-- [x] Microbenchmark for `non_mma_issue_rate_per_sm_gips` (`sfu-shfl`, FFMA and LOP3 mix)
+- [x] Microbenchmark for `non_mma_issue_rate_per_sm_gips` (the higher of pure FFMA and an FFMA and LOP3 mix)
 - [ ] Measure `non_mma_issue_rate_per_sm_gips` and the local memory rates that are still estimated, on every profile
 - [ ] Fix the measurement problems in the rtxpro6000, a100-80gb and rtx3070 profiles (issue #8)
 - [ ] Sealed v0.3 holdout decides the cross-wave L2 reuse change

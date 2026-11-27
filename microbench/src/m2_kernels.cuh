@@ -4913,7 +4913,8 @@ __global__ void shfl_issue_kernel(uint32_t* __restrict__ sink, int iters) {
 }
 
 // Independent fma.rn.f32 and lop3.b32 chains, 1:1: the issue rate of a mix of FP32
-// and integer instructions. 128 per iteration.
+// and integer instructions. Counted as 128 per iteration; the loop counter and branch
+// are not counted, so the rate reads about 2% low.
 __global__ void alu_issue_kernel(uint32_t* __restrict__ sink, int iters) {
   const uint32_t tid = threadIdx.x;
   const float fa = 0.999f - static_cast<float>(tid & 7u) * 1e-4f;
