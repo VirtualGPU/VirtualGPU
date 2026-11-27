@@ -165,7 +165,9 @@ def freeze(run_dir, resources_path, output):
     specs, base, arch = profile["specs"], raw.decode(), profile["identity"]["arch"]
     resources_text = resources_path.read_text()
     resources = kernel_resources(resources_text)
-    pilots = {m: (run_dir / f"pilot-{m}.json").read_bytes() for m in ("h5-dram", "h5-staging")}
+    # GB10 runs h5-dram only (v0.3-gb10-h5-redo-amendment.md); h5-staging is frozen where it ran.
+    pilots = {m: (run_dir / f"pilot-{m}.json").read_bytes()
+              for m in ("h5-dram", "h5-staging") if (run_dir / f"pilot-{m}.json").exists()}
     manifest = (run_dir / "freeze-manifest.json").read_bytes()
     frozen = {
         "status": "frozen before the capture",
@@ -178,7 +180,8 @@ def freeze(run_dir, resources_path, output):
         "local_memory": "none" if not any(s or loc for s, loc in resources.values()) else "some",
         "bw_strided_128_gbps": dram.strided_128_bw(profile),
         "dram": freeze_dram(json.loads(pilots["h5-dram"]), specs, base, arch, resources),
-        "staging": freeze_staging(json.loads(pilots["h5-staging"]), profile, specs, base, resources),
+        "staging": (freeze_staging(json.loads(pilots["h5-staging"]), profile, specs, base, resources)
+                    if "h5-staging" in pilots else None),
     }
     output.write_text(json.dumps(frozen, separators=(",", ":")) + "\n")
 
@@ -196,7 +199,7 @@ def merged_values(run_dir, mode):
 def judged_modes(state):
     """Per mode, whether its capture qualifies: 5 valid rounds and rule 3 passed."""
     out = {}
-    for mode in ("h5-dram", "h5-staging"):
+    for mode in state["modes"]:
         valid = sum(r["results"].get(mode, {}).get("status") == "valid" for r in state["rounds"])
         rule = state.get("rule_three", {}).get(mode, {}).get("status")
         out[mode] = valid >= ROUNDS and rule == "passed"
@@ -254,8 +257,12 @@ def score(frozen, run_dir):
     qualified = judged_modes(state)
     out = {"qualified": qualified, "rule_three": state.get("rule_three", {})}
     for mode, name, fn in (("h5-dram", "dram_form", score_dram), ("h5-staging", "k1", score_staging)):
-        out[name] = fn(frozen, merged_values(run_dir, mode)) if qualified[mode] else {
-            "verdict": "not judged (capture not qualified)"}
+        if mode not in qualified:
+            out[name] = {"verdict": "not captured"}
+        elif qualified[mode]:
+            out[name] = fn(frozen, merged_values(run_dir, mode))
+        else:
+            out[name] = {"verdict": "not judged (capture not qualified)"}
     return out
 
 

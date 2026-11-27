@@ -92,6 +92,7 @@ def test_merged_keys_match_the_original_point_keys():
 def test_only_a_capture_with_five_valid_rounds_and_rule_three_passed_is_judged():
     rounds = [{"results": {"h5-dram": {"status": "valid"}, "h5-staging": {"status": "valid"}}}] * 5
     state = {
+        "modes": ["h5-dram", "h5-staging"],
         "rounds": rounds,
         "rule_three": {"h5-dram": {"status": "passed"}, "h5-staging": {"status": "failed"}},
     }
@@ -178,3 +179,17 @@ def test_dram_scoring_takes_r_from_the_five_round_medians_of_the_calibration_poi
     assert out["rate_warp_requests_per_ns"] == pytest.approx(5000.0 / 2000.0)
     assert out["passed"]
     json.dumps(out)
+
+
+def test_a_capture_of_h5_dram_alone_scores_k1_as_not_captured(tmp_path):
+    # GB10 runs h5-dram only (v0.3-gb10-h5-redo-amendment.md).
+    rounds = [{"results": {"h5-dram": {"status": "valid"}}}] * 5
+    state = {
+        "modes": ["h5-dram"],
+        "rounds": rounds,
+        "rule_three": {"h5-dram": {"status": "failed"}},
+    }
+    (tmp_path / "capture-state.json").write_text(json.dumps(state))
+    out = redo.score({}, tmp_path)
+    assert out["k1"] == {"verdict": "not captured"}
+    assert out["dram_form"] == {"verdict": "not judged (capture not qualified)"}
