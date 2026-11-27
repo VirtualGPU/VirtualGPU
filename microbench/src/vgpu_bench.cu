@@ -501,6 +501,7 @@ static int run_cta_dispatch(int device, int repeats) {
 #include "posthoc_gb10_probe.cuh"
 #include "barrier_step.cuh"
 #include "decode_closed_loop.cuh"
+#include "sync_load_reuse.cuh"
 
 static int run_read_soak(int device) {
   cudaDeviceProp prop{};
@@ -580,9 +581,10 @@ int main(int argc, char** argv) {
       mode != "barrier-step" &&
       mode != "decode-closed-loop" &&
       mode != "h5-dram" &&
-      mode != "h5-staging") {
+      mode != "h5-staging" &&
+      mode != "sync-load-reuse") {
     std::fprintf(stderr, "Launch schedules apply only to mlp, strided-mlp, dram-bw, l2, closed-loop, l2-merge, mma, "
-                         "gmem-issue, gmem-issue-controlled, sync-loop, closed-loop-mma, spill-latency, mma-chain, sync-loop-multicta, sync-loop-ablation, sync-loop-reconcile, mma-softmax-chain, serial-fill, stage-overhead, sfu-shfl, cp-async, launch, latency, latency-curve, l1-carveout, l2-rescan, barrier-step, decode-closed-loop, h5-dram and h5-staging\n");
+                         "gmem-issue, gmem-issue-controlled, sync-loop, closed-loop-mma, spill-latency, mma-chain, sync-loop-multicta, sync-loop-ablation, sync-loop-reconcile, mma-softmax-chain, serial-fill, stage-overhead, sfu-shfl, cp-async, launch, latency, latency-curve, l1-carveout, l2-rescan, barrier-step, decode-closed-loop, h5-dram, h5-staging and sync-load-reuse\n");
     return 2;
   }
 
@@ -628,6 +630,7 @@ int main(int argc, char** argv) {
     else if (mode == "decode-closed-loop") result = run_decode_closed_loop(device, samples, warmup, schedule.get());
     else if (mode == "h5-dram") result = run_h5_dram(device, samples, warmup, schedule.get());
     else if (mode == "h5-staging") result = run_h5_staging(device, samples, warmup, schedule.get());
+    else if (mode == "sync-load-reuse") result = run_sync_load_reuse(device, samples, warmup, schedule.get());
     else result = run_l2(device, samples, warmup, schedule.get());
     schedule->finish();
     return result;
