@@ -4556,6 +4556,85 @@ static int run_spill_counters(int device, bool probe_only) {
   return 0;
 }
 
+// Diagnostic (GB10 spill study): spill points at their frozen steps, read in several local
+// memory allocations of one process. Each line of `path` is `dependency_mode
+// frame_bytes_per_thread reload_count steps`. Allocations in order: the first launch's,
+// two after raising the stack limit (which makes the driver allocate local memory anew),
+// then a new context (cudaDeviceReset) and two more raises. Each allocation is read twice.
+static int run_spill_alloc_diag(int device, int samples, int warmup, const std::string& path) {
+  struct Point {
+    std::string mode;
+    int frame, reloads, steps;
+  };
+  std::vector<Point> points;
+  std::ifstream input(path);
+  for (Point p; input >> p.mode >> p.frame >> p.reloads >> p.steps;) points.push_back(p);
+  if (!input.eof() || points.empty()) {
+    std::fprintf(stderr, "spill-alloc-diag: cannot read %s\n", path.c_str());
+    return 2;
+  }
+  const char* actions[] = {"first", "stack", "stack", "context", "stack", "stack"};
+  std::printf("{\n  \"samples\": %d,\n  \"allocations\": [", samples);
+  for (int a = 0; a < 6; ++a) {
+    const std::string action = actions[a];
+    if (action == "context") CUDA_CHECK(cudaDeviceReset());
+    CUDA_CHECK(cudaSetDevice(device));
+    cudaDeviceProp prop{};
+    CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+    const int sm_count = prop.multiProcessorCount;
+    size_t stack = 0;
+    CUDA_CHECK(cudaDeviceGetLimit(&stack, cudaLimitStackSize));
+    if (action == "stack") {
+      stack += 1024;
+      CUDA_CHECK(cudaDeviceSetLimit(cudaLimitStackSize, stack));
+      CUDA_CHECK(cudaDeviceGetLimit(&stack, cudaLimitStackSize));
+    }
+    uint32_t* d_sink = nullptr;
+    CUDA_CHECK(cudaMalloc(&d_sink, static_cast<size_t>(sm_count) * 128 * sizeof(uint32_t)));
+    cudaEvent_t ev_start, ev_stop, cal_start, cal_stop;
+    for (cudaEvent_t* e : {&ev_start, &ev_stop, &cal_start, &cal_stop}) CUDA_CHECK(cudaEventCreate(e));
+    std::printf("%s\n    {\"allocation\": %d, \"action\": \"%s\", \"stack_limit_bytes\": %zu, \"visits\": [",
+                a ? "," : "", a, action.c_str(), stack);
+    for (int v = 0; v < 2; ++v) {
+      std::printf("%s\n      [", v ? "," : "");
+      for (size_t pi = 0; pi < points.size(); ++pi) {
+        const Point& p = points[pi];
+        const bool serial = p.mode == "serial_chain";
+        auto launch = [&]() {
+          if (serial) dispatch_spill_frame<true>(p.frame, sm_count, d_sink, p.reloads, 1, p.steps);
+          else dispatch_spill_frame<false>(p.frame, sm_count, d_sink, p.reloads, 1, p.steps);
+        };
+        const double before = 1e3 * measure_cycles_per_ns(cal_start, cal_stop);
+        for (int w = 0; w < warmup; ++w) launch();
+        CUDA_CHECK(cudaGetLastError());
+        CUDA_CHECK(cudaDeviceSynchronize());
+        std::vector<double> ns;
+        for (int s = 0; s < samples; ++s) {
+          CUDA_CHECK(cudaEventRecord(ev_start));
+          launch();
+          CUDA_CHECK(cudaEventRecord(ev_stop));
+          CUDA_CHECK(cudaEventSynchronize(ev_stop));
+          float ms = 0;
+          CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
+          ns.push_back(static_cast<double>(ms) * 1e6);
+        }
+        const double after = 1e3 * measure_cycles_per_ns(cal_start, cal_stop);
+        std::printf("%s\n        {\"dependency_mode\": \"%s\", \"frame_bytes_per_thread\": %d, \"reload_count\": %d, "
+                    "\"steps\": %d, \"sm_mhz_before\": %.1f, \"sm_mhz_after\": %.1f, \"launch_ns_samples\": [",
+                    pi ? "," : "", p.mode.c_str(), p.frame, p.reloads, p.steps, before, after);
+        for (int s = 0; s < samples; ++s) std::printf("%s%.1f", s ? ", " : "", ns[s]);
+        std::printf("]}");
+      }
+      std::printf("]");
+    }
+    std::printf("]}");
+    for (cudaEvent_t e : {ev_start, ev_stop, cal_start, cal_stop}) CUDA_CHECK(cudaEventDestroy(e));
+    CUDA_CHECK(cudaFree(d_sink));
+  }
+  std::printf("\n  ]\n}\n");
+  return 0;
+}
+
 static int run_spill_latency(int device, int samples, int warmup, LaunchSchedule* schedule = nullptr) {
   cudaDeviceProp prop{};
   CUDA_CHECK(cudaGetDeviceProperties(&prop, device));

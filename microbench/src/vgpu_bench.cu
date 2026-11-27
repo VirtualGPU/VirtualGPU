@@ -622,6 +622,9 @@ int main(int argc, char** argv) {
     schedule->finish();
     return result;
   }
+  if (mode == "spill-alloc-diag") {
+    return run_spill_alloc_diag(device, samples, warmup, point_order);
+  }
   if (mode == "mlp-order") {
     return run_mlp_order(device, samples, warmup, point_order);
   }
