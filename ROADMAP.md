@@ -81,7 +81,9 @@ Fix what made v0.2 miss on the RTX 4070 and GB10, and fix the profiles we alread
 - [ ] Capture `microbench.spill_counters` on the RTX 4070 and check the loop split with `scripts/posthoc_spill_split.py`
 - [x] Do not charge local memory bandwidth on a phase's chain on top of the measured reload latency (#15)
 - [x] Take the per-launch frame cost out of `extra_ns_vs_zero` in `spill-latency` (#15)
-- [ ] Recollect `spill_reload_latency_by_count` on every profile with the launch cost taken out
+- [ ] Recollect `spill_reload_latency_by_count` on the RTX 4070 and GB10 with the launch cost taken out
+- [ ] Build the GB10 0.23.0 profile with `collect_profile.py --long-launch --carry-from`, after one locked session for the device query and the `cta-dispatch` trace
+- [ ] Capture the RTX 4070 0.23.0 long-launch profile
 - [x] Register a decision rule and freeze predictions for the spill mechanisms before `spill-latency` is recaptured with long launches (#15, [v0.3-spill-decision-registration.md](docs/results/analysis/v0.3-spill-decision-registration.md))
 - [ ] Score the spill decision on the RTX 4070 long-launch profile with `scripts/spill_decision.py` and report it, with GB10 as not run since its `spill-latency` failed rule 3 (#21)
 - [x] Size the spill frames' L1 footprint by the CTAs an SM actually holds, not full residency (`simulate` in `sim.rs`), which overcharges grids under one wave such as the one-CTA-per-SM `spill-latency` kernel
@@ -93,11 +95,10 @@ Fix what made v0.2 miss on the RTX 4070 and GB10, and fix the profiles we alread
 - [ ] Synchronous load GEMM (`num_stages = 1`, +9.1% warm): find the missing mechanism with a microbenchmark
 - [ ] GB10 decode shapes are predicted too compressed: find out why
 - [x] Microbenchmark for `non_mma_issue_rate_per_sm_gips` (the higher of pure FFMA and an FFMA and LOP3 mix)
-- [ ] Measure `non_mma_issue_rate_per_sm_gips` and the local memory rates that are still estimated, on every profile
+- [ ] Measure `non_mma_issue_rate_per_sm_gips` and the local memory rates that are still estimated, on the RTX 4070 and GB10
 - [ ] Run the registered same-device check of the measured non-MMA issue rate on the qualified GB10 and RTX 4070 profiles ([v0.3-non-mma-same-device-check-registration.md](docs/results/analysis/v0.3-non-mma-same-device-check-registration.md))
 - [ ] The core charges a stage synchronization (`sync_ns`) on every pipeline step, also on a loop with no barrier: decide whether a barrier-free loop should pay it (no v0.2 kernel has such a loop)
 - [ ] The core charges one `sync_ns` per step whatever the number of barriers in the loop: find out whether the barrier count should enter it
-- [ ] Fix the measurement problems in the rtxpro6000, a100-80gb and rtx3070 profiles (issue #8)
 - [ ] Sealed v0.3 holdout decides the cross-wave L2 reuse change
 
 - [ ] Exit test: pass on fresh GEMM and attention holdouts on both the RTX 4070 and GB10.
@@ -110,6 +111,8 @@ Most inference kernels are tuned for data center cards, so the model has to work
 - [ ] Hopper mechanisms in the frontend, Kernel IR and core: TMA loads and stores, `wgmma` with its async wait, warp specialization with producer and consumer warp groups, register reallocation (`setmaxnreg`), persistent kernels with an outer tile loop, epilogues that overlap the next tile
 - [ ] Thread block clusters and distributed shared memory, for the kernels Triton emits them in
 - [ ] New microbenchmarks for each mechanism, under the same no fitting rule
+- [ ] Fix the measurement problems in the rtxpro6000 and a100-80gb profiles (issue #8)
+- [ ] Recollect `spill_reload_latency_by_count` with the launch cost taken out, and measure `non_mma_issue_rate_per_sm_gips` and the estimated local memory rates, on the other bundled profiles
 - [ ] Publish wheels to PyPI from the release workflow with build attestations, so testers install with one command (no announcement yet)
 
 - [ ] Exit test: sealed holdouts for GEMM and attention on H100 and A100 with a model frozen before their labels exist, passing.
