@@ -79,8 +79,11 @@ def launch_errors(profile: dict[str, Any]) -> list[str]:
     protocol's minimum."""
     minimum = profile["provenance"]["capture_protocol"]["minimum_launch_ns"]
     errors = []
-    for path, name, leaf in measured_leaves(profile["measured"]):
-        if leaf.get("source") != "measured" or name in UNTIMED_LEAVES or "provisional" in leaf:
+    for path, _, leaf in measured_leaves(profile["measured"]):
+        # A derived field may hold several values (serial_stage_overhead_ns: intercept and
+        # slope per point), so the field is looked for anywhere in the path.
+        untimed = UNTIMED_LEAVES.intersection(path.replace("[", ".").split("."))
+        if leaf.get("source") != "measured" or untimed or "provisional" in leaf:
             continue
         launch = leaf.get("launch")
         if launch is None:

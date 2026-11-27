@@ -134,3 +134,16 @@ def test_long_launch_profile_requires_launch_of_every_timed_value() -> None:
         for e in launch_errors(profile)
     )
     assert "extra_ns_vs_zero" in spill
+
+
+def test_long_launch_check_skips_every_value_of_a_derived_field() -> None:
+    # serial_stage_overhead_ns holds an intercept and a slope per point, fitted, not timed.
+    profile = load_profile(REPO_ROOT / "profiles" / "gb10.json")
+    profile["provenance"]["capture_protocol"] = {
+        "minimum_launch_ns": 1e6,
+        "freeze_manifest_sha256": "0" * 64,
+        "rounds": [],
+        "rule_three": {},
+    }
+    assert profile["measured"]["compute"]["serial_stage_overhead_ns"][0]["intercept_ns"]
+    assert not any("serial_stage_overhead_ns" in e for e in launch_errors(profile))
