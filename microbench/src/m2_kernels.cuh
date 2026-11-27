@@ -2550,7 +2550,9 @@ static int run_l2_merge(int device, int samples, int warmup, LaunchSchedule* sch
   // samples in one loop, so each launch writes its own row of a ring of `ring` rows
   // and the last rows hold the timed samples.
   const size_t max_ctas = std::max<size_t>(256, static_cast<size_t>(sm_count) * 2);
-  const int ring = schedule ? std::max(samples, 3) : 1;
+  // With a schedule a sample is the median of kGroup launches (l2-merge groups registration).
+  constexpr int kGroup = 9;
+  const int ring = schedule ? std::max(samples * kGroup, 3) : 1;
   CUDA_CHECK(cudaMalloc(&d_cta_turn, max_ctas * ring * sizeof(double)));
   CUDA_CHECK(cudaMemset(d_dram, 21, dram_bytes));
   CUDA_CHECK(cudaMemset(d_flush, 22, flush_bytes));
@@ -2607,17 +2609,26 @@ static int run_l2_merge(int device, int samples, int warmup, LaunchSchedule* sch
             // Each step reads a fresh stripe of one stage per group; no wrap within a launch.
             const size_t stripe = static_cast<size_t>(n / r) * static_cast<size_t>(k);
             const int maximum = static_cast<int>(std::min<size_t>(dram_bytes / stripe, 1u << 30));
+            schedule->group = kGroup;
             auto timed = schedule->time_point(256, 1, maximum, warmup, samples, ev_start, ev_stop, prepare, launch);
+            schedule->group = 1;
             std::vector<double> rows(max_ctas * ring);
             CUDA_CHECK(cudaMemcpy(rows.data(), d_cta_turn, rows.size() * sizeof(double), cudaMemcpyDeviceToHost));
             const double l2_bytes = static_cast<double>(n) * static_cast<double>(k) * timed.length;
-            std::vector<double> turn, l2_bw, dram_bw;
-            const long count = static_cast<long>(timed.launch_ns.size());
+            // Per launch (every launch in a capture, the sizing launches' last ones in a pilot),
+            // then the median over each group for the sample lists.
+            const std::vector<double>& per_launch = timed.launch_each.empty() ? timed.launch_ns : timed.launch_each;
+            const int g = timed.launch_each.empty() ? 1 : kGroup;
+            std::vector<double> turn_each, l2_each;
+            const long count = static_cast<long>(per_launch.size());
             for (long i = 0; i < count; ++i) {
-              turn.push_back(mean_turn_ns(rows.data() + static_cast<size_t>((calls - count + i) % ring) * max_ctas));
-              l2_bw.push_back(l2_bytes / timed.launch_ns[i]);
-              dram_bw.push_back(l2_bw.back() / static_cast<double>(r));
+              turn_each.push_back(mean_turn_ns(rows.data() + static_cast<size_t>((calls - count + i) % ring) * max_ctas));
+              l2_each.push_back(l2_bytes / per_launch[i]);
             }
+            const auto turn = LaunchSchedule::group_medians(turn_each, g);
+            const auto l2_bw = LaunchSchedule::group_medians(l2_each, g);
+            std::vector<double> dram_bw;
+            for (double b : l2_bw) dram_bw.push_back(b / static_cast<double>(r));
             auto list = [](const char* key, const std::vector<double>& v, const char* fmt) {
               std::printf(", \"%s\": [", key);
               for (size_t i = 0; i < v.size(); ++i) {
@@ -2629,6 +2640,16 @@ static int run_l2_merge(int device, int samples, int warmup, LaunchSchedule* sch
             list("turnaround_ns_samples", turn, "%.2f");
             list("dram_unique_bw_gbps_samples", dram_bw, "%.3f");
             list("l2_to_sm_bw_gbps_samples", l2_bw, "%.3f");
+            if (!timed.launch_each.empty()) {
+              list("turnaround_ns_each", turn_each, "%.2f");
+              std::vector<double> sorted_each = timed.launch_each;
+              std::sort(sorted_each.begin(), sorted_each.end());
+              const size_t m = sorted_each.size();
+              const double med = m % 2 ? sorted_each[m / 2] : 0.5 * (sorted_each[m / 2 - 1] + sorted_each[m / 2]);
+              long slow = 0;
+              for (double x : timed.launch_each) slow += x > 1.15 * med;
+              std::printf(", \"slow_launch_share\": %.4f", static_cast<double>(slow) / static_cast<double>(m));
+            }
             std::printf("}");
             continue;
           }

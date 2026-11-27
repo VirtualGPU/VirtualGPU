@@ -11,6 +11,10 @@ struct LaunchSchedule {
   // raise it for points whose window varies between processes by a known factor (GB10's
   // L2 bistable band), so the frozen length still clears the capture floor in either state.
   double observed_target_ns = pilot_min_ns;
+  // A mode may repeat its measured unit: with group k above 1, a capture sample is the median
+  // of k consecutive launches (prepare and launch each time) and every launch is printed as
+  // `launch_ns_each`; the pilot still sizes and prints single launches.
+  int group = 1;
   std::function<double()> clock_probe;
 
   explicit LaunchSchedule(const std::string& path) : pilot(path == "pilot") {
@@ -38,7 +42,19 @@ struct LaunchSchedule {
     int length;
     std::vector<double> launch_ns;
     std::vector<double> observed;
+    std::vector<double> launch_each;  // every capture launch when group > 1, else empty
   };
+
+  // The medians of consecutive groups of `k` values.
+  static std::vector<double> group_medians(const std::vector<double>& v, int k) {
+    std::vector<double> out;
+    for (size_t i = 0; i + k <= v.size(); i += k) {
+      std::vector<double> g(v.begin() + i, v.begin() + i + k);
+      std::sort(g.begin(), g.end());
+      out.push_back(k % 2 ? g[k / 2] : 0.5 * (g[k / 2 - 1] + g[k / 2]));
+    }
+    return out;
+  }
 
   // Size (pilot) or look up (frozen schedule) one point's length and time it. Prints
   // the pilot's sizing trials, then `"steps"` and `"launch_ns_samples"`; the caller
@@ -116,13 +132,22 @@ struct LaunchSchedule {
       }
       std::printf("]");
     } else {
-      durations = collect(length, minimum, maximum, warmup, samples, start, stop, prepare, launch,
-                          observe, observed);
+      durations = collect(length, minimum, maximum, warmup, samples * group, start, stop, prepare,
+                          launch, observe, observed);
+    }
+    std::vector<double> each;
+    if (!pilot && group > 1) {
+      each = durations;
+      durations = group_medians(each, group);
     }
     std::printf(", \"steps\": %d, \"launch_ns_samples\": ", length);
     print_list(durations, 1.0, false);
+    if (!each.empty()) {
+      std::printf(", \"launch_ns_each\": ");
+      print_list(each, 1.0, false);
+    }
     if (clock_probe) std::printf(", \"sm_mhz_after\": %.1f", clock_probe());
-    return {length, durations, observed};
+    return {length, durations, observed, each};
   }
 
   template <class Prepare, class Launch, class Observe>
