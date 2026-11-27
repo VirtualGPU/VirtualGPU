@@ -177,6 +177,11 @@ DESIGN_FIELDS = {
         "fixed_sync_ns": ("num_warps", "tokens"),
         "min_async_roundtrip": ("num_warps",),
     },
+    # Diagnostic (v0.3-gb10-carveout-probe-registration.md), not a profile mode.
+    "carveout-probe": {
+        "l1_cliff": ("config", "threads", "smem_request_bytes", "ws_bytes"),
+        "spill_transition": ("context", "warps", "frame_bytes_per_thread", "reload_count"),
+    },
 }
 
 
