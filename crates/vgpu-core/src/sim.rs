@@ -615,6 +615,14 @@ fn waterfill(caps: &[f64], capacity: f64, out: &mut [f64]) {
     }
 }
 
+/// One CTA's spill traffic (L1, L2, DRAM bytes) and reload latency
+/// per execution of the spill scope.
+#[derive(Clone, Copy, Default)]
+struct SpillCharge {
+    bytes: (f64, f64, f64),
+    reload_ns: f64,
+}
+
 struct Sim<'a, L: L2> {
     k: &'a Kernel,
     m: &'a Machine,
@@ -624,11 +632,8 @@ struct Sim<'a, L: L2> {
     l2_hit_bytes: f64,
     merged_bytes: f64,
     dram_bytes: f64,
-    /// Spill traffic of one CTA per execution of the spill scope, as
-    /// `(L1 bytes, L2 bytes, DRAM bytes)`.
-    spill: (f64, f64, f64),
-    /// Spill reload latency of one CTA per execution of the spill scope.
-    reload_ns: f64,
+    spill_charges: Vec<SpillCharge>,
+    spill_residents: Vec<u32>,
 }
 
 impl<'a, L: L2> Sim<'a, L> {
@@ -662,6 +667,13 @@ impl<'a, L: L2> Sim<'a, L> {
     /// iterations only compute (drain). `prologue` holds only work outside
     /// the software pipeline.
     fn demand(&mut self, phase: Phase, sm: u32, program: u32, tile: u32) -> Demand {
+        let spill =
+            self.spill_residents
+                .get(sm as usize)
+                .map_or_else(SpillCharge::default, |&count| {
+                    debug_assert!(count > 0 && count as usize <= self.spill_charges.len());
+                    self.spill_charges[count as usize - 1]
+                });
         let k = self.k;
         let tl = &k.tile;
         let n = k.iterations(program, tile);
@@ -711,7 +723,7 @@ impl<'a, L: L2> Sim<'a, L> {
             }
             _ => 0.0,
         };
-        let (spill_l1, spill_l2, spill_dram) = self.spill;
+        let (spill_l1, spill_l2, spill_dram) = spill.bytes;
         let (spill_l1, spill_l2, spill_dram) = (
             spill_l1 * spill_executions,
             spill_l2 * spill_executions,
@@ -719,7 +731,7 @@ impl<'a, L: L2> Sim<'a, L> {
         );
         self.dram_bytes += spill_dram;
         let local_bytes = spill_l1 + spill_l2 + spill_dram;
-        let chain_local_bytes = if self.reload_ns > 0.0 && k.spill.bytes_per_thread > 0.0 {
+        let chain_local_bytes = if spill.reload_ns > 0.0 && k.spill.bytes_per_thread > 0.0 {
             local_bytes * (1.0 - k.spill.load_bytes_per_thread / k.spill.bytes_per_thread)
         } else {
             local_bytes
@@ -783,7 +795,7 @@ impl<'a, L: L2> Sim<'a, L> {
             round_trips: if load_bytes > 0.0 { round_trips } else { 0.0 },
             stages: if phase == Phase::Main { steps } else { 0.0 },
             tokens: d + 1,
-            reload_ns: self.reload_ns * spill_executions,
+            reload_ns: spill.reload_ns * spill_executions,
             sync_ns: {
                 let base_sync = match phase {
                     Phase::Main => self.m.sync_ns(k.num_warps, d + 1) * steps,
@@ -926,6 +938,12 @@ impl<'a, L: L2> Sim<'a, L> {
                 TileEvent::Begin(sm, program, tile) => {
                     self.l2.begin_tile(sm, program, tile, self.t)
                 }
+            }
+        }
+        if !self.spill_residents.is_empty() {
+            self.spill_residents.fill(0);
+            for c in ctas.iter().chain(changed.iter()) {
+                self.spill_residents[c.sm as usize] += 1;
             }
         }
         changed.sort_unstable_by_key(|c| (c.program, c.tile));
@@ -1261,25 +1279,6 @@ pub fn simulate<L: L2>(
     let occ = occupancy(k, &p.specs).map_err(ModelError::Occupancy)?;
     let n_sm = m.sm_count;
     let slots = occ.ctas_per_sm * n_sm;
-    // Spill traffic for the CTAs the busiest SM holds in the first wave,
-    // computed once for the steady state.
-    let held = occ.ctas_per_sm.min(k.grid.div_ceil(n_sm)).max(1);
-    let threads_in_sm = held * k.num_warps * p.specs.warp_size;
-    let split = match k.spill.scope {
-        SpillScope::None => SpillSplit::default(),
-        _ => l2.spill(0, threads_in_sm, occ.carveout_bytes, &k.spill),
-    };
-    let per_cta = f64::from(held);
-    let spill = (split.l1 / per_cta, split.l2 / per_cta, split.dram / per_cta);
-    let reload_ns = if k.spill.scope == SpillScope::None {
-        0.0
-    } else {
-        m.spill_reload_ns(
-            k.spill.load_bytes_per_thread / SPILL_RELOAD_BYTES,
-            k.spill.stack_frame_bytes as f64 * f64::from(threads_in_sm),
-            split.miss,
-        )
-    };
     let mut sim = Sim {
         k,
         m,
@@ -1289,8 +1288,8 @@ pub fn simulate<L: L2>(
         l2_hit_bytes: 0.0,
         merged_bytes: 0.0,
         dram_bytes: 0.0,
-        spill,
-        reload_ns,
+        spill_charges: Vec::new(),
+        spill_residents: Vec::new(),
     };
 
     // First wave: breadth-first round robin over SMs. Later: first SM to free a slot.
@@ -1304,6 +1303,27 @@ pub fn simulate<L: L2>(
             changed.push(c);
         }
         next += 1;
+    }
+    if k.spill.scope != SpillScope::None && !changed.is_empty() {
+        // The first wave fills breadth first. Later refills cannot increase
+        // its peak residency. Seed the persistent L2 pressure at that peak
+        // before deriving the smaller spill charges at the same initial L2 state.
+        let peak = (changed.len() as u32).div_ceil(n_sm);
+        sim.spill_charges = vec![SpillCharge::default(); peak as usize];
+        sim.spill_residents = vec![0; n_sm as usize];
+        for count in (1..=peak).rev() {
+            let threads = count * k.num_warps * p.specs.warp_size;
+            let split = sim.l2.spill(0, threads, occ.carveout_bytes, &k.spill);
+            let ctas = f64::from(count);
+            sim.spill_charges[count as usize - 1] = SpillCharge {
+                bytes: (split.l1 / ctas, split.l2 / ctas, split.dram / ctas),
+                reload_ns: m.spill_reload_ns(
+                    k.spill.load_bytes_per_thread / SPILL_RELOAD_BYTES,
+                    k.spill.stack_frame_bytes as f64 * f64::from(threads),
+                    split.miss,
+                ),
+            };
+        }
     }
     sim.settle(&mut tile_events, &mut changed, &mut ctas);
 
@@ -1530,6 +1550,94 @@ mod tests {
     }
 
     #[test]
+    fn spill_footprint_follows_residency_on_each_sm() {
+        // All spill bytes stay in L1 with one resident CTA, and overflow to
+        // DRAM with two or more. No other operation accesses memory.
+        struct SpillOverflow {
+            threads_per_cta: u32,
+            queries: Vec<u32>,
+        }
+
+        impl L2 for SpillOverflow {
+            fn split(
+                &mut self,
+                _: u32,
+                _: u32,
+                _: u32,
+                _: &Access,
+                _: u32,
+                _: u32,
+                _: bool,
+                _: f64,
+            ) -> Traffic {
+                unreachable!("the kernel has no global accesses")
+            }
+
+            fn spill(&mut self, _: u32, threads: u32, _: u64, spill: &Spill) -> SpillSplit {
+                self.queries.push(threads);
+                let bytes = f64::from(threads) * spill.bytes_per_thread;
+                if threads == self.threads_per_cta {
+                    SpillSplit {
+                        l1: bytes,
+                        ..SpillSplit::default()
+                    }
+                } else {
+                    SpillSplit {
+                        dram: bytes,
+                        miss: 1.0,
+                        ..SpillSplit::default()
+                    }
+                }
+            }
+        }
+
+        let ir = KernelIR::from_json_str(include_str!("../../../schemas/examples/gemm_sm89.json"))
+            .unwrap();
+        let p = Profile::from_json(include_str!("../../../profiles/rtx4070.json")).unwrap();
+        let mut k = kernel_from_ir(&ir).unwrap();
+        k.tile.prologue = Work::default();
+        k.tile.per_iteration = Work::default();
+        k.tile.epilogue = Work::default();
+        k.tile.iterations = 3;
+        k.tile.prefetch_distance = 0;
+        k.tile_iterations = None;
+        k.spill = Spill {
+            bytes_per_thread: 16.0,
+            stack_frame_bytes: 1024,
+            scope: SpillScope::PerIteration { assumed: false },
+            ..Spill::default()
+        };
+        let mut m = Machine::nominal(&p, &k.mma_key).unwrap();
+        m.sm_count = 2;
+        let threads = k.num_warps * p.specs.warp_size;
+        let full = occupancy(&k, &p.specs).unwrap().ctas_per_sm * m.sm_count;
+        assert!(full >= 4);
+        let per_cta_bytes = f64::from(threads * k.tile.iterations) * k.spill.bytes_per_thread;
+
+        for (grid, peak, overflowing_ctas) in [
+            (1, 1, 0),
+            (2, 1, 0),
+            (3, 2, 2),
+            (full, full / 2, full),
+            (full + 1, full / 2, full),
+        ] {
+            k.grid = grid;
+            let mut l2 = SpillOverflow {
+                threads_per_cta: threads,
+                queries: Vec::new(),
+            };
+            let result = simulate(&k, &p, &m, &mut l2).unwrap();
+            let expected: Vec<_> = (1..=peak).rev().map(|count| count * threads).collect();
+            assert_eq!(l2.queries, expected, "grid {grid}");
+            assert_eq!(
+                result.dram_bytes,
+                f64::from(overflowing_ctas) * per_cta_bytes,
+                "grid {grid}"
+            );
+        }
+    }
+
+    #[test]
     fn reload_latency_takes_spill_loads_off_the_chain() {
         let mut v: serde_json::Value =
             serde_json::from_str(include_str!("../../../schemas/examples/gemm_sm89.json")).unwrap();
@@ -1552,71 +1660,17 @@ mod tests {
             l2_hit_bytes: 0.0,
             merged_bytes: 0.0,
             dram_bytes: 0.0,
-            spill: (1000.0, 0.0, 0.0),
-            reload_ns: 0.0,
+            spill_charges: vec![SpillCharge {
+                bytes: (1000.0, 0.0, 0.0),
+                reload_ns: 0.0,
+            }],
+            spill_residents: vec![1],
         };
         let d = sim.demand(Phase::Main, 0, 0, 0);
         assert!(d.local_bytes > 0.0);
         assert_eq!(d.chain_local_bytes, d.local_bytes);
-        sim.reload_ns = 50.0;
+        sim.spill_charges[0].reload_ns = 50.0;
         let d = sim.demand(Phase::Main, 0, 0, 0);
         assert!((d.chain_local_bytes - d.local_bytes * 0.25).abs() < 1e-9);
-    }
-
-    struct SpillThreads(ConstantHitRatio, Vec<u32>);
-
-    impl L2 for SpillThreads {
-        fn split(
-            &mut self,
-            sm: u32,
-            program: u32,
-            tile: u32,
-            a: &Access,
-            k0: u32,
-            k1: u32,
-            is_write: bool,
-            t: f64,
-        ) -> Traffic {
-            self.0.split(sm, program, tile, a, k0, k1, is_write, t)
-        }
-
-        fn spill(&mut self, _: u32, threads: u32, _: u64, s: &Spill) -> SpillSplit {
-            self.1.push(threads);
-            SpillSplit {
-                l1: s.bytes_per_thread * f64::from(threads),
-                ..SpillSplit::default()
-            }
-        }
-    }
-
-    #[test]
-    fn spill_frames_count_only_the_ctas_an_sm_holds() {
-        let mut v: serde_json::Value =
-            serde_json::from_str(include_str!("../../../schemas/examples/gemm_sm89.json")).unwrap();
-        let r = &mut v["resources"];
-        r["stack_frame_bytes"] = 512.into();
-        r["spill_loads_bytes"] = 384.into();
-        r["spill_stores_bytes"] = 128.into();
-        r["spill_scope"] = "inner_loop_confirmed".into();
-        let ir = KernelIR::from_json_str(&v.to_string()).unwrap();
-        let p = Profile::from_json(include_str!("../../../profiles/rtx4070.json")).unwrap();
-        let mut k = kernel_from_ir(&ir).unwrap();
-        let m = Machine::nominal(&p, &k.mma_key).unwrap();
-        let occ = occupancy(&k, &p.specs).unwrap();
-        assert!(occ.ctas_per_sm > 1);
-        let cta_threads = k.num_warps * p.specs.warp_size;
-        let n_sm = m.sm_count;
-        for (grid, held) in [
-            (1, 1),
-            (n_sm, 1),
-            (n_sm + 1, 2),
-            (occ.ctas_per_sm * n_sm, occ.ctas_per_sm),
-            (3 * occ.ctas_per_sm * n_sm, occ.ctas_per_sm),
-        ] {
-            k.grid = grid;
-            let mut l2 = SpillThreads(ConstantHitRatio(0.5), Vec::new());
-            simulate(&k, &p, &m, &mut l2).unwrap();
-            assert_eq!(l2.1, vec![held * cta_threads], "grid {grid}");
-        }
     }
 }
