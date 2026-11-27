@@ -306,6 +306,14 @@ def check_allocations(mode, point, samples):
         raise ValueError(f"{mode}: expected {n} allocations in allocation_launch_ns")
     for one in lists:
         check_samples(mode, {"launch_ns_samples": one}, samples)
+    # The point's samples are the means over allocations of their j-th smallest launch.
+    ranked = [sorted(one) for one in lists]
+    for j, value in enumerate(point["launch_ns_samples"]):
+        mean = sum(one[j] for one in ranked) / n
+        if abs(value - mean) > 0.15:  # inputs and output each rounded to 0.1 ns
+            raise ValueError(
+                f"{mode}: sample {j} is not the mean of the allocations' rank {j} launches"
+            )
     return min(min(one) for one in lists)
 
 

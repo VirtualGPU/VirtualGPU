@@ -54,7 +54,10 @@ def test_verify_checks_every_launch_of_every_allocation():
     capture = {"samples": 15, "reload_latency_by_count": copy.deepcopy(points)}
     assert long_launch.verify(record, capture)["shortest_launch_ns"] == 1.3e6
     short = copy.deepcopy(capture)
-    short["reload_latency_by_count"][1]["allocation_launch_ns"][7][3] = 0.9e6
+    short_point = short["reload_latency_by_count"][1]
+    short_point["allocation_launch_ns"][7][3] = 0.9e6
+    ranked = [sorted(one) for one in short_point["allocation_launch_ns"]]
+    short_point["launch_ns_samples"] = [sum(one[j] for one in ranked) / N for j in range(15)]
     with pytest.raises(ValueError, match="a launch took 900000"):
         long_launch.verify(record, short)
     missing = copy.deepcopy(capture)
@@ -65,6 +68,24 @@ def test_verify_checks_every_launch_of_every_allocation():
     zero["reload_latency_by_count"][0]["allocation_launch_ns"] = good
     with pytest.raises(ValueError, match="read in one allocation"):
         long_launch.verify(record, zero)
+
+
+def test_samples_must_be_rank_means_of_the_unsorted_allocations():
+    # allocation_launch_ns keeps launch order; the samples are the means by rank.
+    launches = [[1.3e6 + 1e3 * ((a * 7 + j * 5) % 15) for j in range(15)] for a in range(N)]
+    point = capture_point(8, launches)
+    ranked = [sorted(one) for one in launches]
+    point["launch_ns_samples"] = [round(sum(one[j] for one in ranked) / N, 1) for j in range(15)]
+    assert point["allocation_launch_ns"][0] != sorted(point["allocation_launch_ns"][0])
+    record = record_for([capture_point(0, None), point])
+    capture = {"samples": 15, "reload_latency_by_count": [capture_point(0, None), point]}
+    long_launch.verify(record, capture)
+    by_position = copy.deepcopy(capture)
+    by_position["reload_latency_by_count"][1]["launch_ns_samples"] = [
+        sum(one[j] for one in launches) / N for j in range(15)
+    ]
+    with pytest.raises(ValueError, match="rank"):
+        long_launch.verify(record, by_position)
 
 
 def test_merge_keeps_each_round_s_allocations_and_their_shortest_launch():

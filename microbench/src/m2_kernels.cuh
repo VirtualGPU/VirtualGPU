@@ -4685,11 +4685,11 @@ static int run_spill_allocations(int device, int samples, int warmup, LaunchSche
               samples, resident_threads_per_sm, kSpillAllocations);
   for (size_t i = 0; i < points.size(); ++i) {
     Point& p = points[i];
-    for (auto& v : p.launch_ns) std::sort(v.begin(), v.end());
+    // Rank means from sorted copies; allocation_launch_ns keeps launch order.
     std::vector<double> rank(samples, 0.0);
-    for (int j = 0; j < samples; ++j) {
-      for (auto& v : p.launch_ns) rank[j] += v[j];
-      rank[j] /= static_cast<double>(p.launch_ns.size());
+    for (std::vector<double> v : p.launch_ns) {
+      std::sort(v.begin(), v.end());
+      for (int j = 0; j < samples; ++j) rank[j] += v[j] / static_cast<double>(p.launch_ns.size());
     }
     std::printf("%s\n    {\"regime\": \"%s\", \"dependency_mode\": \"%s\", \"num_warps\": 4, "
                 "\"resident_threads_per_sm\": %d, \"frame_bytes_per_thread\": %d, \"reload_count\": %d, "
