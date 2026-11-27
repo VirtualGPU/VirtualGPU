@@ -1,0 +1,24 @@
+{
+ "binary_sha256": "ea578e6020cbfddb0dde624c7c4cba54b254f743fc7a938f5559f5ff96f0ff48",
+ "arch": "sm_121a",
+ "source": "df2841e",
+ "note": "opcode counts per instance from cuobjdump -sass; reported, not a registered check",
+ "instances": {
+  "_ZN15sync_load_reuse6kernelILb0EEEvPK5uint4PfPimiii": {
+   "S2R": 3,
+   "LDG.E.128": 24,
+   "BAR.SYNC.DEFER_BLOCKING": 6,
+   "STS.128": 24,
+   "LDSM.16.M88.4": 6,
+   "HMMA.16816.F32": 24
+  },
+  "_ZN15sync_load_reuse6kernelILb1EEEvPK5uint4PfPimiii": {
+   "S2R": 3,
+   "LDG.E.128.STRONG.GPU": 24,
+   "BAR.SYNC.DEFER_BLOCKING": 6,
+   "STS.128": 24,
+   "LDSM.16.M88.4": 6,
+   "HMMA.16816.F32": 24
+  }
+ }
+}

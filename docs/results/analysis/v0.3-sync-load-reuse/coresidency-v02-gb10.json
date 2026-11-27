@@ -1,0 +1,977 @@
+{
+ "source": "archived v0.2 GB10 GEMM holdout IRs (opened), core ctas_per_sm on profiles/gb10-0.23.0.json, first wave under round-robin dispatch (CTA c on SM c mod 48)",
+ "configs": [
+  {
+   "case": "v02-gb10-decode-4",
+   "config": "m128n128k64-w4-s1-g1",
+   "grid": 52,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 4,
+   "sms_sharing_A": 4,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-4",
+   "config": "m128n128k64-w8-s1-g1",
+   "grid": 52,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 4,
+   "sms_sharing_A": 4,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-4",
+   "config": "m128n64k64-w4-s1-g1",
+   "grid": 104,
+   "ctas_per_sm": 3,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-4",
+   "config": "m128n64k64-w8-s1-g1",
+   "grid": 104,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-4",
+   "config": "m16n64k32-w4-s1-g1",
+   "grid": 104,
+   "ctas_per_sm": 10,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-4",
+   "config": "m16n64k32-w8-s1-g1",
+   "grid": 104,
+   "ctas_per_sm": 6,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-4",
+   "config": "m32n64k32-w4-s1-g1",
+   "grid": 104,
+   "ctas_per_sm": 10,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-4",
+   "config": "m32n64k32-w8-s1-g1",
+   "grid": 104,
+   "ctas_per_sm": 5,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-4",
+   "config": "m64n128k32-w4-s1-g1",
+   "grid": 52,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 4,
+   "sms_sharing_A": 4,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-4",
+   "config": "m64n128k32-w8-s1-g1",
+   "grid": 52,
+   "ctas_per_sm": 3,
+   "sms_with_co_resident_ctas": 4,
+   "sms_sharing_A": 4,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-4",
+   "config": "m64n64k32-w4-s1-g1",
+   "grid": 104,
+   "ctas_per_sm": 6,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-4",
+   "config": "m64n64k32-w8-s1-g1",
+   "grid": 104,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-40",
+   "config": "m128n128k64-w4-s1-g1",
+   "grid": 104,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-40",
+   "config": "m128n128k64-w8-s1-g1",
+   "grid": 104,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-40",
+   "config": "m128n64k64-w4-s1-g1",
+   "grid": 208,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-40",
+   "config": "m128n64k64-w8-s1-g1",
+   "grid": 208,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-40",
+   "config": "m16n64k32-w4-s1-g1",
+   "grid": 624,
+   "ctas_per_sm": 10,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-40",
+   "config": "m16n64k32-w8-s1-g1",
+   "grid": 624,
+   "ctas_per_sm": 6,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-40",
+   "config": "m32n64k32-w4-s1-g1",
+   "grid": 416,
+   "ctas_per_sm": 10,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-40",
+   "config": "m32n64k32-w8-s1-g1",
+   "grid": 416,
+   "ctas_per_sm": 5,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-40",
+   "config": "m64n128k32-w4-s1-g1",
+   "grid": 104,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-40",
+   "config": "m64n128k32-w8-s1-g1",
+   "grid": 104,
+   "ctas_per_sm": 3,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-40",
+   "config": "m64n64k32-w4-s1-g1",
+   "grid": 208,
+   "ctas_per_sm": 6,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-decode-40",
+   "config": "m64n64k32-w8-s1-g1",
+   "grid": 208,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-1153",
+   "config": "m128n128k64-w4-s1-g1",
+   "grid": 760,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 28,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-1153",
+   "config": "m128n128k64-w8-s1-g1",
+   "grid": 760,
+   "ctas_per_sm": 1,
+   "sms_with_co_resident_ctas": 0,
+   "sms_sharing_A": 0,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-1153",
+   "config": "m128n64k64-w4-s1-g1",
+   "grid": 1520,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-1153",
+   "config": "m128n64k64-w8-s1-g1",
+   "grid": 1520,
+   "ctas_per_sm": 1,
+   "sms_with_co_resident_ctas": 0,
+   "sms_sharing_A": 0,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-1153",
+   "config": "m16n64k32-w4-s1-g1",
+   "grid": 11096,
+   "ctas_per_sm": 9,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-1153",
+   "config": "m16n64k32-w8-s1-g1",
+   "grid": 11096,
+   "ctas_per_sm": 6,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-1153",
+   "config": "m32n64k32-w4-s1-g1",
+   "grid": 5624,
+   "ctas_per_sm": 7,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-1153",
+   "config": "m32n64k32-w8-s1-g1",
+   "grid": 5624,
+   "ctas_per_sm": 5,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-1153",
+   "config": "m64n128k32-w4-s1-g1",
+   "grid": 1444,
+   "ctas_per_sm": 3,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-1153",
+   "config": "m64n128k32-w8-s1-g1",
+   "grid": 1444,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 28,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-1153",
+   "config": "m64n64k32-w4-s1-g1",
+   "grid": 2888,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-1153",
+   "config": "m64n64k32-w8-s1-g1",
+   "grid": 2888,
+   "ctas_per_sm": 3,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m128n128k64-w4-s1-g1",
+   "grid": 246,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 0,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m128n128k64-w8-s1-g1",
+   "grid": 246,
+   "ctas_per_sm": 1,
+   "sms_with_co_resident_ctas": 0,
+   "sms_sharing_A": 0,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m128n64k64-w4-s1-g1",
+   "grid": 486,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 33,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m128n64k64-w8-s1-g1",
+   "grid": 486,
+   "ctas_per_sm": 1,
+   "sms_with_co_resident_ctas": 0,
+   "sms_sharing_A": 0,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m16n64k32-w4-s1-g1",
+   "grid": 3321,
+   "ctas_per_sm": 9,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m16n64k32-w8-s1-g1",
+   "grid": 3321,
+   "ctas_per_sm": 6,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m32n64k32-w4-s1-g1",
+   "grid": 1701,
+   "ctas_per_sm": 7,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m32n64k32-w8-s1-g1",
+   "grid": 1701,
+   "ctas_per_sm": 5,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m64n128k32-w4-s1-g1",
+   "grid": 451,
+   "ctas_per_sm": 3,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 0,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m64n128k32-w8-s1-g1",
+   "grid": 451,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 0,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m64n64k32-w4-s1-g1",
+   "grid": 891,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m64n64k32-w8-s1-g1",
+   "grid": 891,
+   "ctas_per_sm": 3,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-prefill-1792",
+   "config": "m128n128k64-w4-s1-g1",
+   "grid": 840,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 12,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-prefill-1792",
+   "config": "m128n128k64-w8-s1-g1",
+   "grid": 840,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 12,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-prefill-1792",
+   "config": "m128n64k64-w4-s1-g1",
+   "grid": 1680,
+   "ctas_per_sm": 3,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-prefill-1792",
+   "config": "m128n64k64-w8-s1-g1",
+   "grid": 1680,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-prefill-1792",
+   "config": "m16n64k32-w4-s1-g1",
+   "grid": 13440,
+   "ctas_per_sm": 10,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-prefill-1792",
+   "config": "m16n64k32-w8-s1-g1",
+   "grid": 13440,
+   "ctas_per_sm": 6,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-prefill-1792",
+   "config": "m32n64k32-w4-s1-g1",
+   "grid": 6720,
+   "ctas_per_sm": 10,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-prefill-1792",
+   "config": "m32n64k32-w8-s1-g1",
+   "grid": 6720,
+   "ctas_per_sm": 5,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-prefill-1792",
+   "config": "m64n128k32-w4-s1-g1",
+   "grid": 1680,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 36,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-prefill-1792",
+   "config": "m64n128k32-w8-s1-g1",
+   "grid": 1680,
+   "ctas_per_sm": 3,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 24,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-prefill-1792",
+   "config": "m64n64k32-w4-s1-g1",
+   "grid": 3360,
+   "ctas_per_sm": 6,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-prefill-1792",
+   "config": "m64n64k32-w8-s1-g1",
+   "grid": 3360,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-prefill-896",
+   "config": "m128n128k64-w4-s1-g1",
+   "grid": 336,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 0,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-prefill-896",
+   "config": "m128n128k64-w8-s1-g1",
+   "grid": 336,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 0,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-prefill-896",
+   "config": "m128n64k64-w4-s1-g1",
+   "grid": 672,
+   "ctas_per_sm": 3,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-prefill-896",
+   "config": "m128n64k64-w8-s1-g1",
+   "grid": 672,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-prefill-896",
+   "config": "m16n64k32-w4-s1-g1",
+   "grid": 5376,
+   "ctas_per_sm": 10,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-prefill-896",
+   "config": "m16n64k32-w8-s1-g1",
+   "grid": 5376,
+   "ctas_per_sm": 5,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-prefill-896",
+   "config": "m32n64k32-w4-s1-g1",
+   "grid": 2688,
+   "ctas_per_sm": 10,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-prefill-896",
+   "config": "m32n64k32-w8-s1-g1",
+   "grid": 2688,
+   "ctas_per_sm": 5,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-prefill-896",
+   "config": "m64n128k32-w4-s1-g1",
+   "grid": 672,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 0,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-prefill-896",
+   "config": "m64n128k32-w8-s1-g1",
+   "grid": 672,
+   "ctas_per_sm": 3,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 0,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-prefill-896",
+   "config": "m64n64k32-w4-s1-g1",
+   "grid": 1344,
+   "ctas_per_sm": 6,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-prefill-896",
+   "config": "m64n64k32-w8-s1-g1",
+   "grid": 1344,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-resident-wave-above",
+   "config": "m128n128k64-w4-s1-g1",
+   "grid": 97,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-above",
+   "config": "m128n128k64-w8-s1-g1",
+   "grid": 97,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-above",
+   "config": "m128n64k64-w4-s1-g1",
+   "grid": 194,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-above",
+   "config": "m128n64k64-w8-s1-g1",
+   "grid": 194,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-above",
+   "config": "m16n64k32-w4-s1-g1",
+   "grid": 582,
+   "ctas_per_sm": 10,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-above",
+   "config": "m16n64k32-w8-s1-g1",
+   "grid": 582,
+   "ctas_per_sm": 5,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-above",
+   "config": "m32n64k32-w4-s1-g1",
+   "grid": 388,
+   "ctas_per_sm": 10,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-above",
+   "config": "m32n64k32-w8-s1-g1",
+   "grid": 388,
+   "ctas_per_sm": 5,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-above",
+   "config": "m64n128k32-w4-s1-g1",
+   "grid": 97,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-above",
+   "config": "m64n128k32-w8-s1-g1",
+   "grid": 97,
+   "ctas_per_sm": 3,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-above",
+   "config": "m64n64k32-w4-s1-g1",
+   "grid": 194,
+   "ctas_per_sm": 6,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-above",
+   "config": "m64n64k32-w8-s1-g1",
+   "grid": 194,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-below",
+   "config": "m128n128k64-w4-s1-g1",
+   "grid": 95,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 47,
+   "sms_sharing_A": 47,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-below",
+   "config": "m128n128k64-w8-s1-g1",
+   "grid": 95,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 47,
+   "sms_sharing_A": 47,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-below",
+   "config": "m128n64k64-w4-s1-g1",
+   "grid": 190,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-below",
+   "config": "m128n64k64-w8-s1-g1",
+   "grid": 190,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-below",
+   "config": "m16n64k32-w4-s1-g1",
+   "grid": 570,
+   "ctas_per_sm": 10,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-below",
+   "config": "m16n64k32-w8-s1-g1",
+   "grid": 570,
+   "ctas_per_sm": 5,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-below",
+   "config": "m32n64k32-w4-s1-g1",
+   "grid": 380,
+   "ctas_per_sm": 10,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-below",
+   "config": "m32n64k32-w8-s1-g1",
+   "grid": 380,
+   "ctas_per_sm": 5,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-below",
+   "config": "m64n128k32-w4-s1-g1",
+   "grid": 95,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 47,
+   "sms_sharing_A": 47,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-below",
+   "config": "m64n128k32-w8-s1-g1",
+   "grid": 95,
+   "ctas_per_sm": 3,
+   "sms_with_co_resident_ctas": 47,
+   "sms_sharing_A": 47,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-below",
+   "config": "m64n64k32-w4-s1-g1",
+   "grid": 190,
+   "ctas_per_sm": 6,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-below",
+   "config": "m64n64k32-w8-s1-g1",
+   "grid": 190,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-exact",
+   "config": "m128n128k64-w4-s1-g1",
+   "grid": 96,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-exact",
+   "config": "m128n128k64-w8-s1-g1",
+   "grid": 96,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-exact",
+   "config": "m128n64k64-w4-s1-g1",
+   "grid": 192,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-exact",
+   "config": "m128n64k64-w8-s1-g1",
+   "grid": 192,
+   "ctas_per_sm": 2,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-exact",
+   "config": "m16n64k32-w4-s1-g1",
+   "grid": 576,
+   "ctas_per_sm": 10,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-resident-wave-exact",
+   "config": "m16n64k32-w8-s1-g1",
+   "grid": 576,
+   "ctas_per_sm": 5,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-resident-wave-exact",
+   "config": "m32n64k32-w4-s1-g1",
+   "grid": 384,
+   "ctas_per_sm": 10,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-resident-wave-exact",
+   "config": "m32n64k32-w8-s1-g1",
+   "grid": 384,
+   "ctas_per_sm": 5,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 48
+  },
+  {
+   "case": "v02-gb10-resident-wave-exact",
+   "config": "m64n128k32-w4-s1-g1",
+   "grid": 96,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-exact",
+   "config": "m64n128k32-w8-s1-g1",
+   "grid": 96,
+   "ctas_per_sm": 3,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-exact",
+   "config": "m64n64k32-w4-s1-g1",
+   "grid": 192,
+   "ctas_per_sm": 6,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  },
+  {
+   "case": "v02-gb10-resident-wave-exact",
+   "config": "m64n64k32-w8-s1-g1",
+   "grid": 192,
+   "ctas_per_sm": 4,
+   "sms_with_co_resident_ctas": 48,
+   "sms_sharing_A": 48,
+   "sms_sharing_B": 0
+  }
+ ]
+}
