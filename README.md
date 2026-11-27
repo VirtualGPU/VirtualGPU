@@ -29,6 +29,38 @@ Everything comes from public specs and small benchmarks we wrote ourselves. Noth
 
 <br />
 
+## What it is for
+
+**The task.** A GPU kernel such as a matrix multiply (GEMM) or attention has settings that do not change its result but change its speed: the tile size each thread block works on, the number of warps, and the number of pipeline stages that overlap loading data with computing on it. Each combination is a config. For one input shape there are usually dozens of candidate configs, and the fastest one differs from shape to shape and from GPU to GPU.
+
+**How it is done today.** Each candidate is compiled and timed on the real GPU, and the fastest is kept. Triton's `@triton.autotune` does exactly this. It needs the target GPU to be free for the whole search, and it can't be done at all for a GPU you don't have.
+
+**The question.** Can most of the candidates be ruled out on a CPU first, so that only a few need to run on the card?
+
+**How we test it.** VirtualGPU predicts how the configs of one shape rank against each other, from a profile of the target GPU (its public specs plus rates measured by small benchmarks, never kernel timings). The real GPU timings of the test shapes stay sealed until all predictions are archived, and the rules for passing are written down before any result is opened. Three numbers are reported:
+
+- **Kendall tau-b**: how well the predicted order matches the measured order. 1 is the same order, 0 is no relation.
+- **Top-5 regret**: how much slower the best of the five predicted fastest configs is than the truly fastest config. 0% means the fastest config is in the five.
+- **Agreement of ordered verdicts**: VirtualGPU only says "A is faster than B" when A wins by at least 5% in all of its perturbed copies of the profile. This is the share of those verdicts the real GPU agrees with.
+
+Two baselines are scored on the same data: a roofline model with wave quantization, and a NeuSight-style predictor learned from earlier kernel timings.
+
+**What the results say so far.** To pass, a round needs a ranking better than both baselines by a set margin, and a top-5 regret of at most 1% and no more than 0.5 points worse than the baselines'. None of these three rounds has passed in full:
+
+- [Phase 1](docs/results/phase1.md), RTX 4070, GEMM: tau-b 0.787 warm and 0.750 cold, against at most 0.514 for the baselines, and about 95% of ordered verdicts agreed with the GPU. Top-5 regret was 3.11% and 3.02%: six of the nine shapes had 0%, and one shape with unaligned dimensions had 24.5% and 22.2%. Formal decision: Fail.
+- [Phase 2](docs/results/phase2.md), the same frozen model on the DGX Spark GB10 with a GB10 profile: tau-b 0.446 warm and 0.597 cold, above both baselines by the required margin, and over 95% of ordered verdicts agreed. Top-5 regret was 1.095% warm, 0.095 points over the 1% limit, and 0.156% cold. Formal decision: Fail.
+- [v0.2](docs/results/v0.2.md), fresh shapes, GEMM and attention on both GPUs: 87% to 94% of ordered verdicts agreed with the GPU, against 54% to 76% for the baselines. RTX 4070 GEMM passed. RTX 4070 attention (top-5 regret 1.30% warm, 1.43% cold) and GB10 GEMM (2.12% and 2.00%, and the learned baseline's regret was lower on cold) failed the regret limit, and GB10 attention warm missed the ranking margin over the learned baseline by 0.002 (0.048 against 0.05). A GPU passes only if both kernels pass warm and cold, so the formal decision for both GPUs is Fail.
+
+So far: when VirtualGPU orders two configs it is usually right, but its shortlist is not yet reliable enough to skip measuring the top few on the card.
+
+**Limits.**
+
+- It ranks configs of the same kernel and shape against each other. It is not built to predict how long a kernel takes, and the times it computes along the way are not meant to be used as such.
+- It needs a profile of the GPU you are tuning for. A ranking with another card's profile says nothing about yours.
+- Only the `rtx4070` and `gb10` profiles have been checked against sealed GPU timings in the rounds above. The Ascend 910B3 has its own sealed test, reported in [docs/results/ascend910b3-holdout.md](docs/results/ascend910b3-holdout.md). The other bundled profiles have not been checked.
+
+<br />
+
 ## How it works
 
 VirtualGPU compiles each config with Triton for the GPU you picked, without needing that GPU. It reads the compiler's output to see the tile sizes, how many pipeline stages the loop really got, how much memory each block touches, and how many registers it uses or spills.
