@@ -99,7 +99,7 @@ Fix what made v0.2 miss on the RTX 4070 and GB10, and fix the profiles we alread
 - [ ] Run the registered same-device check of the measured non-MMA issue rate on the qualified GB10 and RTX 4070 profiles ([v0.3-non-mma-same-device-check-registration.md](docs/results/analysis/v0.3-non-mma-same-device-check-registration.md))
 - [ ] The core charges a stage synchronization (`sync_ns`) on every pipeline step, also on a loop with no barrier: decide whether a barrier-free loop should pay it (no v0.2 kernel has such a loop)
 - [ ] The core charges one `sync_ns` per step whatever the number of barriers in the loop: find out whether the barrier count should enter it
-- [ ] Sealed v0.3 holdout decides the cross-wave L2 reuse change
+- [ ] Sealed v0.3 holdout sets the standing of the cross-wave L2 reuse change; the near-L2 cases are reported descriptively and design.md 9.3 stays open whatever the verdict (#29)
 
 - [ ] Exit test: pass on fresh GEMM and attention holdouts on both the RTX 4070 and GB10.
 
