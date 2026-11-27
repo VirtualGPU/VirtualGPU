@@ -1491,6 +1491,24 @@ __global__ void mlp_ld_v4_kernel(const uint4* __restrict__ src,
   }
 }
 
+// One MLP launch: `steps` cp.async stages or ld.global.v4 batches of `mult` x 4 KiB per CTA.
+static void launch_mlp(bool is_cp, int mult, int ctas, const uint4* buf, uint4* sink, size_t mask, int steps) {
+  if (is_cp) {
+    const int cp_sub = (mult <= 4) ? 1 : (mult / 4);
+    const int cp_stages = (mult <= 4) ? mult : 4;
+    const size_t smem = static_cast<size_t>(cp_stages) * static_cast<size_t>(cp_sub) * 4096ULL;
+    if (mult == 1) mlp_cp_async_kernel<1, 1><<<ctas, 256, smem>>>(buf, sink, mask, steps);
+    else if (mult == 2) mlp_cp_async_kernel<2, 1><<<ctas, 256, smem>>>(buf, sink, mask, steps);
+    else if (mult == 4) mlp_cp_async_kernel<4, 1><<<ctas, 256, smem>>>(buf, sink, mask, steps);
+    else mlp_cp_async_kernel<4, 2><<<ctas, 256, smem>>>(buf, sink, mask, steps);
+  } else {
+    if (mult == 1) mlp_ld_v4_kernel<1><<<ctas, 256>>>(buf, sink, mask, steps);
+    else if (mult == 2) mlp_ld_v4_kernel<2><<<ctas, 256>>>(buf, sink, mask, steps);
+    else if (mult == 4) mlp_ld_v4_kernel<4><<<ctas, 256>>>(buf, sink, mask, steps);
+    else mlp_ld_v4_kernel<8><<<ctas, 256>>>(buf, sink, mask, steps);
+  }
+}
+
 static int run_mlp(int device, int samples, int warmup, LaunchSchedule* schedule = nullptr) {
   cudaDeviceProp prop{};
   CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
@@ -1590,20 +1608,7 @@ static int run_mlp(int device, int samples, int warmup, LaunchSchedule* schedule
                                   ? (static_cast<double>(ctas) * 4096.0 * cp_sub * cp_steps)
                                   : (static_cast<double>(ctas) * 4096.0 * mult * ld_iters);
 
-        const size_t cp_dyn_smem = static_cast<size_t>(cp_stages) * static_cast<size_t>(cp_sub) * 4096ULL;
-        auto launch_once = [&]() {
-          if (is_cp) {
-            if (mult == 1) mlp_cp_async_kernel<1, 1><<<ctas, 256, cp_dyn_smem>>>(buf, d_sink, mask, cp_steps);
-            else if (mult == 2) mlp_cp_async_kernel<2, 1><<<ctas, 256, cp_dyn_smem>>>(buf, d_sink, mask, cp_steps);
-            else if (mult == 4) mlp_cp_async_kernel<4, 1><<<ctas, 256, cp_dyn_smem>>>(buf, d_sink, mask, cp_steps);
-            else mlp_cp_async_kernel<4, 2><<<ctas, 256, cp_dyn_smem>>>(buf, d_sink, mask, cp_steps);
-          } else {
-            if (mult == 1) mlp_ld_v4_kernel<1><<<ctas, 256>>>(buf, d_sink, mask, ld_iters);
-            else if (mult == 2) mlp_ld_v4_kernel<2><<<ctas, 256>>>(buf, d_sink, mask, ld_iters);
-            else if (mult == 4) mlp_ld_v4_kernel<4><<<ctas, 256>>>(buf, d_sink, mask, ld_iters);
-            else mlp_ld_v4_kernel<8><<<ctas, 256>>>(buf, d_sink, mask, ld_iters);
-          }
-        };
+        auto launch_once = [&]() { launch_mlp(is_cp, mult, ctas, buf, d_sink, mask, is_cp ? cp_steps : ld_iters); };
 
         if (schedule) {
           auto prepare = [&]() {
@@ -1678,6 +1683,134 @@ static int run_mlp(int device, int samples, int warmup, LaunchSchedule* schedule
   CUDA_CHECK(cudaFree(d_flush));
   CUDA_CHECK(cudaFree(d_l2));
   CUDA_CHECK(cudaFree(d_sink));
+  return 0;
+}
+
+// MLP points in a given order (the GB10 slow-segment timing study): each line of
+// `path` is `field issue_mode bytes_in_flight active_ctas bytes_per_cta steps`,
+// field being dram_bw_by_bytes_in_flight or l2_bw_by_bytes_in_flight. Buffers,
+// flush, kernels and timing are those of run_mlp under a launch schedule; each
+// sample adds host CLOCK_MONOTONIC stamps and one stream event before its flush,
+// and each point the SM clock before and after.
+static double measure_cycles_per_ns(cudaEvent_t ev_start, cudaEvent_t ev_stop);
+
+static long long monotonic_ns(clockid_t clock = CLOCK_MONOTONIC) {
+  timespec t{};
+  clock_gettime(clock, &t);
+  return static_cast<long long>(t.tv_sec) * 1000000000LL + t.tv_nsec;
+}
+static const long long g_entry_monotonic_ns = monotonic_ns();
+static const long long g_entry_realtime_ns = monotonic_ns(CLOCK_REALTIME);
+
+static int run_mlp_order(int device, int samples, int warmup, const std::string& path) {
+  struct Point {
+    std::string field, issue_mode;
+    size_t bytes_in_flight;
+    int ctas, bytes_per_cta, steps;
+  };
+  std::vector<Point> points;
+  std::ifstream input(path);
+  for (Point p; input >> p.field >> p.issue_mode >> p.bytes_in_flight >> p.ctas >> p.bytes_per_cta >> p.steps;)
+    points.push_back(p);
+  if (!input.eof() || points.empty()) {
+    std::fprintf(stderr, "mlp-order: cannot read %s\n", path.c_str());
+    return 2;
+  }
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  const int sm_count = prop.multiProcessorCount;
+  const size_t dram_bytes = 1024ULL * LaunchSchedule::MiB;
+  const size_t flush_bytes = 256ULL * LaunchSchedule::MiB;
+  const size_t l2_bytes = 8ULL * 1024ULL * 1024ULL;
+  uint4 *d_dram = nullptr, *d_flush = nullptr, *d_l2 = nullptr, *d_sink = nullptr;
+  CUDA_CHECK(cudaMalloc(&d_dram, dram_bytes));
+  CUDA_CHECK(cudaMalloc(&d_flush, flush_bytes));
+  CUDA_CHECK(cudaMalloc(&d_l2, l2_bytes));
+  CUDA_CHECK(cudaMalloc(&d_sink, 1024 * sizeof(uint4)));
+  CUDA_CHECK(cudaMemset(d_dram, 13, dram_bytes));
+  CUDA_CHECK(cudaMemset(d_flush, 14, flush_bytes));
+  CUDA_CHECK(cudaMemset(d_l2, 15, l2_bytes));
+  cudaEvent_t ev_flush, ev_start, ev_stop, cal_start, cal_stop;
+  for (cudaEvent_t* e : {&ev_flush, &ev_start, &ev_stop, &cal_start, &cal_stop}) CUDA_CHECK(cudaEventCreate(e));
+
+  std::printf("{\n  \"mode\": \"mlp-order\",\n  \"entry_monotonic_ns\": %lld,\n  \"entry_realtime_ns\": %lld,\n"
+              "  \"samples\": %d,\n  \"warmup\": %d,\n  \"points\": [",
+              g_entry_monotonic_ns, g_entry_realtime_ns, samples, warmup);
+  for (size_t pi = 0; pi < points.size(); ++pi) {
+    const Point& p = points[pi];
+    const bool is_dram = p.field == "dram_bw_by_bytes_in_flight";
+    const bool is_cp = p.issue_mode == "cp_async";
+    const int mult = p.bytes_per_cta / 4096;
+    if ((!is_dram && p.field != "l2_bw_by_bytes_in_flight") || (!is_cp && p.issue_mode != "ld_global_v4") ||
+        (mult != 1 && mult != 2 && mult != 4 && mult != 8) || p.bytes_per_cta % 4096 != 0 ||
+        p.bytes_in_flight != static_cast<size_t>(p.ctas) * p.bytes_per_cta) {
+      std::fprintf(stderr, "mlp-order: invalid point %zu\n", pi);
+      return 2;
+    }
+    const uint4* buf = is_dram ? d_dram : d_l2;
+    const size_t mask = (is_dram ? dram_bytes : l2_bytes) / sizeof(uint4) - 1ULL;
+    const size_t bytes_per_step = static_cast<size_t>(p.ctas) * 4096ULL * (is_cp ? (mult <= 4 ? 1 : mult / 4) : mult);
+    if (is_dram && static_cast<size_t>(p.steps) * bytes_per_step > dram_bytes) {
+      std::fprintf(stderr, "mlp-order: point %zu would wrap the DRAM buffer\n", pi);
+      return 2;
+    }
+    auto prepare = [&]() {
+      if (is_dram) l2_read_cg_kernel<<<sm_count * 4, 512>>>(d_flush, d_sink, flush_bytes / sizeof(uint4), 1);
+    };
+    auto launch = [&]() { launch_mlp(is_cp, mult, p.ctas, buf, d_sink, mask, p.steps); };
+    const double mhz_before = 1e3 * measure_cycles_per_ns(cal_start, cal_stop);
+    for (int w = 0; w < warmup; ++w) {
+      prepare();
+      launch();
+    }
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+    std::vector<long long> host_start, launch_end;
+    std::vector<double> flush_ns, launch_ns;
+    for (int s = 0; s < samples; ++s) {
+      host_start.push_back(monotonic_ns());
+      CUDA_CHECK(cudaEventRecord(ev_flush));
+      prepare();
+      CUDA_CHECK(cudaEventRecord(ev_start));
+      launch();
+      CUDA_CHECK(cudaEventRecord(ev_stop));
+      CUDA_CHECK(cudaEventSynchronize(ev_stop));
+      launch_end.push_back(monotonic_ns());
+      float ms = 0, fms = 0;
+      CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
+      CUDA_CHECK(cudaEventElapsedTime(&fms, ev_flush, ev_start));
+      launch_ns.push_back(static_cast<double>(ms) * 1e6);
+      flush_ns.push_back(static_cast<double>(fms) * 1e6);
+    }
+    CUDA_CHECK(cudaGetLastError());
+    const double mhz_after = 1e3 * measure_cycles_per_ns(cal_start, cal_stop);
+    const double transfer = static_cast<double>(p.steps) * bytes_per_step;
+    std::printf("%s\n    {\"exec_index\": %zu, \"field\": \"%s\", \"issue_mode\": \"%s\", \"bytes_in_flight\": %zu, "
+                "\"active_ctas\": %d, \"bytes_per_cta\": %d, \"steps\": %d, \"transfer_bytes\": %.0f, "
+                "\"sm_mhz_before\": %.1f, \"sm_mhz_after\": %.1f",
+                pi ? "," : "", pi, p.field.c_str(), p.issue_mode.c_str(), p.bytes_in_flight, p.ctas, p.bytes_per_cta,
+                p.steps, transfer, mhz_before, mhz_after);
+    auto ints = [](const char* key, const std::vector<long long>& v) {
+      std::printf(", \"%s\": [", key);
+      for (size_t i = 0; i < v.size(); ++i) std::printf("%s%lld", i ? ", " : "", v[i]);
+      std::printf("]");
+    };
+    ints("host_start_ns", host_start);
+    ints("launch_end_ns", launch_end);
+    std::vector<long long> flush_end;
+    for (int s = 0; s < samples; ++s) flush_end.push_back(launch_end[s] - static_cast<long long>(launch_ns[s]));
+    ints("flush_end_ns", flush_end);
+    std::printf(", \"flush_ns\": [");
+    for (int s = 0; s < samples; ++s) std::printf("%s%.1f", s ? ", " : "", flush_ns[s]);
+    std::printf("], \"launch_ns\": [");
+    for (int s = 0; s < samples; ++s) std::printf("%s%.1f", s ? ", " : "", launch_ns[s]);
+    std::printf("], \"gbps_samples\": [");
+    for (int s = 0; s < samples; ++s) std::printf("%s%.3f", s ? ", " : "", transfer / launch_ns[s]);
+    std::printf("]}");
+  }
+  std::printf("\n  ]\n}\n");
+  for (cudaEvent_t e : {ev_flush, ev_start, ev_stop, cal_start, cal_stop}) CUDA_CHECK(cudaEventDestroy(e));
+  for (uint4* b : {d_dram, d_flush, d_l2, d_sink}) CUDA_CHECK(cudaFree(b));
   return 0;
 }
 

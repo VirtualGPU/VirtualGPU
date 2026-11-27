@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <limits>
 #include <memory>
@@ -520,6 +521,7 @@ int main(int argc, char** argv) {
   double l2_gbps = 0.0;
   std::unique_ptr<LaunchSchedule> schedule;
   bool clock_probe = false;
+  std::string point_order;
 
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
@@ -537,6 +539,8 @@ int main(int argc, char** argv) {
       buffer_mb = static_cast<size_t>(std::atoll(argv[++i]));
     } else if (arg == "--l2-gbps" && i + 1 < argc) {
       l2_gbps = std::atof(argv[++i]);
+    } else if (arg == "--point-order" && i + 1 < argc) {
+      point_order = argv[++i];
     } else if (arg == "--clock-probe") {
       clock_probe = true;
     } else if ((arg == "--launch-schedule" || arg == "--long-read-schedule") && i + 1 < argc) {
@@ -584,6 +588,9 @@ int main(int argc, char** argv) {
     else result = run_l2(device, samples, warmup, schedule.get());
     schedule->finish();
     return result;
+  }
+  if (mode == "mlp-order") {
+    return run_mlp_order(device, samples, warmup, point_order);
   }
   if (mode == "query") {
     return run_query(device);

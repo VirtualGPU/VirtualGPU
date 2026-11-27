@@ -2,6 +2,7 @@
 
 import json
 import os
+import sys
 import time
 import unittest
 from unittest.mock import patch
@@ -113,3 +114,15 @@ class WaitForQuietHostTests(unittest.TestCase):
         with patch.object(host_quiet, "sample", lambda: next(samples)):
             with self.assertRaises(RuntimeError):
                 host_quiet.wait_for_quiet_host([10], seconds=5, timeout=30, clock=FakeClock())
+
+
+class RunTracedTests(unittest.TestCase):
+    def test_returns_stdout_trace_and_check(self):
+        run = host_quiet.run_traced(
+            [sys.executable, "-c", "import time; time.sleep(0.05); print('ok')"]
+        )
+        self.assertEqual(run["stdout"], "ok\n")
+        self.assertGreaterEqual(len(run["cpu_10ms"]), 1)
+        self.assertLess(run["started_monotonic_ns"], run["finished_monotonic_ns"])
+        self.assertIn(run["host_check"]["status"], ("passed", "failed"))
+        self.assertGreaterEqual(run["host_check"]["samples"], 1)

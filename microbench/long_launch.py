@@ -27,7 +27,20 @@ CAPTURE_MIN_NS = 1_000_000
 # else in a point (timing results, run-time diagnostics such as observed_sms) stays
 # out of the freeze.
 CLOSED_LOOP = ("issue_mode", "tokens", "active_ctas", "stage_bytes", "compute_ns")
+MLP = ("issue_mode", "bytes_in_flight", "active_ctas", "bytes_per_cta")
 DESIGN_FIELDS = {
+    "mlp": {"dram_bw_by_bytes_in_flight": MLP, "l2_bw_by_bytes_in_flight": MLP},
+    "strided-mlp": {
+        "dram_bw_by_bytes_in_flight_strided": (
+            "segment_bytes",
+            "stride_bytes",
+            "bytes_in_flight",
+            "active_ctas",
+            "bytes_per_cta",
+        )
+    },
+    "dram-bw": {"read_curve": ("target_sms",)},
+    "l2": {"read_curve": ("target_sms",)},
     "closed-loop": {"dram_closed_loop": CLOSED_LOOP, "l2_closed_loop": CLOSED_LOOP},
     "l2-merge": {
         "l2_merge_by_sharing": ("active_ctas", "sharing", "bytes_per_cta", "stagger_stages")
@@ -101,6 +114,14 @@ def identity(mode, path, point):
     return {"field": "/".join(path), **{k: point[k] for k in fields}}
 
 
+# Work a frozen length implies; bound in the freeze so the same steps cannot do other work.
+WORK_FIELDS = ("transfer_bytes", "source_buffer_bytes")
+
+
+def work(point):
+    return {k: point[k] for k in WORK_FIELDS if k in point}
+
+
 def check_diagnostics(mode, point):
     """Run-time diagnostics that must agree with the design, checked apart from the freeze."""
     if "observed_sms" in point and "target_sms" in point:
@@ -136,7 +157,12 @@ def freeze(mode, pilot):
                 f"{mode} {identity(mode, path, point)}: pilot reached only {fastest:.0f} ns"
             )
         frozen.append(
-            {"point": identity(mode, path, point), "steps": point["steps"], "pilot_min_ns": fastest}
+            {
+                "point": identity(mode, path, point),
+                "steps": point["steps"],
+                "pilot_min_ns": fastest,
+                **work(point),
+            }
         )
     schedule = "".join(f"{row['steps']}\n" for row in frozen)
     record = {
@@ -171,6 +197,8 @@ def verify(record, capture):
             raise ValueError(
                 f"{mode} {frozen['point']}: ran {point['steps']} steps, froze {frozen['steps']}"
             )
+        if work(point) != {k: frozen[k] for k in WORK_FIELDS if k in frozen}:
+            raise ValueError(f"{mode} {frozen['point']}: work differs from the freeze")
         fastest = min(point["launch_ns_samples"])
         if fastest < record["capture_min_ns"]:
             raise ValueError(f"{mode} {frozen['point']}: a launch took {fastest:.0f} ns")

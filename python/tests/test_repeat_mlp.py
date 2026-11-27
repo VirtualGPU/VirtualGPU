@@ -93,48 +93,6 @@ class RepeatMlpTests(unittest.TestCase):
         moved["read"][(4,)] = [89.0] * mlp.SAMPLES
         self.assertEqual(mlp.reproducibility_for_runs([base, moved])["status"], "failed")
 
-    def test_gb10_low_in_flight_points_leave_rules_one_and_three_only(self):
-        steady = [100.0] * mlp.SAMPLES
-        wide = [80.0, 90.0, 100.0, 110.0, 120.0] * 3
-        field = "dram_bw_by_active_sms"
-        points = {field: {(sms,): list(steady) for sms in (1, 2, 4, 12, 24, 48)}}
-        points[field][(1,)] = list(wide)
-        points[field][(2,)] = list(wide)
-        self.assertEqual(mlp.dispersion_for_points(points)["status"], "failed")
-        receipt = mlp.dispersion_for_points(points, "NVIDIA GB10")
-        self.assertEqual((receipt["status"], receipt["exempt_lists"]), ("passed", 2))
-        self.assertEqual(receipt["rules"]["iqr"]["failing"], 0)
-        spiky = {key: list(v) for key, v in points[field].items()}
-        spiky[(1,)] = [100.0] * 13 + [160.0, 160.0]
-        spiky[(2,)] = [100.0] * 13 + [160.0, 160.0]
-        receipt = mlp.dispersion_for_points({field: spiky}, "NVIDIA GB10")
-        self.assertEqual((receipt["status"], receipt["rules"]["spike"]["failing"]), ("failed", 2))
-        moved = {field: {key: list(steady) for key in points[field]}}
-        base = {field: {key: list(steady) for key in points[field]}}
-        moved[field][(1,)] = [130.0] * mlp.SAMPLES
-        moved[field][(2,)] = [130.0] * mlp.SAMPLES
-        self.assertEqual(mlp.reproducibility_for_runs([base, moved])["status"], "failed")
-        self.assertEqual(
-            mlp.reproducibility_for_runs([base, moved], "NVIDIA GB10")["status"], "passed"
-        )
-
-    def test_low_in_flight_limits_follow_each_field(self):
-        contiguous = "dram_bw_by_bytes_in_flight"
-        points = {
-            contiguous: {
-                ("cp_async", 262144, 64, 4096): [1.0],
-                ("cp_async", 270336, 66, 4096): [1.0],
-            },
-            mlp.STRIDED: {
-                (512, 16384, 393216, 96, 4096): [1.0],
-                (512, 16384, 786432, 48, 16384): [1.0],
-            },
-        }
-        judged = mlp.judged_points(points, "NVIDIA GB10")
-        self.assertEqual(list(judged[contiguous]), [("cp_async", 270336, 66, 4096)])
-        self.assertEqual(list(judged[mlp.STRIDED]), [(512, 16384, 786432, 48, 16384)])
-        self.assertEqual(mlp.judged_points(points, "NVIDIA GeForce RTX 4070"), points)
-
     def test_failed_dispersion_archives_raw_and_exits(self):
         record = {"dispersion_check": {"status": "failed"}, "raw": {"read_curve": [1, 2]}}
         with tempfile.TemporaryDirectory() as temp:

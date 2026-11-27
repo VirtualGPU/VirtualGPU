@@ -1,9 +1,94 @@
 # VirtualGPU v0.3 preregistration draft
 
-This draft defines the evaluation and freeze procedure. Release mechanism
-scope is pending the H1 decision. Publish a reviewed amendment naming
-the included changes and the frozen implementation before opening any
-v0.3 holdout labels. Earlier release decisions remain frozen.
+This draft defines the evaluation and freeze procedure and records the
+current mechanism status. The release lead will finalize the scope before
+the freeze. Publish a reviewed amendment naming the included changes and
+the frozen implementation before opening any v0.3 holdout labels.
+Earlier release decisions remain frozen.
+
+## Mechanism scope (draft)
+
+### On main
+
+- **Cross-wave L2 reuse.** The core models reuse by K slice under LRU
+  (`a5c01c6`, `f48763f`). All seven GB10 runs passed capture rules 1 and
+  2 individually. Each of the three benchmark versions failed rule 3
+  across runs. At working sets of at least 1.5 times L2, forward re-read
+  hit fractions were about -0.01 to 0.09 in all seven runs, versus 0.5 to
+  0.9 predicted by the previous form. That subset passed all three rules
+  in a post-hoc check. Near the capacity boundary, the GB10 observations
+  are bistable. Reversed walks are provisional and no supported kernel
+  uses them. The form remains unvalidated on RTX 4070. Its standing is
+  decided by the sealed holdout. [Evidence and limits](../docs/design.md#93-cross-wave-l2-reuse-near-capacity)
+- **Frontend `ldmatrix` byte correction.** The extractor counts the
+  per-warp bytes of MMA shared-memory operands from PTX (`4c70e03`).
+  This is a unit correction. Its registered check compares the
+  absolute signed median latency error with and without the correction
+  per GPU and kernel family, and by `num_stages` in attention. Error
+  should not grow, with attention `num_stages = 2` reported separately
+  because growth is expected. Report ranking changes descriptively.
+  [Registered check](../docs/results/analysis/h7-ldmatrix-registration.md)
+
+### Spill changes under review
+
+The carveout-dependent L1 spill transition (`d050c15`) and critical-path
+reload latency (`b605efa`) went directly to main without preregistration.
+They remain under review in [issue #15](https://github.com/VirtualGPU/VirtualGPU/issues/15).
+The four findings and current status are:
+
+| Finding | Current status |
+| --- | --- |
+| Static `ptxas` spill load bytes divided by four stand in for executed reloads. Cold paths and wider loads can inflate the count. | Executed per-iteration counts are still missing for the model. |
+| Causal attention originally charged the combined static count in both loops. | `ae02278` splits the count between the main and diagonal loops. Post-hoc RTX 3070 counters still show overcounts of 1.4 and 4.1 times, and the loops have different spill code. |
+| The dependent chain originally charged local reload bandwidth alongside measured reload latency. | PR #16 (`c2e920c`) removes the reload bytes from the chain's local pipe charge when reload latency is charged. Both loads and stores still use the shared local pipe. |
+| Profiles without a carveout curve now use a hard threshold in place of linear overflow. | The behavior change remains and is documented in the changelog. |
+
+Reload latency is provisional pending executed counts and qualified
+long-launch recapture. The profile derivation still carries large-frame
+initialization bias. Spill frames leaving L1 can also change the working
+set used to split global traffic between L2 and DRAM. Impacts already
+reported on opened workloads are post-hoc. [Spill limitations](../docs/design.md#92-v02-residuals-and-exclusions)
+
+### Registered candidates and rejected forms
+
+- **H7 F-dep.** The dependent softmax chain is registered and has not
+  entered the core. Its decision awaits the RTX 4070 cross-device
+  microbenchmark against F-max. On points where the forms differ by
+  more than 2%, F-dep must bring median error below half and be closer on at
+  least two thirds. [Registered test](../docs/results/analysis/h7-fdep-registration.md)
+- **H5 narrow loads.** Neither the DRAM request/sector limit nor the
+  combined register-staging form enters the core. The DRAM captures
+  failed dispersion and leave that form unjudged. The qualified GB10
+  staging run had 15.7% MAPE against a 15% limit.
+  [Evidence](../docs/design.md#95-narrow-register-staged-loads-h5)
+- **H1 merged-wait discount and lockstep bursts.** Neither enters the
+  core. Free-running CTA groups did not support discounting the merged
+  wait by arrival offset. The fixed-lead result was provisional. CTAs
+  fell out of step, and the burst form did not win its registered test.
+  [Evidence](../docs/results/analysis/v0.2-posthoc.md)
+
+### Profiles planned for the freeze
+
+The planned RTX 4070 and GB10 revision is `0.23.0` under the long-launch
+protocol. Size timed points with a pilot, freeze their schedules, use at
+least 1 ms per timed window, and reduce five valid independent sweeps
+under the applicable thermal, host and desktop gates and the three
+capture rules. The protocol records per-point SM clocks and per-cycle
+rates for compute measurements. The final amendment will name the
+actual qualified profile revisions and digests.
+
+Two registered capture exceptions apply to GB10:
+
+| Region | Points and handling |
+| --- | --- |
+| L2 bistability | In `l2-rescan` and the capacity sweep, working sets within 0.75 to 1.25 times physical L2 are excluded from the rule 3 decision and tagged `bistable_band`. |
+| Low-in-flight cold DRAM | Contiguous reads at or below 256 KiB, strided reads at or below 384 KiB, and the DRAM active-SM read curve at targets 1 and 2 are excluded from the rule 1 and 3 decisions and tagged `low_in_flight_unstable`. Rule 2 still examines every sample list. |
+
+Keep the min and max of the per-round medians and report uncertainty from
+the observed spread, covering both clusters for low-in-flight points.
+The exceptions are fixed before recapture.
+[Long-launch protocol](../docs/components/long-launch-capture.md)
+[GB10 cold DRAM evidence](../docs/results/analysis/v0.3-gb10-mlp-wall-order-posthoc.md)
 
 ## Evaluation design
 

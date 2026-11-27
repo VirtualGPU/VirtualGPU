@@ -16,6 +16,8 @@ under full copy bandwidth and the load average lags by tens of seconds.
 from __future__ import annotations
 
 import os
+import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -141,3 +143,53 @@ def wait_for_quiet_host(roots, seconds=QUIET_SECONDS, timeout=QUIET_TIMEOUT_SECO
             }
         if clock.monotonic() - start > timeout:
             raise RuntimeError(f"The host did not stay quiet for {seconds} s within {timeout} s")
+
+
+def run_traced(cmd):
+    """Run `cmd` while recording /proc/stat every 10 ms and processes every second.
+
+    Returns its stdout, the trace (`cpu_10ms` rows of realtime ns, monotonic ns,
+    total and busy jiffies; `procs_1s` snapshots, slimmed) and the host check of
+    the whole run, the runner's own process tree counting as the capture.
+    """
+    fast, slow, done = [], [], threading.Event()
+
+    def sampler():
+        last = 0.0
+        while not done.is_set():
+            fields = [int(x) for x in Path("/proc/stat").read_text().splitlines()[0].split()[1:]]
+            fast.append(
+                (
+                    time.time_ns(),
+                    time.monotonic_ns(),
+                    sum(fields),
+                    sum(fields) - fields[3] - fields[4],
+                )
+            )
+            if time.monotonic() - last >= 1.0:
+                slow.append({"realtime_ns": time.time_ns(), **sample()})
+                last = time.monotonic()
+            time.sleep(0.01)
+
+    thread = threading.Thread(target=sampler)
+    thread.start()
+    started = (time.time_ns(), time.monotonic_ns())
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
+    finally:
+        done.set()
+        thread.join()
+    # A closing snapshot, so a run shorter than a second still spans one interval.
+    slow.append({"realtime_ns": time.time_ns(), **sample()})
+    finished = (time.time_ns(), time.monotonic_ns())
+    roots = [os.getpid()]
+    return {
+        "started_realtime_ns": started[0],
+        "started_monotonic_ns": started[1],
+        "finished_realtime_ns": finished[0],
+        "finished_monotonic_ns": finished[1],
+        "cpu_10ms": fast,
+        "procs_1s": slim(slow, roots),
+        "host_check": check(slow, roots),
+        "stdout": out,
+    }

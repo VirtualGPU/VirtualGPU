@@ -22,6 +22,36 @@ from virtualgpu.profile import validate_profile  # noqa: E402
 DEFAULT_BIN = Path(__file__).resolve().parent / "build" / "vgpu_bench"
 SUITE_VERSION = "0.21.0"
 PROFILE_REVISION = "0.21.0-posthoc"
+LONG_LAUNCH_REVISION = "0.23.0"
+# The timed modes build_profile reads, in its argument order after the dispatch raw.
+BUILD_MODES = (
+    "dram-bw",
+    "mma",
+    "l2",
+    "cp-async",
+    "latency",
+    "launch",
+    "latency-curve",
+    "l2-rescan",
+    "mlp",
+    "closed-loop",
+    "l2-merge",
+    "stage-overhead",
+    "closed-loop-mma",
+    "mma-chain",
+    "serial-fill",
+    "sync-loop",
+    "gmem-issue",
+    "spill-latency",
+    "strided-mlp",
+    "sfu-shfl",
+    "mma-softmax-chain",
+    "sync-loop-ablation",
+    "gmem-issue-controlled",
+    "l1-carveout",
+    "sync-loop-multicta",
+    "sync-loop-reconcile",
+)
 
 
 def find_nvidia_smi() -> str | None:
@@ -1571,6 +1601,61 @@ def build_profile(
     return profile
 
 
+def long_launch_profile(binary: Path, device: int, run_dir: Path) -> dict[str, Any]:
+    """A 0.23.0 profile from a passed five-round long-launch capture (long_capture.py)."""
+    import hashlib
+
+    try:
+        import profile_launch
+    except ImportError:  # imported as microbench.collect_profile
+        from microbench import profile_launch
+
+    state = json.loads((run_dir / "capture-state.json").read_text())
+    if state.get("status") != "passed":
+        raise SystemExit(f"{run_dir}: the capture did not pass ({state.get('status')})")
+    missing = [mode for mode in BUILD_MODES if mode not in state["modes"]]
+    if missing:
+        raise SystemExit(
+            f"{run_dir}: no long-launch capture of {missing}; a profile mixes no protocols"
+        )
+    merged = {m: json.loads((run_dir / f"merged-{m}.json").read_text()) for m in state["modes"]}
+    query, _ = run_bench_with_clock_polling(binary, "query", device, poll_interval_s=0.05)
+    dispatch, _ = run_bench_with_clock_polling(binary, "cta-dispatch", device, ["--repeats", "5"])
+    probes = [
+        clock
+        for raw in merged.values()
+        for _, point in profile_launch.long_launch.points(raw)
+        for clock in point["launch"]["sm_mhz_before"] + point["launch"]["sm_mhz_after"]
+    ]
+    # SM clocks come from the probes taken around every point under load; driver, power
+    # limit, memory clock and throttle state from the reading after each mode's process.
+    gpu = [r["gpu"] for rnd in state["rounds"] for r in rnd["results"].values() if r.get("gpu")]
+    smi_samples = [{**g, "sm_clock_mhz": None} for g in gpu] + [{"sm_clock_mhz": c} for c in probes]
+    profile = build_profile(
+        query, merged["dram-bw"], dispatch, *[merged[m] for m in BUILD_MODES[1:]], smi_samples
+    )
+    profile_launch.attach_all(profile, merged)
+    manifest = (run_dir / "freeze-manifest.json").read_bytes()
+    profile["provenance"]["profile_revision"] = LONG_LAUNCH_REVISION
+    profile["provenance"]["capture_protocol"] = {
+        "minimum_launch_ns": 1e6,
+        "freeze_manifest_sha256": hashlib.sha256(manifest).hexdigest(),
+        "rounds": [
+            {
+                "round": r["round"],
+                "results": {
+                    m: {"status": v["status"], "reason": v.get("reason")}
+                    for m, v in r["results"].items()
+                },
+            }
+            for r in state["rounds"]
+        ],
+        "rule_three": state["rule_three"],
+    }
+    validate_profile(profile)
+    return profile
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Collect M1 GPU profile via CUDA microbenchmarks.")
     parser.add_argument(
@@ -1582,7 +1667,21 @@ def main() -> int:
     )
     parser.add_argument("--repeats", type=int, default=5, help="Repeats per CTA dispatch probe.")
     parser.add_argument("--output", type=Path, required=True, help="Output profile JSON path.")
+    parser.add_argument(
+        "--long-launch",
+        type=Path,
+        metavar="RUN_DIR",
+        help="Build a 0.23.0 profile from a passed long_capture.py run directory.",
+    )
     args = parser.parse_args()
+    if args.long_launch:
+        profile = long_launch_profile(args.binary, args.device, args.long_launch)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(profile, indent=2) + "\n")
+        print(
+            f"Wrote {args.output} ({LONG_LAUNCH_REVISION}, {len(profile['provenance']['capture_protocol']['rounds'])} rounds)"
+        )
+        return 0
 
     query, _ = run_bench_with_clock_polling(args.binary, "query", args.device, poll_interval_s=0.05)
     dram_raw, smi_dram = run_bench_with_clock_polling(

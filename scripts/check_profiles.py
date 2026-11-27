@@ -32,6 +32,16 @@ KNOWN_SKU_DRAM_PEAK_GBPS: dict[str, float] = {
     "NVIDIA RTX PRO 6000 Blackwell Server Edition": 1792.0,
 }
 
+# Measured values that are derived from other timed values rather than timed themselves
+# (docs/components/long-launch-capture.md, section 5): no launch of their own.
+UNTIMED_LEAVES = {
+    "l2_effective_capacity_bytes",
+    "estimated_hit_rate",
+    "serial_stage_overhead_ns",
+    "extra_ns_vs_zero",
+    "ns_per_reload",
+}
+
 DRAM_WRITE_TO_READ_MAX_RATIO = 1.15
 ACTIVE_SM_STEP_FLOOR = 0.90
 FULL_CHIP_PEAK_FLOOR = 0.90
@@ -45,6 +55,35 @@ def leaf_sources(obj: Any, path: str = "measured") -> list[tuple[str, Any]]:
     if isinstance(obj, list):
         return [leaf for i, v in enumerate(obj) for leaf in leaf_sources(v, f"{path}[{i}]")]
     return []
+
+
+def measured_leaves(obj: Any, path: str = "measured", name: str = "") -> list[tuple[str, str, Any]]:
+    """(path, field name, value) for every leaf value under `obj`."""
+    if isinstance(obj, dict):
+        if LEAF_KEYS.issubset(obj):
+            return [(path, name, obj)]
+        return [leaf for k, v in obj.items() for leaf in measured_leaves(v, f"{path}.{k}", k)]
+    if isinstance(obj, list):
+        return [
+            leaf for i, v in enumerate(obj) for leaf in measured_leaves(v, f"{path}[{i}]", name)
+        ]
+    return []
+
+
+def launch_errors(profile: dict[str, Any]) -> list[str]:
+    """A long-launch profile: every timed measured value records launches of at least the
+    protocol's minimum."""
+    minimum = profile["provenance"]["capture_protocol"]["minimum_launch_ns"]
+    errors = []
+    for path, name, leaf in measured_leaves(profile["measured"]):
+        if leaf.get("source") != "measured" or name in UNTIMED_LEAVES:
+            continue
+        launch = leaf.get("launch")
+        if launch is None:
+            errors.append(f"{path}: no launch record")
+        elif launch["min_ns"] < minimum:
+            errors.append(f"{path}: launch of {launch['min_ns']:.0f} ns under {minimum:.0f} ns")
+    return errors
 
 
 def sanity_errors(profile: dict[str, Any]) -> list[str]:
@@ -177,6 +216,12 @@ def check(path: Path | str, *, skip_sanity: bool = False) -> tuple[list[str], st
         errors.append(f"source is 'spec_derived' but {measured} values are 'measured'")
     elif source == "partial" and not (measured and estimated):
         errors.append(f"source is 'partial' but found {measured} measured, {estimated} estimated")
+
+    if "capture_protocol" in prov:
+        launch = launch_errors(profile)
+        errors.extend(
+            launch[:20] + ([f"{len(launch) - 20} more launch errors"] if len(launch) > 20 else [])
+        )
 
     if not skip_sanity:
         errors.extend(sanity_errors(profile))

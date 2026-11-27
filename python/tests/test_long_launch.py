@@ -145,6 +145,27 @@ class LongLaunchTests(unittest.TestCase):
             },
         )
 
+    def test_read_sweeps_bind_their_work(self):
+        def row(steps, transfer):
+            return {
+                "issue_mode": "cp_async",
+                "bytes_in_flight": 4096,
+                "active_ctas": 1,
+                "bytes_per_cta": 4096,
+                "steps": steps,
+                "transfer_bytes": transfer,
+                "source_buffer_bytes": 1 << 30,
+                "launch_ns_samples": [1.3e6] * 3,
+            }
+
+        _, record = long_launch.freeze(
+            "mlp", {"samples": 3, "dram_bw_by_bytes_in_flight": [row(4096, 1 << 24)]}
+        )
+        self.assertEqual(record["points"][0]["transfer_bytes"], 1 << 24)
+        capture = {"samples": 3, "dram_bw_by_bytes_in_flight": [row(4096, 1 << 25)]}
+        with self.assertRaisesRegex(ValueError, "work differs"):
+            long_launch.verify(record, capture)
+
     def test_unregistered_field_is_refused(self):
         pilot = {"samples": 3, "other": [{"steps": 1, "launch_ns_samples": [1.3e6] * 3}]}
         with self.assertRaisesRegex(ValueError, "other: no design fields"):

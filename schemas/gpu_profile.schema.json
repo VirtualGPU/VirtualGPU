@@ -71,6 +71,16 @@
         "is_wsl": { "type": "boolean" },
         "power_limit_w": { "type": ["number", "null"], "exclusiveMinimum": 0 },
         "timestamp_utc": { "type": "string", "minLength": 1 },
+        "capture_protocol": {
+          "type": "object",
+          "required": ["minimum_launch_ns", "freeze_manifest_sha256", "rounds", "rule_three"],
+          "properties": {
+            "minimum_launch_ns": { "type": "number", "exclusiveMinimum": 0 },
+            "freeze_manifest_sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+            "rounds": { "type": "array" },
+            "rule_three": { "type": "object" }
+          }
+        },
         "clock_policy": {
           "type": "object",
           "additionalProperties": false,
@@ -623,7 +633,34 @@
           "type": "string",
           "enum": ["measured", "estimated", "spec_derived"]
         },
-        "perturb_group": { "type": ["string", "null"] }
+        "perturb_group": { "type": ["string", "null"] },
+        "launch": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["length", "min_ns", "median_ns"],
+          "properties": {
+            "length": { "type": "integer", "minimum": 1 },
+            "min_ns": { "type": "number", "minimum": 0 },
+            "median_ns": { "type": "number", "minimum": 0 },
+            "sm_mhz_before": { "type": "array", "items": { "type": ["number", "null"] } },
+            "sm_mhz_after": { "type": "array", "items": { "type": ["number", "null"] } }
+          }
+        },
+        "round_median_range": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "number", "minimum": 0 }
+        },
+        "per_cycle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value", "unit"],
+          "properties": {
+            "value": { "type": "number", "minimum": 0 },
+            "unit": { "type": "string", "minLength": 1 }
+          }
+        }
       }
     },
     "ActiveSmBwPoint": {
@@ -632,7 +669,8 @@
       "required": ["active_sms", "bw_gbps"],
       "properties": {
         "active_sms": { "type": "integer", "minimum": 1 },
-        "bw_gbps": { "$ref": "#/$defs/MeasuredValue" }
+        "bw_gbps": { "$ref": "#/$defs/MeasuredValue" },
+        "low_in_flight_unstable": { "type": "boolean" }
       }
     },
     "ActiveSmLatencyPoint": {
@@ -656,7 +694,8 @@
         "bytes_in_flight": { "type": "integer", "minimum": 1 },
         "active_ctas": { "type": "integer", "minimum": 1 },
         "bytes_per_cta": { "type": "integer", "minimum": 1 },
-        "bw_gbps": { "$ref": "#/$defs/MeasuredValue" }
+        "bw_gbps": { "$ref": "#/$defs/MeasuredValue" },
+        "low_in_flight_unstable": { "type": "boolean" }
       }
     },
     "ClosedLoopPoint": {
@@ -783,7 +822,8 @@
         "working_set_bytes": { "type": "integer", "minimum": 1 },
         "working_set_ratio_to_l2": { "type": "number", "exclusiveMinimum": 0 },
         "pass2_bw_gbps": { "$ref": "#/$defs/MeasuredValue" },
-        "estimated_hit_rate": { "$ref": "#/$defs/MeasuredValue" }
+        "estimated_hit_rate": { "$ref": "#/$defs/MeasuredValue" },
+        "bistable_band": { "type": "boolean" }
       }
     },
     "MmaChainPoint": {
@@ -967,7 +1007,8 @@
         "bytes_in_flight": { "type": "integer", "minimum": 1 },
         "active_ctas": { "type": "integer", "minimum": 1 },
         "bytes_per_cta": { "type": "integer", "minimum": 1 },
-        "bw_gbps": { "$ref": "#/$defs/MeasuredValue" }
+        "bw_gbps": { "$ref": "#/$defs/MeasuredValue" },
+        "low_in_flight_unstable": { "type": "boolean" }
       }
     },
     "WarpIssueRatePoint": {

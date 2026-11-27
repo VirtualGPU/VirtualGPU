@@ -8,7 +8,7 @@ from pathlib import Path
 from virtualgpu.profile import load_profile
 
 from microbench.collect_profile import arch_unified_l1_bytes
-from scripts.check_profiles import SANITY_CHECK_ALLOWLIST, check, sanity_errors
+from scripts.check_profiles import SANITY_CHECK_ALLOWLIST, check, launch_errors, sanity_errors
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE_PROFILE = REPO_ROOT / "schemas" / "examples" / "profile_example.json"
@@ -112,3 +112,25 @@ def test_issue8_allowlist_skips_sanity_until_recollected() -> None:
         errs_skipped, summary = check(path, skip_sanity=True)
         assert errs_skipped == []
         assert summary is not None
+
+
+def test_long_launch_profile_requires_launch_of_every_timed_value() -> None:
+    profile = load_profile(REPO_ROOT / "profiles" / "gb10.json")
+    profile["provenance"]["capture_protocol"] = {
+        "minimum_launch_ns": 1e6,
+        "freeze_manifest_sha256": "0" * 64,
+        "rounds": [],
+        "rule_three": {},
+    }
+    errors = launch_errors(profile)
+    assert errors and all("no launch record" in e for e in errors)
+    for leaf in [profile["measured"]["compute"]["fp32_fma_tflops"]]:
+        leaf["launch"] = {"length": 40000, "min_ns": 0.9e6, "median_ns": 1.0e6}
+    assert any("fp32_fma_tflops: launch of 900000 ns" in e for e in launch_errors(profile))
+    spill = profile["measured"]["memory"]["spill_reload_latency_by_count"][0]
+    assert not any("extra_ns_vs_zero" in e for e in launch_errors(profile))
+    assert any(
+        e.startswith("measured.memory.spill_reload_latency_by_count[0].iter_time_ns")
+        for e in launch_errors(profile)
+    )
+    assert "extra_ns_vs_zero" in spill

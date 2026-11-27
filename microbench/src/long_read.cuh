@@ -2,7 +2,7 @@
 
 // Optional long-launch protocol for any timed mode. A schedule lists point
 // lengths in emission order, one per line. Pilot output carries all sizing trials.
-// With `clock_probe` set, each point timed through time_point also records the SM
+// With `clock_probe` set, each point (time_point or measure) also records the SM
 // clock (MHz) measured just before its first launch and just after its last.
 struct LaunchSchedule {
   static constexpr size_t MiB = 1024ULL * 1024ULL;
@@ -66,6 +66,7 @@ struct LaunchSchedule {
   void measure(int initial, int minimum, int maximum, size_t bytes_per_step,
                size_t buffer_bytes, int warmup, int samples, cudaEvent_t start,
                cudaEvent_t stop, Prepare prepare, Launch launch) {
+    if (clock_probe) std::printf(", \"sm_mhz_before\": %.1f", clock_probe());
     int length = std::min(initial, maximum);
     if (!pilot) {
       if (next == lengths.size()) fail("Missing point in launch schedule");
@@ -117,6 +118,7 @@ struct LaunchSchedule {
     print_list(durations, 1.0, false);
     std::printf(", \"gbps_samples\": ");
     print_list(durations, static_cast<double>(transferred), true);
+    if (clock_probe) std::printf(", \"sm_mhz_after\": %.1f", clock_probe());
   }
 
  private:

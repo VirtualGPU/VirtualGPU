@@ -28,16 +28,6 @@ MLP_MODES = {"mlp": CONTIGUOUS, "strided-mlp": (STRIDED,)}
 ACTIVE_MODES = {"dram-bw": ("dram_bw_by_active_sms",), "l2": ("l2_bw_by_active_sms",)}
 MODES = {**MLP_MODES, **ACTIVE_MODES}
 ACTIVE_FIELDS = {fields[0] for fields in ACTIVE_MODES.values()}
-# Device-specific exception to capture rules 1 and 3, not rule 2
-# (docs/components/long-launch-capture.md, section 4): GB10's low in-flight cold DRAM
-# points. Per field: the position of the limited value in the point key, and its limit.
-LOW_IN_FLIGHT_UNSTABLE = {
-    "NVIDIA GB10": {
-        "dram_bw_by_bytes_in_flight": (1, 256 * 1024),
-        STRIDED: (2, 384 * 1024),
-        "dram_bw_by_active_sms": (0, 2),
-    }
-}
 REPEATS = 5
 SAMPLES = 15
 WARMUP = 3
@@ -242,48 +232,18 @@ def points_raw(points):
     }
 
 
-def judged_points(points, device):
-    """The points rules 1 and 3 judge: all but the device's low in-flight exception."""
-    limits = LOW_IN_FLIGHT_UNSTABLE.get(device, {})
-    return {
-        field: {
-            key: samples
-            for key, samples in keys.items()
-            if field not in limits or key[limits[field][0]] > limits[field][1]
-        }
-        for field, keys in points.items()
-    }
-
-
-def dispersion_for_points(points, device=""):
-    """Capture rules 1 and 2 on one run (microbench/capture_posthoc.py); exempted points
-    leave rule 1 and its count, rule 2 judges every list."""
+def dispersion_for_points(points):
+    """Capture rules 1 and 2 on one run (microbench/capture_posthoc.py)."""
     from microbench.capture_posthoc import dispersion_check
 
-    every = dispersion_check(points_raw(points), suffixes=("gbps_samples",))
-    judged = judged_points(points, device)
-    rule1 = dispersion_check(points_raw(judged), suffixes=("gbps_samples",))["rules"]["iqr"]
-    rules = {"iqr": rule1, "spike": every["rules"]["spike"]}
-    failed = (
-        every["sample_lists"] == 0
-        or every["invalid_lists"] > 0
-        or any(r["failing"] > r["allowed"] for r in rules.values())
-    )
-    return {
-        **every,
-        "status": "failed" if failed else "passed",
-        "exempt_lists": every["sample_lists"] - sum(len(k) for k in judged.values()),
-        "rules": rules,
-    }
+    return dispersion_check(points_raw(points), suffixes=("gbps_samples",))
 
 
-def reproducibility_for_runs(point_runs, device=""):
-    """Capture rule 3 across the repeats of one benchmark, without exempted points."""
+def reproducibility_for_runs(point_runs):
+    """Capture rule 3 across the repeats of one benchmark."""
     from microbench.capture_posthoc import reproducibility_check
 
-    return reproducibility_check(
-        [points_raw(judged_points(p, device)) for p in point_runs], suffixes=("gbps_samples",)
-    )
+    return reproducibility_check([points_raw(p) for p in point_runs], suffixes=("gbps_samples",))
 
 
 def capture(args):
@@ -384,9 +344,7 @@ def capture(args):
     if gate_host:
         host_samples.append(host_quiet.sample())
     # Rules 1 and 2 apply to every sweep, long-launch ones included; a pilot has 3 samples.
-    dispersion = dispersion_for_points(
-        point_maps(profile, args.mode, raw, sample_count), query["name"]
-    )
+    dispersion = dispersion_for_points(point_maps(profile, args.mode, raw, sample_count))
     if not snaps:
         raise ValueError("No telemetry was recorded during the sweep")
     return {
@@ -470,10 +428,7 @@ def reduce_runs(base, paths, revision):
         raise ValueError("Windows repeats require a passing desktop quiet gate")
     if any(
         item.get("dispersion_check", {}).get("status") != "passed"
-        or dispersion_for_points(
-            point_maps(profile, item["mode"], item["raw"]),
-            item.get("device_query", {}).get("name", ""),
-        )
+        or dispersion_for_points(point_maps(profile, item["mode"], item["raw"]))
         != item["dispersion_check"]
         for _, item in records
     ):
@@ -495,10 +450,7 @@ def reduce_runs(base, paths, revision):
         runs = [
             point_maps(profile, mode, item["raw"]) for _, item in records if item["mode"] == mode
         ]
-        devices = {item.get("device_query", {}).get("name", "") for _, item in records}
-        if len(devices) != 1:
-            raise ValueError("Repeats come from more than one device")
-        reproducibility[mode] = reproducibility_for_runs(runs, devices.pop())
+        reproducibility[mode] = reproducibility_for_runs(runs)
         if reproducibility[mode]["status"] != "passed":
             raise ValueError(f"{mode}: repeats fail capture rule 3: {reproducibility[mode]}")
     if include_active and (
