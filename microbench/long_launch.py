@@ -93,6 +93,7 @@ DESIGN_FIELDS = {
                 "sfu_rcp_issue_rate_per_sm_gips",
                 "shfl_issue_rate_per_sm_gips",
                 "shfl_idx_issue_rate_per_sm_gips",
+                "alu_issue_rate_per_sm_gips",
             )
         },
         "shfl_latency": ("warps",),

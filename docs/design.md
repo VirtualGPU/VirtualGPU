@@ -167,7 +167,7 @@ What the core computes in v0.2. Each mechanism was checked on its own microbench
 | Pipe | Charged | Rate from | Microbenchmark error |
 |---|---|---|---|
 | `mma` | MMA FLOP | `mma_tflops_per_sm_by_warps`, by MMA-issuing warps on the SM | measured curve, interpolated between points |
-| `issue` | every non-MMA instruction | `non_mma_issue_rate_per_sm_gips` (estimated) | not measured |
+| `issue` | every non-MMA instruction | `non_mma_issue_rate_per_sm_gips`, peak over warps of a 1:1 FFMA and LOP3 mix (`sfu-shfl`); bundled profiles still carry the 4 per clock estimate until re-collected. On the RTX 3070 the mix peaks at about 3.2 per clock (6.2 Gwarp-inst/s at about 1.95 GHz, 16 warps) | not checked on kernels |
 | `smem` | shared memory bytes, loads and stores | `smem_bw_per_sm_gbps` | not checked on its own |
 | `local` | all spill bytes | `local_mem_l1_hit_bw_per_sm_gbps` (estimated) | not measured |
 | `sfu` | `ex2`-class instructions | `sfu_issue_rate_per_sm_gips`, by warps | measured points exact; leave-one-out -1% to -12% at 8 and 16 warps, -24% to -28% at the 4-warp knee |

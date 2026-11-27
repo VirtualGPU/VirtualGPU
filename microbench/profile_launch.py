@@ -132,6 +132,8 @@ VIEWS = {("l2", "write_full"): "write_full_gbps_samples"}
 # carveout together.
 NOT_IN_PROFILE = {
     ("l2", "capacity_sweep"),
+    # Only its peak enters the profile, as non_mma_issue_rate_per_sm_gips.
+    ("sfu-shfl", "alu_issue_rate_per_sm_gips"),
     ("mma-softmax-chain", "solo_calibration"),
     ("l1-carveout", "l1_carveout_sweep"),
 }

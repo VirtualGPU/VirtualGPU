@@ -22,6 +22,7 @@
 - Post-hoc check of the causal attention spill split against that capture (`scripts/posthoc_spill_split.py`)
 - Optional `l2_bw_by_active_sms_cp_async` curve in the GPU profile schema and microbenchmarks, and physical sanity checks in `scripts/check_profiles.py`
 - NVIDIA A100-SXM4-80GB (`sm_80`) profile
+- `sfu-shfl` measures the non-MMA issue rate with an FFMA and LOP3 mix, and `collect_profile.py` stores it as `non_mma_issue_rate_per_sm_gips` instead of the 4 per clock estimate
 - NVIDIA RTX PRO 6000 Blackwell Server Edition (`sm_120`) profile
 - NVIDIA L4 (`sm_89`) profile
 - NVIDIA L40S (`sm_89`) profile
