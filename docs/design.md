@@ -341,6 +341,14 @@ Neither form is in the core. Redoing both with launches over 1 ms on GB10 and th
 
 **Effect on users.** Configs with narrow register-staged loads, which Triton emits when rows are not 16-byte aligned, rank faster than they are; measure them on the target GPU.
 
+### 9.6 GB10 decode predictions are compressed
+
+On GB10 the 36 `decode-16` configs were measured at 270 to 330 us (phase 2, profile `0.11.0-m3`). On core `70de487` and profile `gb10-0.23.0`, 33 of them are predicted at 281 to 282 us. The location is the DRAM MLP curve's saturated plateau: every config is past its knee, where the DRAM time, by bandwidth share or by Little's law latency, is the bytes over one plateau bandwidth. The round-trip port floor and the low in-flight latency states are excluded as the cause.
+
+The missing mechanism is not found. The measured groups split by prefetch distance, and the contiguous closed loop shows no effect of the buffer count at these grids. The registered strided closed-loop test of access granularity (H-gran) did not reproduce its contiguous control, so H-gran is untested. It is not repeated: the contiguous points take one of two DRAM levels that a control cannot hold. Details are in [the decode analysis](results/analysis/v0.3-gb10-decode-compression.md).
+
+**Effect on users.** On GB10, memory-bound decode GEMMs whose DRAM traffic is past the MLP knee rank close together in the prediction. Their real order, which follows prefetch distance and tile, has to be measured on hardware.
+
 ## 10. Related work
 
 - [GPGPU-Sim](https://github.com/gpgpu-sim/gpgpu-sim_distribution) / [Accel-Sim](https://accel-sim.github.io/): cycle-level NVIDIA simulation; detailed but hours per large kernel and behind on recent architectures.
