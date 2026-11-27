@@ -86,7 +86,22 @@
             "dram_reference_protocol": { "const": "gb10-mlp-plateau-p3a-v1" },
             "rounds": { "type": "array" },
             "rule_three": { "type": "object" },
-            "l2_knee_fallback_rounds": { "type": "integer", "minimum": 0 }
+            "l2_knee_fallback_rounds": { "type": "integer", "minimum": 0 },
+            "carried_over": {
+              "type": "array",
+              "maxItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["mode", "fields", "from_profile_revision", "from_profile_sha256"],
+                "properties": {
+                  "mode": { "type": "string", "minLength": 1 },
+                  "fields": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+                  "from_profile_revision": { "type": "string", "minLength": 1 },
+                  "from_profile_sha256": { "$ref": "#/$defs/Sha256" }
+                }
+              }
+            }
           }
         },
         "clock_policy": {
@@ -691,6 +706,17 @@
         },
         "perturb_group": { "type": ["string", "null"] },
         "l2_near_capacity_unstable": { "type": "boolean" },
+        "provisional": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reason", "mode", "from_profile_revision", "from_profile_sha256"],
+          "properties": {
+            "reason": { "const": "rule_three_failed" },
+            "mode": { "type": "string", "minLength": 1 },
+            "from_profile_revision": { "type": "string", "minLength": 1 },
+            "from_profile_sha256": { "$ref": "#/$defs/Sha256" }
+          }
+        },
         "launch": {
           "type": "object",
           "additionalProperties": false,
