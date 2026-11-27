@@ -83,7 +83,7 @@ Fix what made v0.2 miss on the RTX 4070 and GB10, and fix the profiles we alread
 - [x] Take the per-launch frame cost out of `extra_ns_vs_zero` in `spill-latency` (#15)
 - [ ] Recollect `spill_reload_latency_by_count` on every profile with the launch cost taken out
 - [x] Register a decision rule and freeze predictions for the spill mechanisms before `spill-latency` is recaptured with long launches (#15, [v0.3-spill-decision-registration.md](docs/results/analysis/v0.3-spill-decision-registration.md))
-- [ ] Score the spill decision on the GB10 and RTX 4070 long-launch profiles with `scripts/spill_decision.py` and report it
+- [ ] Score the spill decision on the RTX 4070 long-launch profile with `scripts/spill_decision.py` and report it, with GB10 as not run since its `spill-latency` failed rule 3 (#21)
 - [x] Size the spill frames' L1 footprint by the CTAs an SM actually holds, not full residency (`simulate` in `sim.rs`), which overcharges grids under one wave such as the one-CTA-per-SM `spill-latency` kernel
 - [ ] Re-check the spill frame footprint on the qualified 0.23.0 profiles with `scripts/recheck_mechanisms.py` ([v0.3-mechanism-recheck-baseline.md](docs/results/analysis/v0.3-mechanism-recheck-baseline.md))
 - [ ] Find out why `spill-latency` frames stay in L1 past the pointer-chase L1 cliff on GB10 (512 B frames at 96 to 160 KiB per SM, [carveout probe](docs/results/analysis/v0.3-gb10-carveout-probe-reregistration.md)), before the L1 to L2 step for spill frames is changed; after the spill decision is scored (#21)
