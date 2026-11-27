@@ -28,6 +28,15 @@ CAPTURE_MIN_NS = 1_000_000
 # else in a point (timing results, run-time diagnostics such as observed_sms) stays
 # out of the freeze.
 CLOSED_LOOP = ("issue_mode", "tokens", "active_ctas", "stage_bytes", "compute_ns")
+GMEM_NARROW = (
+    "width_bytes",
+    "aligned",
+    "level",
+    "ctas_per_sm",
+    "num_warps",
+    "loads_in_flight",
+    "registered_request_bytes",
+)
 MLP = ("issue_mode", "bytes_in_flight", "active_ctas", "bytes_per_cta")
 DESIGN_FIELDS = {
     "mlp": {"dram_bw_by_bytes_in_flight": MLP, "l2_bw_by_bytes_in_flight": MLP},
@@ -177,6 +186,24 @@ DESIGN_FIELDS = {
         "fixed_sync_ns": ("num_warps", "tokens"),
         "min_async_roundtrip": ("num_warps",),
     },
+    # H5 GB10 redo (docs/results/analysis/v0.3-gb10-h5-redo-registration.md); the request size
+    # a point is registered with stays in its identity when the pilot grows it.
+    "h5-dram": {key: GMEM_NARROW for key in ("calibration", "gmem_load_narrow")}
+    | {
+        "sync_loop_narrow": (
+            "width_bytes",
+            "aligned",
+            "ctas_per_sm",
+            "num_warps",
+            "stage_bytes",
+            "mma_per_warp",
+            "registered_request_bytes",
+        )
+    },
+    "h5-staging": {
+        key: ("variant", "width_bytes", "ctas_per_sm", "num_warps", "stage_bytes", "mma_per_warp")
+        for key in ("calibration", "stage_narrow")
+    },
 }
 
 
@@ -245,9 +272,13 @@ def check_samples(mode, point, count):
 
 def pilot_target(mode, point):
     """The fastest pilot launch a point must reach: spill-latency's reload points are sized to
-    twice the capture floor (v0.3-spill-allocation-redo-registration.md)."""
+    twice the capture floor (v0.3-spill-allocation-redo-registration.md), H5's DRAM points to
+    three times."""
     if mode == "spill-latency" and point.get("reload_count", 0) > 0:
         return 2 * CAPTURE_MIN_NS
+    # H5's DRAM points are sized to 3.0 ms (v0.3-gb10-h5-redo-registration.md).
+    if mode == "h5-dram" and point.get("level", "dram") == "dram":
+        return 3 * CAPTURE_MIN_NS
     return PILOT_MIN_NS
 
 

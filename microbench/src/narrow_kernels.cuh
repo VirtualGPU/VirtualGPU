@@ -144,7 +144,8 @@ template <int W, int N, bool CG, int MASK>
 void gmem_narrow_point(const cudaDeviceProp& prop, Timer& timer, const uint8_t* buf,
                        uint32_t* sink, const uint4* flush, uint4* flush_sink, size_t flush_vec4,
                        bool dram, bool offset, int cps, int warps, int share, int step_bytes,
-                       int samples, int warmup, bool& first, size_t dram_bytes = kDramBytes) {
+                       int samples, int warmup, bool& first, size_t dram_bytes = kDramBytes,
+                       LaunchSchedule* schedule = nullptr) {
   auto kernel = gmem_narrow_kernel<W, N, CG, MASK>;
   const int smem = pad_bytes(prop, cps);
   set_smem(kernel, smem);
@@ -165,12 +166,43 @@ void gmem_narrow_point(const cudaDeviceProp& prop, Timer& timer, const uint8_t* 
     batches = static_cast<int>(std::max<size_t>(1, kL2Set / (rows * step)));
     sweeps = static_cast<int>(std::max<size_t>(1, kL2Bytes / (static_cast<size_t>(grid) * rows_per_cta * seg * batches)));
   }
+  const uint32_t step_elems = static_cast<uint32_t>(step / W);
+  if (schedule) {
+    // Long-launch protocol (docs/results/analysis/v0.3-gb10-h5-redo-registration.md): the
+    // length is a DRAM point's batches, grown from its registered request size until the
+    // fastest launch reaches 3.0 ms, or a hot-L2 point's sweeps, grown to 1.25 ms.
+    auto pitch_of = [&] { return round_up(static_cast<size_t>(batches) * step + seg, 128) + (offset ? W : 0); };
+    const int max_batches = static_cast<int>((kBufferBytes / rows - seg - 256) / step);
+    int& length = dram ? batches : sweeps;
+    schedule->launch_target_ns = dram ? 3.0e6 : LaunchSchedule::pilot_min_ns;
+    std::printf("%s\n    {\"width_bytes\": %d, \"mask\": \"%s\", \"aligned\": %s, \"cache\": \"%s\", "
+                "\"level\": \"%s\", \"ctas_per_sm\": %d, \"num_warps\": %d, \"loads_in_flight\": %d, "
+                "\"share\": %d, \"column_step_bytes\": %d, \"grid\": %d, \"rows_per_cta\": %d, "
+                "\"smem_bytes\": %d, \"registered_request_bytes\": %zu",
+                first ? "" : ",", W, MASK == kMaskNone ? "none" : (MASK == kMaskTrue ? "true" : "tail"),
+                offset ? "false" : "true", CG ? "cg" : "default", dram ? "dram" : "l2", cps, warps, N, share,
+                step_bytes, grid, rows_per_cta, smem, dram ? dram_bytes : 0);
+    schedule->time_point(length, length, dram ? max_batches : (1 << 20), warmup, samples, timer.start,
+                         timer.stop, [&] { if (dram) l2_read_cg_kernel<<<sms * 4, 512>>>(flush, flush_sink, flush_vec4, 1); },
+                         [&](int n) {
+                           length = n;
+                           const uint32_t limit = static_cast<uint32_t>(batches) * step_elems + 1u;
+                           kernel<<<grid, warps * 32, smem>>>(buf, sink, pitch_of(), rows_per_cta, share, batches,
+                                                              sweeps, step_elems, limit);
+                         });
+    CUDA_CHECK(cudaGetLastError());
+    std::printf(", \"ctas_per_sm_fit\": %d, \"batches\": %d, \"sweeps\": %d, \"pitch_bytes\": %zu, "
+                "\"dram_request_bytes\": %zu}",
+                fit, batches, sweeps, pitch_of(),
+                dram ? static_cast<size_t>(grid) * rows_per_cta * seg * batches : static_cast<size_t>(0));
+    first = false;
+    return;
+  }
   const size_t pitch = round_up(static_cast<size_t>(batches) * step + seg, 128) + (offset ? W : 0);
   if (rows * pitch > kBufferBytes) {
     std::fprintf(stderr, "gmem-narrow: buffer too small\n");
     std::exit(3);
   }
-  const uint32_t step_elems = static_cast<uint32_t>(step / W);
   const uint32_t limit = static_cast<uint32_t>(batches) * step_elems + 1u;
   auto launch = [&]() {
     kernel<<<grid, warps * 32, smem>>>(buf, sink, pitch, rows_per_cta, share, batches, sweeps,
@@ -318,7 +350,7 @@ template <int W, int ROWS, int MMA_ITERS>
 void sync_loop_narrow_point(const cudaDeviceProp& prop, Timer& timer, const uint8_t* buf, float* sink,
                             const uint4* flush, uint4* flush_sink, size_t flush_vec4, bool dram,
                             bool offset, int cps, int samples, int warmup, bool& first,
-                            size_t dram_bytes = kDramBytes) {
+                            size_t dram_bytes = kDramBytes, LaunchSchedule* schedule = nullptr) {
   constexpr int WARPS = 4;
   constexpr int STAGE_BYTES = ROWS * 128;
   auto kernel = sync_loop_narrow_kernel<W, ROWS, WARPS, MMA_ITERS>;
@@ -336,6 +368,34 @@ void sync_loop_narrow_point(const cudaDeviceProp& prop, Timer& timer, const uint
   if (!dram) {
     distinct = static_cast<int>(std::max<size_t>(1, kL2Set / (static_cast<size_t>(grid) * STAGE_BYTES)));
     steps = std::max(1, steps / distinct) * distinct;
+  }
+  if (schedule) {
+    // Long-launch protocol (v0.3-gb10-h5-redo-registration.md), DRAM points only: the length
+    // is the steps (each a new stage), grown from the registered request size to 3.0 ms.
+    if (!dram) {
+      std::fprintf(stderr, "sync-loop-narrow: launch schedules cover DRAM points only\n");
+      std::exit(2);
+    }
+    auto pitch_of = [&] { return round_up(static_cast<size_t>(steps) * 128, 128) + (offset ? W : 0); };
+    const int max_steps = static_cast<int>((kBufferBytes / (static_cast<size_t>(grid) * ROWS) - 256) / 128);
+    schedule->launch_target_ns = 3.0e6;
+    std::printf("%s\n    {\"width_bytes\": %d, \"aligned\": %s, \"level\": \"dram\", \"ctas_per_sm\": %d, "
+                "\"num_warps\": %d, \"stage_bytes\": %d, \"mma_per_warp\": %d, \"grid\": %d, "
+                "\"smem_bytes\": %d, \"registered_request_bytes\": %zu",
+                first ? "" : ",", W, offset ? "false" : "true", cps, WARPS, STAGE_BYTES, MMA_ITERS, grid, smem,
+                dram_bytes);
+    schedule->time_point(steps, steps, max_steps, warmup, samples, timer.start, timer.stop,
+                         [&] { l2_read_cg_kernel<<<sms * 4, 512>>>(flush, flush_sink, flush_vec4, 1); },
+                         [&](int n) {
+                           steps = n;
+                           kernel<<<grid, WARPS * 32, smem>>>(buf, sink, pitch_of(), steps, steps);
+                         });
+    CUDA_CHECK(cudaGetLastError());
+    std::printf(", \"ctas_per_sm_fit\": %d, \"distinct_steps\": %d, \"pitch_bytes\": %zu, "
+                "\"dram_request_bytes\": %zu}",
+                fit, steps, pitch_of(), static_cast<size_t>(grid) * STAGE_BYTES * steps);
+    first = false;
+    return;
   }
   const size_t pitch = round_up(static_cast<size_t>(distinct) * 128, 128) + (offset ? W : 0);
   if (static_cast<size_t>(grid) * ROWS * pitch > kBufferBytes) {

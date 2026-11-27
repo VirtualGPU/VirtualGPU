@@ -72,6 +72,9 @@ MODES = (
     "l1-carveout",
     "l2-rescan",
 )
+# Modes that run only when named, outside the profile suite: the H5 GB10 redo
+# (docs/results/analysis/v0.3-gb10-h5-redo-registration.md).
+OPT_IN_MODES = ("h5-dram", "h5-staging")
 ROUNDS = 5
 EXTRA_ROUNDS = 2
 SAMPLES = 15
@@ -440,7 +443,7 @@ def main():
     p = sub.add_parser("pilot")
     p.add_argument("binary", type=Path)
     p.add_argument("run_dir", type=Path)
-    p.add_argument("--modes", nargs="+", default=list(MODES), choices=MODES)
+    p.add_argument("--modes", nargs="+", default=list(MODES), choices=MODES + OPT_IN_MODES)
     p.add_argument(
         "--dram-references", action="store_true", help="Record GB10 P3a MLP block references"
     )
