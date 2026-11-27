@@ -28,3 +28,7 @@ Fields from `profiles/rtx4070.json`: `L2l` = `measured.memory.l2_latency_ns` (93
 - Each stage size is also reported on its own, without a verdict.
 - The verdict is what `python -m microbench.sync_loop_delta_eval profiles/rtx4070.json <three run files>` prints.
 - No change to the model's structure follows from this test alone.
+
+## Result (added after the attempt)
+
+The test could not be run. The first step, `sync-loop-delta-flag` on the RTX 4070 (binary for `sm_89` from `290e1ad`, whose `sync-loop-delta` source is identical to this registration's; quiet host and thermal gate passed), measured a `%globaltimer` step of 1024 ns (minimum, median and maximum of 64 increments), against 32 ns on GB10. The desktop was using the GPU at the time (61% utilization in the receipt's telemetry); the timer step and the flag latency (15 samples within 0.1%) are not throughput figures and are unaffected. The grid rule then gives `s` = 1024 ns, on which H-step and H-remain differ at none of the delays, so `--check-grid` failed and, as registered, `sync-loop-delta` was not run. Scheduling the offsets on `%globaltimer` cannot resolve the 0 to 227 ns range on this GPU. Since the GB10 result does not enter the model, the test is not redesigned for another clock. The GB10 run this test was shaped by fails condition 2 of the acquisition rules of 2026-11-27 (19.7% of lists above 1.5 max over min), so its result is provisional too.

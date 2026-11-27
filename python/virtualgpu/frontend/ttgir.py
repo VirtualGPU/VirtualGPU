@@ -56,6 +56,7 @@ class TtgirSummary:
     loop_ptx_barriers: int = 0
     loop_ptx_st_shared_bytes: int = 0
     loop_ptx_ld_shared_bytes: int = 0
+    loop_ptx_ldmatrix_bytes: int = 0
 
 
 _DTYPE_BITS: dict[str, int] = {
@@ -124,6 +125,9 @@ _RE_PTX_ST_SHARED = re.compile(
 _RE_PTX_LD_SHARED = re.compile(
     r"\bld\.shared(?:\.[a-z0-9_:]+)*?(?:\.(v[24]))?\.(?:b|u|s|f)(8|16|32|64)\b"
 )
+# ldmatrix moves 128, 256 or 512 bytes per warp instruction (.x1, .x2, .x4, with or without .trans).
+_RE_PTX_LDMATRIX = re.compile(r"\bldmatrix\.sync\.aligned\.m8n8\.(x[124])\b")
+_LDMATRIX_BYTES = {"x1": 128, "x2": 256, "x4": 512}
 
 
 def dtype_bits(dtype: str) -> int:
@@ -455,6 +459,16 @@ def _extract_ptx_loop_sync_and_smem(
     return bars, st_bytes, ld_bytes
 
 
+def _extract_ptx_loop_ldmatrix_bytes(ptx_loop: str, num_warps: int) -> int:
+    """Shared memory bytes per CTA that ldmatrix reads in the PTX loop body.
+
+    Every warp issues its own ldmatrix for its share of the MMA operands, so a tile that several warps
+    need is read once per warp; the bytes are per warp instruction times the warps.
+    """
+    per_warp = sum(_LDMATRIX_BYTES[m.group(1)] for m in _RE_PTX_LDMATRIX.finditer(ptx_loop))
+    return per_warp * num_warps
+
+
 def _extract_all_dots(
     loop_body: str,
     ttgir: str,
@@ -680,6 +694,7 @@ def parse_ttgir_summary(
     loop_ptx_barriers, loop_ptx_st_shared_bytes, loop_ptx_ld_shared_bytes = (
         _extract_ptx_loop_sync_and_smem(ptx_loop, num_warps, warp_size)
     )
+    loop_ptx_ldmatrix_bytes = _extract_ptx_loop_ldmatrix_bytes(ptx_loop, num_warps)
 
     return TtgirSummary(
         num_warps=num_warps,
@@ -703,5 +718,6 @@ def parse_ttgir_summary(
         num_top_level_loops=num_top_level_loops,
         loop_ptx_barriers=loop_ptx_barriers,
         loop_ptx_st_shared_bytes=loop_ptx_st_shared_bytes,
+        loop_ptx_ldmatrix_bytes=loop_ptx_ldmatrix_bytes,
         loop_ptx_ld_shared_bytes=loop_ptx_ld_shared_bytes,
     )

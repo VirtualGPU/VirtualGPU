@@ -10,6 +10,7 @@ CUDA C++ benchmarks that read a GPU's static limits and measure its real rates, 
 | `src/narrow_validate.cuh` | Follow-ups: new validation points for the DRAM-side narrow request form (`gmem-narrow-validate`, `sync-loop-narrow-validate`) and register staging split into loads and shared memory stores (`stage-narrow`, `stage-narrow-batched` with every load issued before the first store and Triton's swizzled layout, `stage-narrow-validate` and `stage-narrow-k1`, new points for the staging forms) |
 | `build.py` | Builds `vgpu_bench` for one architecture |
 | `collect_profile.py` | Runs every benchmark and writes the profile |
+| `long_launch.py` | Freezes a mode's pilot output into a launch schedule and verifies a capture against it (`--long-read-schedule`) |
 | `run_narrow.py` | Repeats a narrow-load benchmark behind the thermal gate; not part of the profile |
 | `dram_dispersion.py`, `src/cpu_stream.c` | GB10 DRAM dispersion study: long DRAM launches (`dram-dispersion`) with and without a controlled CPU memory load or a build |
 | `host_quiet.py` | Host CPU quiet check for captures on GPUs that share memory with the CPU |

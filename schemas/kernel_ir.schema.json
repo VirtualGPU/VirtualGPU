@@ -483,7 +483,9 @@
           "type": "integer",
           "minimum": 0,
           "description": "Exact shared-memory bytes transferred per CTA per loop iteration (or per phase execution in prologue/epilogue). Unlike gmem_op.nominal_bytes_per_cta, SMEM transfers are fixed per CTA and not clamped by global boundary masks."
-        }
+        },
+        "ttgir_tile_bytes_per_cta": { "type": "integer", "minimum": 0, "description": "Diagnostic: the operand tiles counted once per CTA from the TTGIR local_load sizes." },
+        "ptx_ldmatrix_bytes_per_cta": { "type": "integer", "minimum": 0, "description": "Diagnostic: the bytes ldmatrix reads in the PTX loop body, per warp instruction times the warps; when nonzero it replaces the TTGIR tile bytes in bytes_per_cta." }
       }
     },
     "mma_op": {

@@ -1772,7 +1772,7 @@ __global__ void closed_loop_ld_v4_kernel(const uint4* __restrict__ src,
   }
 }
 
-static int run_closed_loop(int device, int samples, int warmup) {
+static int run_closed_loop(int device, int samples, int warmup, LongReadSchedule* schedule = nullptr) {
   cudaDeviceProp prop{};
   CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
   const int sm_count = prop.multiProcessorCount;
@@ -1856,7 +1856,6 @@ static int run_closed_loop(int device, int samples, int warmup) {
             double est_bw_step_ns = (static_cast<double>(ctas) * stage_bytes) / bw_ref;
             double est_step_ns = std::max({static_cast<double>(tc_ns), est_bw_step_ns, is_dram ? 250.0 : 120.0});
             int steps = std::max(256, std::min(1024, static_cast<int>(500000.0 / est_step_ns)));
-            double total_bytes = static_cast<double>(ctas) * static_cast<double>(stage_bytes) * steps;
 
             auto launch_once = [&]() {
               if (tokens == 0) {
@@ -1882,35 +1881,46 @@ static int run_closed_loop(int device, int samples, int warmup) {
               }
             };
 
-            for (int w = 0; w < warmup; ++w) {
+            auto prepare = [&]() {
               if (is_dram) l2_read_cg_kernel<<<sm_count * 4, 512>>>(d_flush, d_sink, flush_vec4, 1);
-              launch_once();
-            }
-            CUDA_CHECK(cudaDeviceSynchronize());
-
-            std::vector<double> bw_samples;
-            std::vector<double> turn_samples;
-            bw_samples.reserve(samples);
-            turn_samples.reserve(samples);
-
-            for (int s = 0; s < samples; ++s) {
-              if (is_dram) l2_read_cg_kernel<<<sm_count * 4, 512>>>(d_flush, d_sink, flush_vec4, 1);
-              CUDA_CHECK(cudaEventRecord(ev_start));
-              launch_once();
-              CUDA_CHECK(cudaEventRecord(ev_stop));
-              CUDA_CHECK(cudaEventSynchronize(ev_stop));
-              float ms = 0.0f;
-              CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
-              bw_samples.push_back((total_bytes / 1e9) / (static_cast<double>(ms) / 1e3));
-              turn_samples.push_back((static_cast<double>(ms) * 1e6) / static_cast<double>(steps));
-            }
-
+            };
+            std::vector<double> launch_ns;
             if (!first) std::printf(",");
             first = false;
             std::printf(
                 "\n    {\"issue_mode\": \"%s\", \"tokens\": %d, \"active_ctas\": %d, "
-                "\"stage_bytes\": %d, \"compute_ns\": %llu, \"bw_gbps_samples\": [",
+                "\"stage_bytes\": %d, \"compute_ns\": %llu",
                 mode_name, tokens, ctas, stage_bytes, static_cast<unsigned long long>(tc_ns));
+            if (schedule) {
+              auto timed = schedule->time_point(steps, 1, 1 << 22, warmup, samples, ev_start, ev_stop,
+                                                prepare, [&](int length) { steps = length; launch_once(); });
+              steps = timed.length;
+              launch_ns = timed.launch_ns;
+            } else {
+              for (int w = 0; w < warmup; ++w) {
+                prepare();
+                launch_once();
+              }
+              CUDA_CHECK(cudaDeviceSynchronize());
+              for (int s = 0; s < samples; ++s) {
+                prepare();
+                CUDA_CHECK(cudaEventRecord(ev_start));
+                launch_once();
+                CUDA_CHECK(cudaEventRecord(ev_stop));
+                CUDA_CHECK(cudaEventSynchronize(ev_stop));
+                float ms = 0.0f;
+                CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
+                launch_ns.push_back(static_cast<double>(ms) * 1e6);
+              }
+            }
+            const double total_bytes = static_cast<double>(ctas) * static_cast<double>(stage_bytes) * steps;
+            std::vector<double> bw_samples;
+            std::vector<double> turn_samples;
+            for (double ns : launch_ns) {
+              bw_samples.push_back(total_bytes / ns);
+              turn_samples.push_back(ns / static_cast<double>(steps));
+            }
+            std::printf(", \"bw_gbps_samples\": [");
             for (size_t k = 0; k < bw_samples.size(); ++k) {
               if (k > 0) std::printf(", ");
               std::printf("%.3f", bw_samples[k]);
@@ -6984,5 +6994,401 @@ static int run_sync_loop_free(int device, int samples, int warmup) {
   std::printf("\n  ]\n}\n");
   CUDA_CHECK(cudaFree(d_src)); CUDA_CHECK(cudaFree(d_sink)); CUDA_CHECK(cudaFree(d_stamps));
   CUDA_CHECK(cudaFree(d_finish)); CUDA_CHECK(cudaFree(d_clock)); CUDA_CHECK(cudaFree(d_latency));
+  return 0;
+}
+
+// sync-loop-burst: the gemm_s2 shaped single-buffer loop on warm L2 with n CTAs, either started together
+// (lock) or with CTA c held back c * stagger_ns (stag), to see whether the CTAs' simultaneous stages
+// meet the L2 bandwidth. Each CTA records %globaltimer at the start of steps 0, 16, 64, 256, S/2 and
+// S - 1, and its cycles per step after the start offset; block 0 records the SM clock.
+#define BURST_MMA(acc0, acc1, acc2, acc3)                                                         \
+  asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, " \
+               "{%8,%9}, {%0,%1,%2,%3};\n"                                                         \
+               : "+f"(acc0), "+f"(acc1), "+f"(acc2), "+f"(acc3)                                    \
+               : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1))
+
+constexpr int BURST_STAMPS = 6;
+
+template <bool NOLOAD, int STAGE_BYTES, int NUM_WARPS, int MI>
+__global__ void burst_kernel(const uint4* __restrict__ src, float* __restrict__ sink, size_t mask, int steps,
+                             unsigned long long stagger_ns, unsigned long long* __restrict__ out_stamps,
+                             double* __restrict__ out_cycles, unsigned long long* __restrict__ out_clock) {
+  extern __shared__ uint4 smem[];
+  const uint32_t tid = threadIdx.x;
+  const uint32_t warp_id = tid >> 5;
+  const uint32_t lane = tid & 31u;
+  constexpr size_t STAGE_U4 = static_cast<size_t>(STAGE_BYTES) / sizeof(uint4);
+  constexpr int VECS = STAGE_BYTES / (NUM_WARPS * 32 * 16);
+  constexpr int LD_N = STAGE_BYTES / (NUM_WARPS * 512);
+  size_t base = (static_cast<size_t>(blockIdx.x) * STAGE_U4) & mask;
+  const size_t step_u4 = static_cast<size_t>(gridDim.x) * STAGE_U4;
+  if constexpr (NOLOAD) {
+    for (size_t i = tid; i < STAGE_U4; i += blockDim.x) smem[i] = make_uint4(0x3c003c00u, 0x3c003c00u, 0x3c003c00u, 0x3c003c00u);
+  }
+  if (tid == 0 && stagger_ns > 0) {
+    const unsigned long long until = read_globaltimer() + stagger_ns * blockIdx.x;
+    while (read_globaltimer() < until) {}
+  }
+  __syncthreads();
+  const long long k0 = clock64();
+  const unsigned long long g0 = read_globaltimer();
+  const int marks[BURST_STAMPS] = {0, 16, 64, 256, steps / 2, steps - 1};
+  uint32_t a0 = 0x3c003c00u, a1 = 0x3c003c00u, a2 = 0x3c003c00u, a3 = 0x3c003c00u;
+  uint32_t b0 = 0x3c003c00u, b1 = 0x3c003c00u;
+  uint32_t live_acc = 0u;
+  float c00 = 0.f, c01 = 0.f, c02 = 0.f, c03 = 0.f, c10 = 0.f, c11 = 0.f, c12 = 0.f, c13 = 0.f;
+  float c20 = 0.f, c21 = 0.f, c22 = 0.f, c23 = 0.f, c30 = 0.f, c31 = 0.f, c32 = 0.f, c33 = 0.f;
+  for (int step = 0; step < steps; ++step) {
+    if (tid == 0) {
+      #pragma unroll
+      for (int m = 0; m < BURST_STAMPS; ++m) {
+        if (step == marks[m]) out_stamps[blockIdx.x * BURST_STAMPS + m] = read_globaltimer();
+      }
+    }
+    if constexpr (!NOLOAD) {
+      #pragma unroll
+      for (int v = 0; v < VECS; ++v) {
+        size_t off = static_cast<size_t>(v) * (NUM_WARPS * 32) + tid;
+        uint32_t saddr = static_cast<uint32_t>(__cvta_generic_to_shared(smem + off));
+        asm volatile("cp.async.cg.shared.global [%0], [%1], 16;\n" :: "r"(saddr), "l"(src + ((base + off) & mask)) : "memory");
+      }
+      asm volatile("cp.async.commit_group;\n" ::: "memory");
+      asm volatile("cp.async.wait_group 0;\n" ::: "memory");
+    }
+    asm volatile("bar.sync 0;\n" ::: "memory");
+    #pragma unroll
+    for (int r = 0; r < LD_N; ++r) {
+      size_t off_u4 = (static_cast<size_t>(r) * NUM_WARPS + warp_id) * 32ULL + lane;
+      uint32_t saddr = static_cast<uint32_t>(__cvta_generic_to_shared(smem + off_u4));
+      uint32_t r0, r1, r2, r3;
+      asm volatile("ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0,%1,%2,%3}, [%4];\n"
+                   : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "r"(saddr) : "memory");
+      live_acc ^= (r0 ^ r1 ^ r2 ^ r3);
+      if (r == LD_N - 1) { a0 = r0; a1 = r1; a2 = r2; a3 = r3; b0 = r0; b1 = r1; }
+    }
+    #pragma unroll
+    for (int m = 0; m < MI; ++m) { BURST_MMA(c00, c01, c02, c03); BURST_MMA(c10, c11, c12, c13); BURST_MMA(c20, c21, c22, c23); BURST_MMA(c30, c31, c32, c33); }
+    asm volatile("bar.sync 0;\n" ::: "memory");
+    base = (base + step_u4) & mask;
+  }
+  if (tid == 0) {
+    out_cycles[blockIdx.x] = static_cast<double>(clock64() - k0) / steps;
+    if (blockIdx.x == 0) {
+      out_clock[0] = static_cast<unsigned long long>(clock64() - k0);
+      out_clock[1] = read_globaltimer() - g0;
+    }
+  }
+  float sum = c00 + c01 + c02 + c03 + c10 + c11 + c12 + c13 + c20 + c21 + c22 + c23 + c30 + c31 + c32 + c33 +
+              static_cast<float>(live_acc & 1u);
+  if (sum == -999999.0f) sink[blockIdx.x * blockDim.x + tid] = sum;
+}
+#undef BURST_MMA
+
+static int run_sync_loop_burst(int device, int samples, int warmup, bool check) {
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  const int sm_count = prop.multiProcessorCount;
+  const size_t hot_bytes = 4ULL * 1024ULL * 1024ULL;
+  const size_t mask = hot_bytes / sizeof(uint4) - 1;
+  uint4* d_hot = nullptr;
+  float* d_sink = nullptr;
+  unsigned long long *d_stamps = nullptr, *d_clock = nullptr;
+  double* d_cycles = nullptr;
+  CUDA_CHECK(cudaMalloc(&d_hot, hot_bytes));
+  CUDA_CHECK(cudaMalloc(&d_sink, static_cast<size_t>(sm_count) * 256 * sizeof(float)));
+  CUDA_CHECK(cudaMalloc(&d_stamps, static_cast<size_t>(sm_count) * BURST_STAMPS * sizeof(unsigned long long)));
+  CUDA_CHECK(cudaMalloc(&d_cycles, sm_count * sizeof(double)));
+  CUDA_CHECK(cudaMalloc(&d_clock, 2 * sizeof(unsigned long long)));
+  CUDA_CHECK(cudaMemset(d_hot, 0x3c, hot_bytes));
+  cudaEvent_t ev_start, ev_stop;
+  CUDA_CHECK(cudaEventCreate(&ev_start));
+  CUDA_CHECK(cudaEventCreate(&ev_stop));
+  std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"sync_loop_burst\": [", samples, sm_count);
+  bool first = true;
+  // Mean resultant length of the CTAs' phases (time modulo the step) at one stamp: 1 when they move
+  // together, near 0 when they are spread evenly over the step.
+  auto coherence = [](const std::vector<unsigned long long>& st, int grid, int which, double step_ns) {
+    double c = 0.0, s = 0.0;
+    for (int b = 0; b < grid; ++b) {
+      const double rel = static_cast<double>(static_cast<long long>(st[b * BURST_STAMPS + which] - st[which]));
+      const double phase = 2.0 * 3.14159265358979323846 * std::fmod(std::fmod(rel, step_ns) + step_ns, step_ns) / step_ns;
+      c += std::cos(phase);
+      s += std::sin(phase);
+    }
+    return std::sqrt(c * c + s * s) / grid;
+  };
+  auto run_point = [&](auto noload_c, auto sb_c, int grid, double stagger_ns) {
+    constexpr bool NOLOAD = decltype(noload_c)::value;
+    constexpr int SB = decltype(sb_c)::value;
+    constexpr int SMEM = SB > 53248 ? SB : 53248;
+    auto kernel = burst_kernel<NOLOAD, SB, 8, 8>;
+    CUDA_CHECK(cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
+    int max_blocks = 0;
+    CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, 256, SMEM));
+    if (max_blocks != 1) { std::fprintf(stderr, "burst_kernel: %d CTAs per SM\n", max_blocks); std::exit(1); }
+    const unsigned long long stagger = static_cast<unsigned long long>(stagger_ns);
+    auto time_ms = [&](int st) {
+      CUDA_CHECK(cudaEventRecord(ev_start));
+      kernel<<<grid, 256, SMEM>>>(d_hot, d_sink, mask, st, stagger, d_stamps, d_cycles, d_clock);
+      CUDA_CHECK(cudaEventRecord(ev_stop));
+      CUDA_CHECK(cudaEventSynchronize(ev_stop));
+      float ms = 0.0f;
+      CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
+      return static_cast<double>(ms);
+    };
+    // At least 1024 steps so the coherence marks at 16, 64 and 256 come before the middle one.
+    double probe = time_ms(64);
+    int steps = static_cast<int>(1.0 / std::max(probe / 64.0, 1e-5));
+    steps = std::min(65536, std::max(1024, ((steps + 63) / 64) * 64));
+    for (int w = 0; w < warmup; ++w) time_ms(steps);
+    std::vector<double> turn, event_turn;
+    std::vector<std::vector<double>> coh(BURST_STAMPS);
+    std::vector<unsigned long long> st(static_cast<size_t>(grid) * BURST_STAMPS);
+    std::vector<double> cyc(grid);
+    unsigned long long clk[2] = {0, 0};
+    for (int s = 0; s < samples; ++s) {
+      const double ms = time_ms(steps);
+      event_turn.push_back(ms * 1e6 / steps);
+      CUDA_CHECK(cudaMemcpy(st.data(), d_stamps, st.size() * sizeof(unsigned long long), cudaMemcpyDeviceToHost));
+      CUDA_CHECK(cudaMemcpy(cyc.data(), d_cycles, grid * sizeof(double), cudaMemcpyDeviceToHost));
+      CUDA_CHECK(cudaMemcpy(clk, d_clock, sizeof(clk), cudaMemcpyDeviceToHost));
+      // Per-CTA steps after the start offset, so the stag offsets add no tail.
+      const double ghz = static_cast<double>(clk[0]) / static_cast<double>(clk[1]);
+      double mean = 0.0;
+      for (int b = 0; b < grid; ++b) mean += cyc[b] / ghz / grid;
+      turn.push_back(mean);
+      const double step_ns = static_cast<double>(st[5] - st[4]) / (steps - 1 - steps / 2);
+      for (int m = 0; m < BURST_STAMPS; ++m) coh[m].push_back(coherence(st, grid, m, step_ns));
+    }
+    if (!first) std::printf(",");
+    first = false;
+    std::printf("\n    {\"dep\": \"%s\", \"start\": \"%s\", \"grid\": %d, \"num_warps\": 8, \"stage_bytes\": %d, \"steps\": %d, "
+                "\"stagger_ns\": %.1f, \"turnaround_ns_samples\": [", NOLOAD ? "noload" : "free", stagger > 0 ? "stag" : "lock",
+                grid, SB, steps, stagger_ns);
+    for (size_t i = 0; i < turn.size(); ++i) std::printf(i ? ", %.2f" : "%.2f", turn[i]);
+    std::printf("], \"event_turnaround_ns_samples\": [");
+    for (size_t i = 0; i < event_turn.size(); ++i) std::printf(i ? ", %.2f" : "%.2f", event_turn[i]);
+    std::printf("], \"coherence_steps\": [0, 16, 64, 256, %d, %d], \"coherence_samples\": [", steps / 2, steps - 1);
+    for (int m = 0; m < BURST_STAMPS; ++m) {
+      std::printf(m ? ", [" : "[");
+      for (size_t i = 0; i < coh[m].size(); ++i) std::printf(i ? ", %.3f" : "%.3f", coh[m][i]);
+      std::printf("]");
+    }
+    std::printf("]}");
+    std::vector<double> sorted = turn;
+    std::sort(sorted.begin(), sorted.end());
+    return sorted[sorted.size() / 2];
+  };
+  auto each = [&](auto sb_c) {
+    for (int n : {12, 36, 40, 44, 48}) {
+      if (n > sm_count) continue;
+      run_point(std::true_type{}, sb_c, n, 0.0);
+      const double step = run_point(std::false_type{}, sb_c, n, 0.0);
+      run_point(std::false_type{}, sb_c, n, step / n);
+    }
+  };
+  // The check grid: stage sizes and CTA counts the burst sweep did not measure, simultaneous starts only.
+  auto each_check = [&](auto sb_c) {
+    for (int n : {1, 16, 28, 34, 42, 46}) {
+      if (n > sm_count) continue;
+      run_point(std::true_type{}, sb_c, n, 0.0);
+      run_point(std::false_type{}, sb_c, n, 0.0);
+    }
+  };
+  if (check) {
+    each_check(std::integral_constant<int, 24576>{});
+    each_check(std::integral_constant<int, 40960>{});
+    each_check(std::integral_constant<int, 57344>{});
+  } else {
+    each(std::integral_constant<int, 16384>{});
+    each(std::integral_constant<int, 32768>{});
+    each(std::integral_constant<int, 49152>{});
+    each(std::integral_constant<int, 65536>{});
+  }
+  std::printf("\n  ]\n}\n");
+  CUDA_CHECK(cudaFree(d_hot)); CUDA_CHECK(cudaFree(d_sink)); CUDA_CHECK(cudaFree(d_stamps));
+  CUDA_CHECK(cudaFree(d_cycles)); CUDA_CHECK(cudaFree(d_clock));
+  return 0;
+}
+
+// l2-paths: the L2 read bandwidth against active SMs on warm L2 through two load paths in one session:
+// the ld.global.cg ILP-8 kernel of run_l2 (16 warps per CTA) and a 4-stage cp.async ring as in
+// VirtualGPU issue #8 (16 warps per CTA, two 16 B copies per thread per stage), one CTA per SM at
+// every point, plus the cp.async kernel at three CTAs per SM on the full GPU as in #8 (8 warps per CTA
+// there, so three CTAs' rings fit in shared memory).
+__global__ void l2_cp_async_kernel(const uint4* __restrict__ src, uint4* __restrict__ sink, size_t mask, int steps) {
+  extern __shared__ uint4 smem[];
+  const uint32_t tid = threadIdx.x;
+  const size_t stride = static_cast<size_t>(gridDim.x) * blockDim.x;
+  size_t idx = (static_cast<size_t>(blockIdx.x) * blockDim.x + tid) & mask;
+  auto issue = [&](int slot) {
+    #pragma unroll
+    for (int sub = 0; sub < 2; ++sub) {
+      const size_t off = (static_cast<size_t>(slot) * 2 + sub) * blockDim.x + tid;
+      const uint32_t saddr = static_cast<uint32_t>(__cvta_generic_to_shared(&smem[off]));
+      asm volatile("cp.async.cg.shared.global [%0], [%1], 16;\n" :: "r"(saddr), "l"(src + idx) : "memory");
+      idx = (idx + stride) & mask;
+    }
+    asm volatile("cp.async.commit_group;\n" ::: "memory");
+  };
+  #pragma unroll
+  for (int s = 0; s < 4; ++s) issue(s);
+  for (int step = 4; step < steps; ++step) {
+    asm volatile("cp.async.wait_group 3;\n" ::: "memory");
+    issue(step & 3);
+  }
+  asm volatile("cp.async.wait_all;\n" ::: "memory");
+  __syncthreads();
+  if (smem[tid].x == 0xdeadbeefu) sink[tid & 1023u] = smem[tid];
+}
+
+static int run_l2_paths(int device, int samples, int warmup) {
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  const int sm_count = prop.multiProcessorCount;
+  const size_t ws_bytes = 4ULL * 1024ULL * 1024ULL;
+  const size_t mask = ws_bytes / sizeof(uint4) - 1ULL;
+  uint4 *d_buf = nullptr, *d_sink = nullptr;
+  CUDA_CHECK(cudaMalloc(&d_buf, ws_bytes));
+  CUDA_CHECK(cudaMalloc(&d_sink, 1024 * sizeof(uint4)));
+  CUDA_CHECK(cudaMemset(d_buf, 3, ws_bytes));
+  cudaEvent_t ev_start, ev_stop;
+  CUDA_CHECK(cudaEventCreate(&ev_start));
+  CUDA_CHECK(cudaEventCreate(&ev_stop));
+  const int threads = 512;
+  constexpr int CP_SMEM = 4 * 2 * 512 * 16;
+  CUDA_CHECK(cudaFuncSetAttribute(l2_cp_async_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, CP_SMEM));
+  auto time_gbps = [&](auto launch, double bytes) {
+    for (int w = 0; w < warmup; ++w) launch();
+    CUDA_CHECK(cudaDeviceSynchronize());
+    std::vector<double> g;
+    for (int s = 0; s < samples; ++s) {
+      CUDA_CHECK(cudaEventRecord(ev_start));
+      launch();
+      CUDA_CHECK(cudaEventRecord(ev_stop));
+      CUDA_CHECK(cudaEventSynchronize(ev_stop));
+      float ms = 0.0f;
+      CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
+      g.push_back((bytes / 1e9) / (static_cast<double>(ms) / 1e3));
+    }
+    return g;
+  };
+  auto print = [](const char* path, int sms, int grid, const std::vector<double>& g, bool& first) {
+    if (!first) std::printf(",");
+    first = false;
+    std::printf("\n    {\"path\": \"%s\", \"active_sms\": %d, \"grid\": %d, \"gbps_samples\": [", path, sms, grid);
+    for (size_t i = 0; i < g.size(); ++i) std::printf(i ? ", %.3f" : "%.3f", g[i]);
+    std::printf("]}");
+  };
+  std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"working_set_bytes\": %zu,\n  \"l2_paths\": [", samples, sm_count, ws_bytes);
+  bool first = true;
+  for (int sms : {1, 12, 24, 36, 40, 44, 48}) {
+    if (sms > sm_count) continue;
+    const int iters = sms <= 4 ? 4096 : 2048;
+    const double ld_bytes = static_cast<double>(sms) * threads * 8.0 * 16.0 * iters;
+    print("ld_global_cg", sms, sms,
+          time_gbps([&] { l2_read_cg_ilp8_kernel<<<sms, threads>>>(d_buf, d_sink, mask, iters); }, ld_bytes), first);
+    const int steps = 2 * iters * 4;
+    const double cp_bytes = static_cast<double>(sms) * threads * 2.0 * 16.0 * steps;
+    print("cp_async", sms, sms,
+          time_gbps([&] { l2_cp_async_kernel<<<sms, threads, CP_SMEM>>>(d_buf, d_sink, mask, steps); }, cp_bytes), first);
+  }
+  {
+    const int grid = sm_count * 3, steps = 8192, half = threads / 2;
+    const double cp_bytes = static_cast<double>(grid) * half * 2.0 * 16.0 * steps;
+    print("cp_async", sm_count, grid,
+          time_gbps([&] { l2_cp_async_kernel<<<grid, half, CP_SMEM / 2>>>(d_buf, d_sink, mask, steps); }, cp_bytes), first);
+  }
+  std::printf("\n  ]\n}\n");
+  CUDA_CHECK(cudaFree(d_buf)); CUDA_CHECK(cudaFree(d_sink));
+  return 0;
+}
+
+// mma-ilp: each warp keeps ILP independent m16n8k16 f16 -> f32 accumulators and runs a chain of N
+// dependent MMAs on each per step, rotating over the accumulators, with no memory traffic. Every
+// accumulator feeds the sink so nothing is eliminated. CTAs per SM are set by dynamic shared memory.
+template <int ILP, int N>
+__global__ void mma_ilp_kernel(float* __restrict__ sink, int steps, uint32_t seed) {
+  const uint32_t a0 = 0x3c003c00u ^ (seed & 1u), a1 = 0x3c003c00u, a2 = 0x3c003c00u, a3 = 0x3c003c00u;
+  const uint32_t b0 = 0x3c003c00u, b1 = 0x3c003c00u ^ (seed & 2u);
+  float acc[ILP][4];
+  #pragma unroll
+  for (int i = 0; i < ILP; ++i) { acc[i][0] = acc[i][1] = acc[i][2] = acc[i][3] = 0.f; }
+  for (int step = 0; step < steps; ++step) {
+    #pragma unroll
+    for (int n = 0; n < N; ++n) {
+      #pragma unroll
+      for (int i = 0; i < ILP; ++i) {
+        asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
+                     : "+f"(acc[i][0]), "+f"(acc[i][1]), "+f"(acc[i][2]), "+f"(acc[i][3])
+                     : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
+      }
+    }
+  }
+  float sum = 0.f;
+  #pragma unroll
+  for (int i = 0; i < ILP; ++i) sum += acc[i][0] + acc[i][1] + acc[i][2] + acc[i][3];
+  if (sum == -999999.0f) sink[blockIdx.x * blockDim.x + threadIdx.x] = sum;
+}
+
+static int run_mma_ilp(int device, int samples, int warmup) {
+  cudaDeviceProp prop{};
+  CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+  const int sm_count = prop.multiProcessorCount;
+  float* d_sink = nullptr;
+  CUDA_CHECK(cudaMalloc(&d_sink, static_cast<size_t>(sm_count) * 3 * 512 * sizeof(float)));
+  cudaEvent_t ev_start, ev_stop;
+  CUDA_CHECK(cudaEventCreate(&ev_start));
+  CUDA_CHECK(cudaEventCreate(&ev_stop));
+  std::printf("{\n  \"samples\": %d,\n  \"sm_count\": %d,\n  \"chain_lengths\": [16, 64],\n  \"mma_ilp\": [", samples, sm_count);
+  bool first = true;
+  auto run_point = [&](auto ilp_c, int warps, int cps) {
+    constexpr int ILP = decltype(ilp_c)::value;
+    // Shared memory that leaves room for exactly cps CTAs per SM.
+    const int smem = static_cast<int>(prop.sharedMemPerMultiprocessor / cps) - static_cast<int>(prop.reservedSharedMemPerBlock) - 128;
+    auto k16 = mma_ilp_kernel<ILP, 16>;
+    auto k64 = mma_ilp_kernel<ILP, 64>;
+    for (auto k : {k16, k64}) CUDA_CHECK(cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, smem));
+    int blocks = 0;
+    CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&blocks, k64, warps * 32, smem));
+    if (blocks != cps) { std::fprintf(stderr, "mma_ilp: %d CTAs per SM, wanted %d\n", blocks, cps); std::exit(1); }
+    const int grid = sm_count * cps;
+    auto time_ms = [&](auto k, int steps) {
+      CUDA_CHECK(cudaEventRecord(ev_start));
+      k<<<grid, warps * 32, smem>>>(d_sink, steps, 0u);
+      CUDA_CHECK(cudaEventRecord(ev_stop));
+      CUDA_CHECK(cudaEventSynchronize(ev_stop));
+      float ms = 0.0f;
+      CUDA_CHECK(cudaEventElapsedTime(&ms, ev_start, ev_stop));
+      return static_cast<double>(ms);
+    };
+    // Steps so that the N = 64 launch takes about 2 ms; the same steps for N = 16.
+    const double probe = time_ms(k64, 64);
+    int steps = static_cast<int>(64 * 2.0 / std::max(probe, 1e-4));
+    steps = std::min(1 << 20, std::max(256, steps));
+    std::vector<double> slope;
+    for (int w = 0; w < warmup; ++w) { time_ms(k16, steps); time_ms(k64, steps); }
+    for (int s = 0; s < samples; ++s) {
+      const double t16 = time_ms(k16, steps), t64 = time_ms(k64, steps);
+      slope.push_back((t64 - t16) * 1e6 / (static_cast<double>(steps) * 48.0 * ILP));
+    }
+    if (!first) std::printf(",");
+    first = false;
+    std::printf("\n    {\"ilp\": %d, \"num_warps\": %d, \"ctas_per_sm\": %d, \"steps\": %d, \"ns_per_mma_per_warp_samples\": [",
+                ILP, warps, cps, steps);
+    for (size_t i = 0; i < slope.size(); ++i) std::printf(i ? ", %.4f" : "%.4f", slope[i]);
+    std::printf("]}");
+  };
+  auto each = [&](auto ilp_c) {
+    for (int warps : {1, 2, 3, 4, 8})
+      for (int cps : {1, 2, 3})
+        if (warps * cps <= 16) run_point(ilp_c, warps, cps);
+  };
+  each(std::integral_constant<int, 1>{});
+  each(std::integral_constant<int, 2>{});
+  each(std::integral_constant<int, 4>{});
+  each(std::integral_constant<int, 8>{});
+  std::printf("\n  ]\n}\n");
+  CUDA_CHECK(cudaFree(d_sink));
   return 0;
 }

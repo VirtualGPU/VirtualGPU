@@ -63,6 +63,10 @@ MODES = (
     "b-stream",
     "staged-mma",
     "dram-probe-sweep",
+    "sync-loop-delta",
+    "sync-loop-delta-flag",
+    "l2-paths",
+    "mma-ilp",
 )
 POWERSHELL = Path("/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe")
 QUIET_PERCENT = 5
@@ -265,6 +269,7 @@ def capture(args):
         "device_query": query,
         "mode": args.mode,
         "command": run_args,
+        "environment": {k: v for k, v in os.environ.items() if k.startswith("VGPU_")},
         "host": platform.node(),
         "platform": platform.platform(),
         "started_utc": started,

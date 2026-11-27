@@ -262,6 +262,12 @@ pub struct SmemOp {
     pub warp_group_id: u32,
     pub stage_offset: u32,
     pub bytes_per_cta: u64,
+    /// Diagnostic: the operand tiles counted once per CTA from the TTGIR.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ttgir_tile_bytes_per_cta: Option<u64>,
+    /// Diagnostic: the bytes ldmatrix reads in the PTX loop, per warp times the warps.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ptx_ldmatrix_bytes_per_cta: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

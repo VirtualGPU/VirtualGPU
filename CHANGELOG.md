@@ -5,6 +5,8 @@
 ### Added
 
 - Huawei Ascend 910B3 preregistered sealed multi-shape holdout (`validation/ascend-910b3-*`, `docs/results/ascend910b3-holdout.md`): 16 unseen GEMM and Attention shapes across 48 sessions on `0.3.1-ascend`; both Attention cohorts passed (`0.00%` top-5 regret, `+0.089` to `+0.122` tau-b above baselines) while GEMM failed, keeping `unvalidated_target_ascend` gating in place and recording post-hoc frontend and harness findings
+- Post-hoc GB10 microbenchmarks for single-buffer bursts and L2 sharing (`sync-loop-burst`, `l2-paths`), dependent MMA chains (`mma-ilp`) and the attention compute base (`attention_compute`), with their registrations and data
+- Design for long-launch profile capture and a launch-duration audit of the reference profiles
 - Huawei Ascend 910B3 Cube/Vector split modeling and Triton-Ascend forward GQA Attention frontend: L2-resident inter-core GM workspace accounting, multi-buffered AIC/AIV steady-state overlap, isolated FFTS+ cross-core sync microbenchmark (`cv_sync_hop_ns_by_active_sms`, profile `0.3.1-ascend`), `equal_to_1` stride specialization in Ascend AOT (fixing GEMM `multibuffer=False` overestimate), and CPU-only `extract_ascend_attention_kernel_ir` routed via `extract_attention_kernel_ir`
 - Long-launch sizing, capture and audit tools for NVIDIA MLP and active-SM read curves
 - Huawei Ascend 910B3 (`ascend910b3`) support: AscendC M1/M2 microbenchmark suite (`microbench/ascend/`), measured `profiles/ascend910b3.json` profile, optional `specs.ascend` and `resources.vendor_extensions.ascend` on-chip SRAM checks (`OccupancyError::TooMuchOnChipBuffer`), automatic `unvalidated_feature` / `unvalidated_target_ascend` flagging, and CPU-only Triton-Ascend HIVM GEMM frontend
@@ -25,6 +27,7 @@
 
 ### Fixed
 
+- The KernelIR's shared memory reads count the MMA operands' `ldmatrix` bytes per warp from the PTX, instead of each operand tile once per CTA (2 to 6 times fewer bytes on the v0.2 holdout configs)
 - Cross-wave L2 reuse: chunks that end together share one stream clock, and re-reads hit per K slice under LRU with the effective L2 capacity. Kept on GB10 microbenchmarks that agree in direction but fail the cross-run capture rule: forward re-reads at 1.5 times L2 or more do not hit in any run (the old clock charged 50% to 90%); from about 0.75 to 1.25 times L2 the hardware steady state is bistable across runs, a known limit; the reversed-walk detail is provisional; the sealed v0.3 holdout decides
 - Mark the GB10 MLP medians from five independent sweeps as provisional after the dispersion audit and propose long-launch recapture on both GPUs
 - Scale the DRAM streaming bandwidth buffer to at least 16x L2 capacity, map per-architecture unified L1 capacity in `collect_profile.py`, re-collect `rtxpro6000.json` with locked SM clocks and `rtx3070.json` on an idle GPU

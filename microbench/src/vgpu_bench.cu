@@ -544,8 +544,9 @@ int main(int argc, char** argv) {
     }
   }
 
-  if (long_read && mode != "mlp" && mode != "strided-mlp" && mode != "dram-bw" && mode != "l2") {
-    std::fprintf(stderr, "Long-read schedules apply only to mlp, strided-mlp, dram-bw and l2\n");
+  if (long_read && mode != "mlp" && mode != "strided-mlp" && mode != "dram-bw" && mode != "l2" &&
+      mode != "closed-loop") {
+    std::fprintf(stderr, "Launch schedules apply only to mlp, strided-mlp, dram-bw, l2 and closed-loop\n");
     return 2;
   }
 
@@ -555,6 +556,7 @@ int main(int argc, char** argv) {
     if (mode == "mlp") result = run_mlp(device, samples, warmup, long_read.get());
     else if (mode == "strided-mlp") result = run_strided_mlp(device, samples, warmup, long_read.get());
     else if (mode == "dram-bw") result = run_dram_bw(device, samples, warmup, buffer_mb, long_read.get());
+    else if (mode == "closed-loop") result = run_closed_loop(device, samples, warmup, long_read.get());
     else result = run_l2(device, samples, warmup, long_read.get());
     long_read->finish();
     return result;
@@ -729,6 +731,18 @@ int main(int argc, char** argv) {
   }
   if (mode == "dram-dispersion") {
     return run_dram_dispersion(device, samples, warmup);
+  }
+  if (mode == "sync-loop-burst") {
+    return run_sync_loop_burst(device, samples, warmup, false);
+  }
+  if (mode == "sync-loop-burst-check") {
+    return run_sync_loop_burst(device, samples, warmup, true);
+  }
+  if (mode == "l2-paths") {
+    return run_l2_paths(device, samples, warmup);
+  }
+  if (mode == "mma-ilp") {
+    return run_mma_ilp(device, samples, warmup);
   }
   std::fprintf(stderr, "Unknown mode: %s\n", mode.c_str());
   return 2;

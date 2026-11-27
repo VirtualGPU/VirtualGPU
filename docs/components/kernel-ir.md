@@ -108,6 +108,18 @@ Terminology note: `cta` refers to a thread block (NVIDIA), workgroup (AMD), or b
           "access_ref": "acc_A"
         },
         {
+          "op_id": "smem_load_AB",
+          "kind": "smem_load",
+          "warp_group_id": 0,
+          "stage_offset": 0,
+          // Shared memory bytes read per CTA per iteration: the PTX ldmatrix bytes (128, 256 or 512 per
+          // .x1, .x2, .x4 warp instruction, times the warps, since every warp reads its own operands)
+          // plus the PTX ld.shared bytes; the TTGIR tile sizes stand in only when the loop has no ldmatrix.
+          "bytes_per_cta": 65536,
+          "ttgir_tile_bytes_per_cta": 32768,   // optional diagnostic: the operand tiles counted once per CTA
+          "ptx_ldmatrix_bytes_per_cta": 65536  // optional diagnostic: the ldmatrix bytes alone
+        },
+        {
           "op_id": "dot_0",
           "kind": "mma",
           "warp_group_id": 0,

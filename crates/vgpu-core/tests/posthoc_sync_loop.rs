@@ -276,3 +276,30 @@ fn attention_split() {
     }
     std::fs::write(env("OUT"), out).unwrap();
 }
+
+/// Lines: dep start grid stage_bytes model_ns measured_ns (gemm_s2 shape, 8 warps, 32 MMAs per warp,
+/// warm L2). The model does not see the start offsets, so lock and stag points get the same time.
+#[test]
+#[ignore = "post-hoc analysis, needs PROFILE, POINTS and OUT"]
+fn sync_loop_burst() {
+    run("sync_loop_burst", |q| {
+        let pt = Point {
+            grid: u(q, "grid"),
+            ctas_per_sm: 1,
+            num_warps: u(q, "num_warps"),
+            stage_bytes: u(q, "stage_bytes"),
+            mma_per_warp: 32,
+            attention: false,
+            dep: q["dep"].as_str().unwrap().to_string(),
+            dram: false,
+        };
+        let label = format!(
+            "{} {} {} {}",
+            pt.dep,
+            q["start"].as_str().unwrap(),
+            pt.grid,
+            pt.stage_bytes
+        );
+        (pt, label)
+    });
+}

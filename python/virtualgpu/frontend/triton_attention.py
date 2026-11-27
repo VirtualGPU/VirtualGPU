@@ -436,9 +436,13 @@ def _assemble_attention_kernel_ir(
             }
         )
 
-    smem_load_bytes = (
-        summary.smem_load_bytes_per_iter or (tile_bytes_q + tile_bytes_k + tile_bytes_v)
-    ) + summary.loop_ptx_ld_shared_bytes
+    # The MMA operands are read with ldmatrix, once per warp that needs them: count those bytes from the
+    # PTX and fall back to the TTGIR tile sizes (each tile once per CTA) only when the loop has none.
+    ttgir_tile_bytes = summary.smem_load_bytes_per_iter or (
+        tile_bytes_q + tile_bytes_k + tile_bytes_v
+    )
+    operand_bytes = summary.loop_ptx_ldmatrix_bytes or ttgir_tile_bytes
+    smem_load_bytes = operand_bytes + summary.loop_ptx_ld_shared_bytes
     pipeline_ops: list[dict[str, Any]] = [
         {
             "op_id": "load_K",
@@ -466,6 +470,8 @@ def _assemble_attention_kernel_ir(
             "warp_group_id": 0,
             "stage_offset": 0,
             "bytes_per_cta": smem_load_bytes,
+            "ttgir_tile_bytes_per_cta": ttgir_tile_bytes,
+            "ptx_ldmatrix_bytes_per_cta": summary.loop_ptx_ldmatrix_bytes,
         },
     ]
     if summary.loop_ptx_st_shared_bytes > 0:

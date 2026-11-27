@@ -1,0 +1,8 @@
+gb10-attention     cold: 188 configs; signed median -1.9% -> +9.6%; median |err| 8.3% -> 11.2%; mean top-5 regret 0.33% -> 1.95%; mean tau 0.697 -> 0.665
+gb10-attention     warm: 188 configs; signed median -7.7% -> +3.9%; median |err| 9.6% -> 7.7%; mean top-5 regret 0.82% -> 2.30%; mean tau 0.648 -> 0.641
+gb10-gemm          cold: 324 configs; signed median -19.9% -> -17.7%; median |err| 20.0% -> 19.4%; mean top-5 regret 2.00% -> 1.96%; mean tau 0.642 -> 0.654
+gb10-gemm          warm: 324 configs; signed median -20.4% -> -18.5%; median |err| 20.4% -> 20.1%; mean top-5 regret 2.12% -> 2.04%; mean tau 0.636 -> 0.650
+rtx4070-attention  cold: 188 configs; signed median +3.7% -> +11.4%; median |err| 6.8% -> 11.6%; mean top-5 regret 1.43% -> 0.59%; mean tau 0.664 -> 0.620
+rtx4070-attention  warm: 188 configs; signed median +2.3% -> +9.8%; median |err| 6.5% -> 10.3%; mean top-5 regret 1.30% -> 0.64%; mean tau 0.670 -> 0.627
+rtx4070-gemm       cold: 324 configs; signed median -3.8% -> -0.7%; median |err| 10.5% -> 11.0%; mean top-5 regret 0.73% -> 0.61%; mean tau 0.704 -> 0.692
+rtx4070-gemm       warm: 324 configs; signed median -5.4% -> -2.5%; median |err| 11.8% -> 12.9%; mean top-5 regret 0.82% -> 0.63%; mean tau 0.739 -> 0.721

@@ -28,7 +28,7 @@ from virtualgpu.frontend.compiler import (
 from virtualgpu.frontend.scalar_eval import evaluate_ttgir_cta_offsets
 from virtualgpu.frontend.ttgir import dtype_bits, parse_ttgir_summary
 
-KERNEL_IR_CACHE_VERSION = "4"
+KERNEL_IR_CACHE_VERSION = "5"
 _IR_MEMORY_CACHE: dict[str, tuple[dict[str, Any], str]] = {}
 
 
@@ -406,9 +406,11 @@ def _assemble_gemm_kernel_ir(
     tile_bytes_c = block_m * block_n * elem_bytes
 
     prologue_ops: list[dict[str, Any]] = []
-    smem_load_bytes = (
-        summary.smem_load_bytes_per_iter or (tile_bytes_a + tile_bytes_b)
-    ) + summary.loop_ptx_ld_shared_bytes
+    # The MMA operands are read with ldmatrix, once per warp that needs them: count those bytes from the
+    # PTX and fall back to the TTGIR tile sizes (each tile once per CTA) only when the loop has none.
+    ttgir_tile_bytes = summary.smem_load_bytes_per_iter or (tile_bytes_a + tile_bytes_b)
+    operand_bytes = summary.loop_ptx_ldmatrix_bytes or ttgir_tile_bytes
+    smem_load_bytes = operand_bytes + summary.loop_ptx_ld_shared_bytes
     pipeline_ops: list[dict[str, Any]] = [
         {
             "op_id": "load_A",
@@ -436,6 +438,8 @@ def _assemble_gemm_kernel_ir(
             "warp_group_id": 0,
             "stage_offset": 0,
             "bytes_per_cta": smem_load_bytes,
+            "ttgir_tile_bytes_per_cta": ttgir_tile_bytes,
+            "ptx_ldmatrix_bytes_per_cta": summary.loop_ptx_ldmatrix_bytes,
         },
     ]
     if summary.loop_ptx_st_shared_bytes > 0:

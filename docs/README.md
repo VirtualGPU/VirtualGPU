@@ -20,6 +20,7 @@ How each part works today. When the code changes, the doc for that part changes 
 | [components/kernel-ir.md](components/kernel-ir.md) | `KernelIR` format and the L2 reuse model |
 | [components/model-core.md](components/model-core.md) | Event-driven performance model and perturbation draws |
 | [components/profiles.md](components/profiles.md) | GPU profile format and the microbenchmark suite |
+| [components/long-launch-capture.md](components/long-launch-capture.md) | Design for capturing every profile field with launches of at least 1 ms, behind the capture gates |
 | [components/autotune.md](components/autotune.md) | GPU-free autotuning, online and offline |
 | [components/validation.md](components/validation.md) | Candidate matrix, labels, baselines and scoring |
 
