@@ -143,6 +143,8 @@ DESIGN_FIELDS = {
     "l2-rescan": {"points": ("working_set_bytes",)},
     # Diagnostic (docs/results/analysis/v0.3-barrier-sync-plan.md); not in a profile.
     "barrier-step": {"points": ("barriers_per_step", "work_per_step", "num_warps", "grid")},
+    # Diagnostic (docs/results/analysis/v0.3-sync-load-gemm-plan.md); not in a profile.
+    "sync-load-reuse": {"points": ("level", "ctas_per_sm", "sharing", "load")},
     "mma-chain": {
         "mma_chain_latency": (
             "variant",
