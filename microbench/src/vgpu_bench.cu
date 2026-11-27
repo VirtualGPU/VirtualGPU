@@ -548,6 +548,8 @@ int main(int argc, char** argv) {
       l2_gbps = std::atof(argv[++i]);
     } else if (arg == "--point-order" && i + 1 < argc) {
       point_order = argv[++i];
+    } else if (arg == "--spill-carveout" && i + 1 < argc) {
+      g_spill_carveout = std::atoi(argv[++i]);
     } else if (arg == "--clock-probe") {
       clock_probe = true;
     } else if ((arg == "--launch-schedule" || arg == "--long-read-schedule") && i + 1 < argc) {

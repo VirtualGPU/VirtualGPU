@@ -4526,6 +4526,22 @@ static void dispatch_spill_frame(int frame_bytes, int sm_count, uint32_t* d_sink
 constexpr int spill_frame_bytes[] = {128, 256, 512, 1024, 2048, 4096};
 constexpr int spill_reload_counts[] = {0, 8, 32, 68, 128};
 
+// Diagnostic (GB10 spill study): when non-negative, the preferred shared memory carveout
+// (percent) set on every spill kernel before it runs; -1 leaves the driver's choice.
+static int g_spill_carveout = -1;
+
+template <bool SERIAL_CHAIN>
+static void set_spill_carveout(int percent) {
+  for (const void* kernel : {reinterpret_cast<const void*>(spill_reload_latency_kernel<32, SERIAL_CHAIN>),
+                             reinterpret_cast<const void*>(spill_reload_latency_kernel<64, SERIAL_CHAIN>),
+                             reinterpret_cast<const void*>(spill_reload_latency_kernel<128, SERIAL_CHAIN>),
+                             reinterpret_cast<const void*>(spill_reload_latency_kernel<256, SERIAL_CHAIN>),
+                             reinterpret_cast<const void*>(spill_reload_latency_kernel<512, SERIAL_CHAIN>),
+                             reinterpret_cast<const void*>(spill_reload_latency_kernel<1024, SERIAL_CHAIN>)}) {
+    CUDA_CHECK(cudaFuncSetAttribute(kernel, cudaFuncAttributePreferredSharedMemoryCarveout, percent));
+  }
+}
+
 static int run_spill_counters(int device, bool probe_only) {
   cudaDeviceProp prop{};
   CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
@@ -4557,6 +4573,10 @@ static int run_spill_counters(int device, bool probe_only) {
 }
 
 static int run_spill_latency(int device, int samples, int warmup, LaunchSchedule* schedule = nullptr) {
+  if (g_spill_carveout >= 0) {
+    set_spill_carveout<true>(g_spill_carveout);
+    set_spill_carveout<false>(g_spill_carveout);
+  }
   cudaDeviceProp prop{};
   CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
   const int sm_count = prop.multiProcessorCount;
