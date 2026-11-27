@@ -75,7 +75,7 @@ The core uses the online API in [kernel-ir.md](kernel-ir.md):
 
 - `begin_tile` / `end_tile` when a tile (one outer iteration of a CTA) starts and ends, so the L2 model always knows the resident set.
 - `split(sm_id, cta_id, outer_idx, op_id, k_begin, k_end, is_write, cache_policy, t_ns)` once per (CTA, op, phase segment). The segment covers the half-open inner-step range `[k_begin, k_end)` between two changes of the resident set; prologue and epilogue pass `[0, 1)`. The result is the aggregate over the range. Calls stay per segment, never per pipeline iteration, which keeps a 4096-tile GEMM at a few calls per tile and operand.
-- `account_spill` once per run, with the threads of the CTAs the busiest SM holds in the first wave (all it can hold once the grid fills a wave) and the shared memory carveout from occupancy. The share that leaves L1 is the measured L1 miss rate of the frames at that carveout (design.md 6.4).
+- `account_spill` computes a per-CTA charge for each resident count from the initial L2 working set and the occupancy carveout. The highest realized count seeds the persistent L2 spill pressure. After all departures and refills at a timestamp, each CTA entering a phase uses the charge for the resident count on its SM. The share that leaves L1 is the measured miss rate at that footprint and carveout (design.md 6.4).
 
 Other points:
 
