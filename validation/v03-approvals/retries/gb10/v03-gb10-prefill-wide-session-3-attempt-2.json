@@ -1,0 +1,10 @@
+{
+  "status": "retry_approved",
+  "timestamp_utc": "2026-11-27T10:22:47.283819+00:00",
+  "device": "gb10",
+  "case_id": "v03-gb10-prefill-wide",
+  "session": 3,
+  "attempt": 2,
+  "capture_approval_sha256": "f92fb3ccfb50b63df91ef592bdf28c65f840c456680e883e3a85a34b9e3d8689",
+  "failed_receipt_sha256": "fbe9e1f7a87ac154690fb91ec455bee3bf5cf2bd0dc79fd17328673fe61b696e"
+}
