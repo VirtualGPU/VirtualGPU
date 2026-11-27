@@ -1,0 +1,10 @@
+{
+  "status": "retry_approved",
+  "timestamp_utc": "2026-11-27T09:27:16.212728+00:00",
+  "device": "gb10",
+  "case_id": "v03-gb10-decode-wide",
+  "session": 2,
+  "attempt": 2,
+  "capture_approval_sha256": "f92fb3ccfb50b63df91ef592bdf28c65f840c456680e883e3a85a34b9e3d8689",
+  "failed_receipt_sha256": "f50b934236f7aac51f73fee879aa26af0794158dde2d42e59a9ccfb80c7a4b42"
+}
