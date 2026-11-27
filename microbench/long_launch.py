@@ -83,7 +83,8 @@ DESIGN_FIELDS = {
             "resident_threads_per_sm",
             "frame_bytes_per_thread",
             "reload_count",
-        )
+        ),
+        "launch_cost_by_frame": ("dependency_mode", "frame_bytes_per_thread"),
     },
     "sfu-shfl": {
         **{

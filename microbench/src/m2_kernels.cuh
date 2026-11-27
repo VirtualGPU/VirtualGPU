@@ -4636,7 +4636,8 @@ static int run_spill_latency(int device, int samples, int warmup, LaunchSchedule
 
   // A launch with no steps still initializes the frame. Its time is the fixed cost every
   // point above carries once per launch, so collect_profile.py can take it out per step.
-  // One launch is a few us, so each sample is the mean of a batch of launches.
+  // One launch is a few us, so each sample is the mean of a batch of launches. Under a
+  // schedule the batch size is the point's length, sized like any other point.
   constexpr int cost_batch = 256;
   first = true;
   for (int fb : spill_frame_bytes) {
@@ -4645,6 +4646,20 @@ static int run_spill_latency(int device, int samples, int warmup, LaunchSchedule
         if (serial) dispatch_spill_frame<true>(fb, sm_count, d_sink, 0, 1, 0);
         else dispatch_spill_frame<false>(fb, sm_count, d_sink, 0, 1, 0);
       };
+      if (schedule) {
+        std::printf("%s\n    {\"dependency_mode\": \"%s\", \"frame_bytes_per_thread\": %d",
+                    first ? "" : ",", serial ? "serial_chain" : "batch_before_dep", fb);
+        first = false;
+        auto timed = schedule->time_point(cost_batch, 1, 1 << 20, warmup, samples, ev_start, ev_stop,
+                                          [] {}, [&](int length) {
+                                            for (int k = 0; k < length; ++k) launch_once();
+                                          });
+        std::printf(", \"launch_cost_ns_samples\": [");
+        for (size_t i = 0; i < timed.launch_ns.size(); ++i)
+          std::printf("%s%.1f", i ? ", " : "", timed.launch_ns[i] / timed.length);
+        std::printf("]}");
+        continue;
+      }
       for (int w = 0; w < warmup; ++w) launch_once();
       CUDA_CHECK(cudaGetLastError());
       CUDA_CHECK(cudaDeviceSynchronize());

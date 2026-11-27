@@ -3,6 +3,7 @@
 import unittest
 
 from microbench import collect_profile as cp
+from microbench import long_capture
 
 
 def point(rc, steps, per_step_ns, cost_ns, frame=4096, mode="serial_chain"):
@@ -60,6 +61,34 @@ class SpillLaunchCostTests(unittest.TestCase):
             ],
         }
         self.assertAlmostEqual(cp.spill_step_samples(raw)[0][0], 10.0)
+
+    def test_merged_rounds_use_round_medians(self):
+        def round_raw(cost):
+            return {
+                "reload_latency_by_count": [
+                    point(0, 4096, 15.0, cost),
+                    point(32, 128, 900.0, cost),
+                ],
+                "launch_cost_by_frame": [
+                    {
+                        "dependency_mode": "serial_chain",
+                        "frame_bytes_per_thread": 4096,
+                        "steps": 40,
+                        "launch_ns_samples": [40 * cost] * 3,
+                        "launch_cost_ns_samples": [cost - 500, cost, cost + 500],
+                    }
+                ],
+            }
+
+        merged = long_capture.merge([round_raw(c) for c in (125000.0, 126000.0, 127000.0)])
+        costs = merged["launch_cost_by_frame"][0]["launch_cost_ns_samples"]
+        self.assertEqual(costs, [125000.0, 126000.0, 127000.0])
+        zero, reloads = cp.spill_step_samples(merged)
+        # Each round's point carries its own cost; the shared median cost leaves the
+        # rounds off by (round cost - median cost) / steps.
+        self.assertAlmostEqual(zero[1], 15.0)
+        self.assertAlmostEqual(reloads[1], 900.0)
+        self.assertAlmostEqual(reloads[0], 900.0 - 1000.0 / 128)
 
 
 if __name__ == "__main__":

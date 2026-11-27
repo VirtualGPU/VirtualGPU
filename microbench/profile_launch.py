@@ -135,6 +135,8 @@ NOT_IN_PROFILE = {
     # Only its peak may enter the profile, as non_mma_issue_rate_per_sm_gips (see
     # attach_non_mma).
     ("sfu-shfl", "alu_issue_rate_per_sm_gips"),
+    # Taken out of every spill point's per-step time; not a profile value itself.
+    ("spill-latency", "launch_cost_by_frame"),
     ("mma-softmax-chain", "solo_calibration"),
     ("l1-carveout", "l1_carveout_sweep"),
 }
