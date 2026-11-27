@@ -166,7 +166,7 @@ def test_parse_hivm_mix_cv_workspace_and_vector_ops() -> None:
     assert s.loop_sync_blocks == 2
     assert s.loop_cv_sync_hops == 1
     assert s.aiv_loop_max_rows == 32
-    assert "ascend_mix_cv_workspace" in s.diagnostics
+    assert s.diagnostics == []
 
 
 def test_autoblockify_reordering_preserves_all_tiles() -> None:
@@ -216,24 +216,47 @@ def test_assemble_and_predict_ascend_gemm_end_to_end() -> None:
     assert "ub_bytes" not in ir["resources"]
     assert "l0c_bytes" not in ir["resources"]
     assert ir["resources"]["vendor_extensions"]["ascend"]["l0c_bytes"] == 65536
-    assert "unvalidated_target_ascend" in ir["diagnostics"]
+    assert "unvalidated_target_ascend" not in ir["diagnostics"]
 
     profile_text = (REPO_ROOT / "profiles" / "ascend910b3.json").read_text(encoding="utf-8")
     pred = _core.predict(json.dumps(ir), profile_text, l2_state="cold", draws=8, seed=17)
     assert pred["status"] == "ok", pred
     assert pred["time_ns"] > 0.0
     assert pred["ctas_per_sm"] == 1
-    assert "unvalidated_feature" in pred["flags"]
-    assert "unvalidated_target_ascend" in pred["diagnostics"]
+    assert "unvalidated_feature" not in pred["flags"]
+    assert "unvalidated_target_ascend" not in pred["diagnostics"]
 
-    # Even if an Ascend IR omits diagnostics, the core still marks it unvalidated.
-    ir_no_diag = dict(ir, diagnostics=[])
-    pred_no_diag = _core.predict(
-        json.dumps(ir_no_diag), profile_text, l2_state="cold", draws=4, seed=17
+    # Unvalidated Ascend targets still carry unvalidated_target_ascend in frontend and core.
+    other_artifacts = AscendCompiledArtifacts(
+        kernel_name="gemm_clean",
+        target_arch="ascend910c",
+        triton_version="3.5.0",
+        ttir="",
+        ttadapter="",
+        hivm_ir=SAMPLE_HIVM_GEMM_DOUBLE_BUF,
+        ttir_sha256="0" * 64,
+        hivm_sha256=hash_hivm(SAMPLE_HIVM_GEMM_DOUBLE_BUF),
+        mix_mode="mix",
+        workspace_size=0,
+        bs_task_type=20,
+        requested_num_stages=2,
+        requested_multibuffer=True,
     )
-    assert pred_no_diag["status"] == "ok"
-    assert "unvalidated_feature" in pred_no_diag["flags"]
-    assert "unvalidated_target_ascend" in pred_no_diag["diagnostics"]
+    ir_other = assemble_ascend_gemm_kernel_ir(
+        other_artifacts,
+        M=2048,
+        N=2048,
+        K=2048,
+        config={"BLOCK_M": 128, "BLOCK_N": 128, "BLOCK_K": 64, "GROUP_SIZE_M": 8, "num_stages": 2},
+    )
+    assert "unvalidated_target_ascend" in ir_other["diagnostics"]
+    ir_other_no_diag = dict(ir_other, diagnostics=[])
+    pred_other = _core.predict(
+        json.dumps(ir_other_no_diag), profile_text, l2_state="cold", draws=4, seed=17
+    )
+    assert pred_other["status"] == "ok"
+    assert "unvalidated_feature" in pred_other["flags"]
+    assert "unvalidated_target_ascend" in pred_other["diagnostics"]
 
     # On-chip UB/L0C overflow returns a dedicated TooMuchOnChipBuffer reason.
     ir_bad_l0c = json.loads(json.dumps(ir))
@@ -285,7 +308,7 @@ def test_assemble_and_predict_ascend_attention_causal_gqa() -> None:
     assert asc_ext["workspace_multibuffer"] == 4
     assert asc_ext["workspace_loop_bytes"] == 2 * (163840 // 4)
     assert asc_ext["cv_sync_hops_per_iter"] == 1
-    assert "unvalidated_target_ascend" in ir_causal["diagnostics"]
+    assert "unvalidated_target_ascend" not in ir_causal["diagnostics"]
 
     ir_full = assemble_ascend_attention_kernel_ir(
         artifacts,
@@ -306,8 +329,10 @@ def test_assemble_and_predict_ascend_attention_causal_gqa() -> None:
     assert p_causal["status"] == "ok", p_causal
     assert p_full["status"] == "ok", p_full
     assert p_causal["time_ns"] < p_full["time_ns"]
-    assert "unvalidated_feature" in p_causal["flags"]
-    assert "unvalidated_target_ascend" in p_causal["diagnostics"]
+    assert "unvalidated_feature" not in p_causal["flags"]
+    assert "unvalidated_target_ascend" not in p_causal["diagnostics"]
+    assert "unvalidated_feature" not in p_full["flags"]
+    assert "unvalidated_target_ascend" not in p_full["diagnostics"]
 
 
 # Captured pattern from dense_gemm with tl.constexpr M, N, K (m128n64k32):

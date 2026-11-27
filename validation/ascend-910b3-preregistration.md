@@ -1,19 +1,22 @@
 # Ascend 910B3 Sealed Holdout Preregistration
 
-This document fixes the holdout workload manifests, frozen model/profile revision, independent baselines, hardware capture protocol, and pass criteria for Huawei Ascend 910B3 (`profiles/ascend910b3.json`, `0.3.1-ascend`) before any holdout timings are collected or opened.
+This document fixes the holdout workload manifests, frozen model/profile revision, independent baselines, hardware capture protocol, and pass criteria for Huawei Ascend 910B3 (`profiles/ascend910b3.json`, `0.3.2-ascend`) before any holdout timings are collected or opened.
 
 ## 1. Frozen Inputs
 
-- **Core and frontend revision:** `main` + HIVM frontend parser fixes (`hivm.py`: fractal NZ `(Cols1, Rows1, Rows0, Cols0)` tile-shape decoding and skipping non-AIV `hivm.hir.vbrc` `cbuf` helpers inside `AIC` functions), with zero modifications to `crates/vgpu-core/`, `python/virtualgpu/`, or `profiles/ascend910b3.json` during capture or scoring.
-- **Hardware profile:** `profiles/ascend910b3.json` (`0.3.1-ascend`, M1 + M2 microbenchmarks including isolated FFTS+ cross-core sync handoff latency, zero GEMM or Attention fitting).
+- **Core and frontend revision:** `main` plus two zero-fitting physical refinements under `cube_vector_split`:
+  1. Single in-order `PIPE_MTE2` + `L0A/L0B`-decoupled Cube pipeline in `crates/vgpu-core/src/sim.rs` (`round_trips = n - d`, `d = 0` serializing only `MTE1` (`smem_load`) with `MTE2` while `d >= 1` overlaps both; NVIDIA/AMD untouched).
+  2. Isolated AscendC `Nd2Nz` 2D row-issue microbenchmark (`gmem_load_issue_controlled` in `profiles/ascend910b3.json`, `0.3.2-ascend`) paired with 2D row-width `transfer_width_bytes = row_bytes // 32` in `triton_ascend_gemm.py` and `triton_ascend_attention.py`.
+  Zero modifications to `crates/vgpu-core/`, `python/virtualgpu/`, or `profiles/ascend910b3.json` during capture or scoring.
+- **Hardware profile:** `profiles/ascend910b3.json` (`0.3.2-ascend`, M1 + M2 microbenchmarks including isolated FFTS+ cross-core sync handoff latency and isolated AIC `Nd2Nz` 2D row-issue rate, zero GEMM or Attention fitting).
 - **Simulation settings:** `draws = 32`, `seed = 17`, `pair_margin = 0.05` (matching `validation/v02_inputs.py`), evaluated independently for `warm` and `cold` L2 states.
 
-## 2. Disjoint Holdout Cohorts
+## 2. Disjoint Holdout Cohorts (v3)
 
-All holdout workloads are strictly disjoint from both the informal dev sanity checks (`2048^3` GEMM, `4096^3` GEMM, `S=2048` Attention) and the initial diagnostic v1 run (which surfaced the fractal NZ / `AIC` `vbrc` parser bugs and warm `torch.npu.Event` host-dispatch floor):
+All holdout workloads are strictly disjoint from the informal dev sanity checks (`2048^3` GEMM, `4096^3` GEMM, `S=2048` Attention), the v1 holdout (PR #13), and the v2 holdout (PR #14):
 
-- **GEMM (`validation/ascend-910b3-gemm-holdout.json`):** 8 unseen shapes x 16 configs = 128 variants using `validation/ascend_kernels.py:dense_gemm` (FP16 inputs/output, FP32 accumulator). Every shape is absent from both dev (`{2048, 4096}`) and v1 shapes. Covers small-M decode (`32x4608x2560`, `96x6144x2816`), a 20-AI-Core two-wave boundary triplet (`39 / 40 / 41` CTAs at `128x128`: `128x4992x2816`, `128x5120x2816`, `128x5248x2816`), medium and large prefill (`768x4608x2816`, `2304x4608x2816`), and unaligned odd dimensions (`1153x3329x2689`).
-- **Attention (`validation/ascend-910b3-attention-holdout.json`):** 8 unseen shapes x 10 configs = 80 variants using `validation/attention.py:fused_attention` (FP16 Q/K/V/O, FP32 LSE/accumulator). Every `seq_len` (`896, 1152, 1408, 1665, 1921, 2304`) is strictly disjoint from both dev (`2048`) and v1 (`1024, 1280, 1536, 1537, 1793, 2560`). Covers all 8 strata across `{non-causal, causal} x {MHA, GQA} x {D=64, D=128}` including aligned and odd sequence lengths.
+- **GEMM (`validation/ascend-910b3-gemm-holdout.json`):** 8 unseen shapes x 16 configs = 128 variants using `validation/ascend_kernels.py:dense_gemm` (FP16 inputs/output, FP32 accumulator, `input_seed = 37`). Covers small-M decode (`24x5632x3328`, `80x7168x3328`), a 20-AI-Core three-wave boundary triplet (`59 / 60 / 61` CTAs at `128x128`: `128x7552x3328`, `128x7680x3328`, `128x7808x3328`), medium and large prefill (`896x5632x3328`, `2560x5632x3328`), and unaligned odd dimensions (`1281x3713x2945`).
+- **Attention (`validation/ascend-910b3-attention-holdout.json`):** 8 unseen shapes x 10 configs = 80 variants using `validation/attention.py:fused_attention` (FP16 Q/K/V/O, FP32 LSE/accumulator, `input_seed = 37`). Every `seq_len` (`768, 1088, 1409, 1664, 2177, 2432`) is strictly disjoint from dev, v1, and v2. Covers all 8 strata across `{non-causal, causal} x {MHA, GQA} x {D=64, D=128}` including aligned and odd sequence lengths.
 
 ## 3. Independent Baselines (Zero Ascend Labels)
 

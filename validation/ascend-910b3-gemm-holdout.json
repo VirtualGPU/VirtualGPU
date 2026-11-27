@@ -6,9 +6,9 @@
   "input_dtype": "float16",
   "output_dtype": "float16",
   "accumulator_dtype": "float32",
-  "input_seed": 23,
+  "input_seed": 37,
   "excluded_dev_axes": [2048, 4096],
-  "excluded_v1_shapes": [
+  "excluded_prior_shapes": [
     [16, 3584, 3072],
     [64, 5120, 3584],
     [128, 2432, 3072],
@@ -16,7 +16,15 @@
     [128, 2688, 3072],
     [1024, 3584, 3072],
     [3072, 3584, 3072],
-    [1537, 2945, 2497]
+    [1537, 2945, 2497],
+    [32, 4608, 2560],
+    [96, 6144, 2816],
+    [128, 4992, 2816],
+    [128, 5120, 2816],
+    [128, 5248, 2816],
+    [768, 4608, 2816],
+    [2304, 4608, 2816],
+    [1153, 3329, 2689]
   ],
   "configs": [
     {"config_id": "m16n64k32-g1-mb1", "tile": [16, 64, 32], "group_m": 1, "multibuffer": true, "num_stages": 2, "num_warps": 1},
@@ -38,9 +46,9 @@
   ],
   "cases": [
     {
-      "case_id": "ascend-v2-decode-32",
+      "case_id": "ascend-v3-decode-24",
       "split": "holdout",
-      "shape": [32, 4608, 2560],
+      "shape": [24, 5632, 3328],
       "config_ids": [
         "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
         "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",
@@ -49,9 +57,9 @@
       ]
     },
     {
-      "case_id": "ascend-v2-decode-96",
+      "case_id": "ascend-v3-decode-80",
       "split": "holdout",
-      "shape": [96, 6144, 2816],
+      "shape": [80, 7168, 3328],
       "config_ids": [
         "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
         "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",
@@ -60,10 +68,10 @@
       ]
     },
     {
-      "case_id": "ascend-v2-wave2-below",
+      "case_id": "ascend-v3-wave3-below",
       "split": "holdout",
-      "shape": [128, 4992, 2816],
-      "reference_ctas": 39,
+      "shape": [128, 7552, 3328],
+      "reference_ctas": 59,
       "config_ids": [
         "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
         "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",
@@ -72,10 +80,10 @@
       ]
     },
     {
-      "case_id": "ascend-v2-wave2-exact",
+      "case_id": "ascend-v3-wave3-exact",
       "split": "holdout",
-      "shape": [128, 5120, 2816],
-      "reference_ctas": 40,
+      "shape": [128, 7680, 3328],
+      "reference_ctas": 60,
       "config_ids": [
         "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
         "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",
@@ -84,10 +92,10 @@
       ]
     },
     {
-      "case_id": "ascend-v2-wave2-above",
+      "case_id": "ascend-v3-wave3-above",
       "split": "holdout",
-      "shape": [128, 5248, 2816],
-      "reference_ctas": 41,
+      "shape": [128, 7808, 3328],
+      "reference_ctas": 61,
       "config_ids": [
         "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
         "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",
@@ -96,9 +104,9 @@
       ]
     },
     {
-      "case_id": "ascend-v2-prefill-med",
+      "case_id": "ascend-v3-prefill-med",
       "split": "holdout",
-      "shape": [768, 4608, 2816],
+      "shape": [896, 5632, 3328],
       "config_ids": [
         "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
         "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",
@@ -107,9 +115,9 @@
       ]
     },
     {
-      "case_id": "ascend-v2-prefill-large",
+      "case_id": "ascend-v3-prefill-large",
       "split": "holdout",
-      "shape": [2304, 4608, 2816],
+      "shape": [2560, 5632, 3328],
       "config_ids": [
         "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
         "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",
@@ -118,9 +126,9 @@
       ]
     },
     {
-      "case_id": "ascend-v2-mask-odd",
+      "case_id": "ascend-v3-mask-odd",
       "split": "holdout",
-      "shape": [1153, 3329, 2689],
+      "shape": [1281, 3713, 2945],
       "config_ids": [
         "m16n64k32-g1-mb1", "m32n64k32-g1-mb1", "m64n64k32-g1-mb1", "m64n64k32-g8-mb0",
         "m64n64k64-g8-mb1", "m64n128k32-g1-mb1", "m64n128k64-g8-mb1", "m64n128k64-g8-mb0",

@@ -11,8 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SUITE_VERSION = "0.3.1-ascend"
-PROFILE_REVISION = "0.3.1-ascend"
+SUITE_VERSION = "0.3.2-ascend"
+PROFILE_REVISION = "0.3.2-ascend"
 DEFAULT_REL_UNCERTAINTY_FLOOR = 0.10
 
 
@@ -476,6 +476,28 @@ def build_ascend_profile(
         memory_section["l2_latency_by_bw"] = l2_lat_by_bw
     if l2_merge_by_sharing:
         memory_section["l2_merge_by_sharing"] = l2_merge_by_sharing
+    if raw.get("gmem_load_issue_controlled"):
+        memory_section["gmem_load_issue_controlled"] = [
+            {
+                "load_width_bytes": int(pt["load_width_bytes"]),
+                "batch_loads_per_thread": int(pt["batch_loads_per_thread"]),
+                "num_warps": int(pt["num_warps"]),
+                "bytes_in_flight": int(pt["bytes_in_flight"]),
+                "issue_rate_gwarp_inst_per_sm": _mv(
+                    pt["issue_rate_gwarp_inst_per_sm"],
+                    unit="Gwarp-inst/s",
+                    method=f"ascendc_aic_nd2nz_row_issue_w{int(pt['load_width_bytes']) * 32}b",
+                    perturb_group="l2_bw",
+                ),
+                "delivered_bw_per_sm_gbps": _mv(
+                    pt["delivered_bw_per_sm_gbps"],
+                    unit="GB/s",
+                    method=f"ascendc_aic_nd2nz_row_issue_w{int(pt['load_width_bytes']) * 32}b",
+                    perturb_group="l2_bw",
+                ),
+            }
+            for pt in raw["gmem_load_issue_controlled"]
+        ]
 
     pipeline_section: dict[str, Any] = {}
     if fixed_sync_ns:

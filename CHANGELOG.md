@@ -4,6 +4,7 @@
 
 ### Added
 
+- Huawei Ascend 910B3 single-MTE2 `L0A/L0B`-decoupled Cube pipeline (`sim.rs`, gated on `cube_vector_split`), isolated AscendC 2D `Nd2Nz` row-issue M2 microbenchmark (`aic_nd2nz_issue_kernel` -> `gmem_load_issue_controlled`, profile `0.3.2-ascend`), and fresh disjoint v3 sealed holdout (`docs/results/ascend910b3-holdout.md`): all 4 cohorts passed (`gemm-warm`: `0.870` tau-b, `0.00%` regret, `99.1%` ordered agreement, `14.0%` median error; `gemm-cold`: `0.929`, `0.00%`, `98.4%`; `attention-warm/cold`: `0.800`, `0.00%`, `88.2%`), lifting `unvalidated_target_ascend` / `unvalidated_feature` for `ascend910b3` while keeping other unvalidated Ascend architectures gated
 - Optional P3a block references for the 14 registered GB10 DRAM MLP plateau points
 
 - Huawei Ascend 910B3 HIVM parser fixes (`hivm.py` fractal NZ tile-shape axis order and skipping `AIC`-only `vbrc` `cbuf` helpers), zero-L2 `stream_spacer` warm timing harness (`cold_probe_ratio = 1.51-1.65`), and fresh disjoint v2 sealed holdout (`docs/results/ascend910b3-holdout.md`): Attention passed both warm and cold (`0.756` tau-b, `0.00%` regret, `23.6%-23.9%` median error); GEMM passed regret (`0.00%/0.09%`) and NeuSight ranking (`+0.131/+0.453`) with `89.8%/86.7%` ordered agreement but trailed `roofline_wave` tau-b (`0.773/0.720` vs `0.803/0.840`), keeping `unvalidated_target_ascend` gating in place

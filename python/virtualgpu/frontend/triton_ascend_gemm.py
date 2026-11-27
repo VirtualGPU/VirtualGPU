@@ -25,7 +25,7 @@ from virtualgpu.frontend.hivm import HivmSummary, parse_hivm_summary
 from virtualgpu.frontend.scalar_eval import evaluate_ttgir_cta_offsets
 from virtualgpu.frontend.ttgir import dtype_bits
 
-ASCEND_KERNEL_IR_CACHE_VERSION = "4"
+ASCEND_KERNEL_IR_CACHE_VERSION = "5"
 
 
 def _align_up(value: int, alignment: int = 256) -> int:
@@ -228,8 +228,9 @@ def assemble_ascend_gemm_kernel_ir(
         group_size_m=group_m,
     )
 
+    target_arch = canonical_ascend_arch(artifacts.target_arch)
     diagnostics = list(summary.diagnostics)
-    if "unvalidated_target_ascend" not in diagnostics:
+    if target_arch != "ascend910b3" and "unvalidated_target_ascend" not in diagnostics:
         diagnostics.append("unvalidated_target_ascend")
     unsupported_features = list(summary.unsupported_features)
     if used_linear_fallback:
@@ -358,8 +359,11 @@ def assemble_ascend_gemm_kernel_ir(
         },
     ]
 
-    # Ascend DMA transfers move 32-byte aligned blocks; on-chip L1->L0A/L0B streams tile A + B.
-    dma_width = 32
+    # Ascend 2D Nd2Nz/Fixpipe DMA issues one row-request per tile row (row_bytes = cols * elem_bytes).
+    # Encoding transfer_width_bytes = row_bytes // 32 maps nominal_bytes / (32 * width) to the exact
+    # 2D DMA row count (BM for A/C, BK for B) against the measured Nd2Nz row-issue rate.
+    dma_width_a = max(1, (block_k * elem_bytes) // 32)
+    dma_width_b = max(1, (block_n * elem_bytes) // 32)
     pipeline_ops: list[dict[str, Any]] = [
         {
             "op_id": "load_A",
@@ -368,7 +372,7 @@ def assemble_ascend_gemm_kernel_ir(
             "stage_offset": summary.prefetch_distance,
             "tensor_id": "A",
             "nominal_bytes_per_cta": tile_bytes_a,
-            "transfer_width_bytes": dma_width,
+            "transfer_width_bytes": dma_width_a,
             "access_ref": "acc_A",
         },
         {
@@ -378,7 +382,7 @@ def assemble_ascend_gemm_kernel_ir(
             "stage_offset": summary.prefetch_distance,
             "tensor_id": "B",
             "nominal_bytes_per_cta": tile_bytes_b,
-            "transfer_width_bytes": dma_width,
+            "transfer_width_bytes": dma_width_b,
             "access_ref": "acc_B",
         },
         {
@@ -477,7 +481,7 @@ def assemble_ascend_gemm_kernel_ir(
             "stage_offset": 0,
             "tensor_id": "C",
             "nominal_bytes_per_cta": tile_bytes_c,
-            "transfer_width_bytes": dma_width,
+            "transfer_width_bytes": dma_width_b,
             "access_ref": "acc_C",
         }
     ]

@@ -68,7 +68,7 @@ Required means the profile ships at 1.0 and has a sealed holdout. Profile only m
 | AMD CDNA3 | MI325X | Beta | To do |
 | AMD CDNA4 | MI355X | Beta | To do |
 | AMD RDNA3 | RX 7900 XTX | Beta | To do |
-| Ascend | 910B3 | Beta, holdout if possible | Profile |
+| Ascend | 910B3 | Beta, holdout if possible | Validated |
 
 ## 0.3.0: close the known model gaps
 
@@ -167,7 +167,7 @@ Turn the oracle into tools that fit how people already work.
 
 - [ ] AMD through Triton's AMD backend and the public CDNA and RDNA ISA docs: MFMA and WMMA, LDS, Infinity Cache, registers and spills from the compiler's public metadata
 - [ ] MI300X, MI325X, MI355X and RX 7900 XTX profiles, with a ROCm port of the microbenchmark suite
-- [ ] Ascend: a sealed holdout on the 910B3 if hardware time allows
+- [x] Ascend: a sealed holdout on the 910B3 if hardware time allows
 - [ ] AMD and Ascend predictions carry `unvalidated_feature` unless a sealed holdout passed
 - [ ] 1.0.0 release candidates through the full release workflow
 - [ ] Launch evaluation: one preregistered sealed holdout across every Required GPU and every kernel family, scored with the frozen release candidate. This is the number the launch reports

@@ -694,12 +694,17 @@ impl<'a, L: L2> Sim<'a, L> {
             Phase::Main => {
                 let ld = self.traffic(&tl.per_iteration.loads, d, n, false, sm, program, tile);
                 let st = self.traffic(&tl.per_iteration.stores, 0, n, true, sm, program, tile);
-                // A closed loop of d + 1 stage buffers: a stage arrives a round
-                // trip after it was issued, the CTA computes on it and only
-                // then reissues the buffer. So d + 1 stages share each round
-                // trip plus compute, and synchronous loads (d = 0) pay both
-                // every iteration.
-                let trips = f64::from(n - d) / f64::from(d + 1);
+                // A closed loop of d + 1 stage buffers: on unified SMs (NVIDIA/AMD),
+                // d + 1 stages share each memory round trip plus compute. On Ascend
+                // cube_vector_split AI Cores, a single in-order MTE2 DMA engine executes
+                // one stage per K-iteration (with L0A/L0B decoupling Cube from L1), so
+                // double-buffering L1 overlaps MTE2 with MTE1 rather than halving MTE2
+                // round trips.
+                let trips = if self.m.cube_vector_split {
+                    f64::from(n - d)
+                } else {
+                    f64::from(n - d) / f64::from(d + 1)
+                };
                 (&tl.per_iteration, n, ld, st, trips)
             }
             Phase::Epilogue => {
@@ -1170,22 +1175,37 @@ fn rates(ctas: &[Cta], m: &Machine, per_cta: &[PerCta], lat: Latency, s: &mut Sc
         };
         let (launch, l2_latency, dram_latency) =
             d.latency_parts(m.port_floor(lat, d, s.resident[i]));
-        // Steady state with compute and loads: the stage buffers of all CTAs
-        // on the SM queue for the SM's pipes (service: a stage's compute alone
-        // plus its synchronization) and wait a round trip between stages.
-        let queued = (d.stages > 0.0 && d.round_trips > 0.0 && longest > 0.0).then(|| {
-            let users = s.mma_users[i].max(1);
-            let service = (longest + d.sync_ns) / d.stages;
-            let delay = (l2_latency + dram_latency) / d.round_trips + d.reload_ns / d.stages;
-            let x = mva_throughput(users * d.tokens, service, delay);
-            d.stages * f64::from(users) / x
-        });
+        // Steady state with compute and loads: on unified SMs, the stage buffers
+        // of all CTAs on the SM queue for the SM's pipes and wait an infinite-server
+        // memory round trip between stages. On Ascend cube_vector_split AI Cores,
+        // the single in-order MTE2 pipe runs in parallel with Cube (decoupled via
+        // L0A/L0B) and serializes only with MTE1 (smem_load) when L1 is single-buffered.
+        let queued = (!m.cube_vector_split
+            && d.stages > 0.0
+            && d.round_trips > 0.0
+            && longest > 0.0)
+            .then(|| {
+                let users = s.mma_users[i].max(1);
+                let service = (longest + d.sync_ns) / d.stages;
+                let delay = (l2_latency + dram_latency) / d.round_trips + d.reload_ns / d.stages;
+                let x = mva_throughput(users * d.tokens, service, delay);
+                d.stages * f64::from(users) / x
+            });
+        let (exposed, exposed_kind) = if m.cube_vector_split {
+            if d.load_bytes > 0.0 && d.tokens <= 1 {
+                (alone[2], 2)
+            } else {
+                (0.0, kind)
+            }
+        } else {
+            (d.exposed_compute * (longest + d.reload_ns), kind)
+        };
         let parts = Parts {
             launch,
             l2_latency,
             dram_latency,
-            exposed: d.exposed_compute * (longest + d.reload_ns),
-            exposed_kind: kind,
+            exposed,
+            exposed_kind,
             chain_kind: if d.reload_ns > longest + d.sync_ns {
                 LOCAL
             } else {

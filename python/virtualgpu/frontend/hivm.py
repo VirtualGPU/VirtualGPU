@@ -446,8 +446,6 @@ def parse_hivm_summary(
         diagnostics.append("ascend_stages_clamped_to_double_buffer")
     if requested_multibuffer and requested_num_stages >= 2 and num_stages == 1:
         diagnostics.append("unpipelined_fallback")
-    if mix_mode == "mix" and workspace_bytes > 0:
-        diagnostics.append("ascend_mix_cv_workspace")
 
     return HivmSummary(
         mix_mode=mix_mode,

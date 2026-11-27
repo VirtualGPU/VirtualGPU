@@ -9,7 +9,7 @@ To add your GPU, see [contributing a profile](../docs/guides/contributing-a-prof
 | File | SKU | Arch | Memory | Revision | Source | Clocks | Driver / Toolkit |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | [`a100-80gb.json`](a100-80gb.json) | NVIDIA A100-SXM4-80GB | `sm_80` | Discrete (HBM2e) | `0.21.0-posthoc` | `partial` | Unlocked (Linux, 1410 MHz SM / 1593 MHz Mem) | `580.82.07` / `13.0` |
-| [`ascend910b3.json`](ascend910b3.json) | Huawei Ascend 910B3 | `ascend910b3` | Discrete (HBM2e) | `0.3.0-ascend` | `partial` | Unlocked (Linux, 1800 MHz Cube) | `26.1.1` / `CANN 9.2.1` |
+| [`ascend910b3.json`](ascend910b3.json) | Huawei Ascend 910B3 | `ascend910b3` | Discrete (HBM2e) | `0.3.2-ascend` | `partial` | Unlocked (Linux, 1800 MHz Cube) | `26.1.1` / `CANN 9.2.1` |
 | [`gb10.json`](gb10.json) | NVIDIA GB10 (DGX Spark) | `sm_121` | Unified (LPDDR5X) | `0.21.0-posthoc` | `partial` | Unlocked (2411 to 2561 MHz SM / 8533 MHz Mem) | `580.173.02` / `13.0` |
 | [`l4.json`](l4.json) | NVIDIA L4 | `sm_89` | Discrete (GDDR6) | `0.21.0-posthoc` | `partial` | Unlocked (Linux, 1845 to 2040 MHz SM / 6251 MHz Mem) | `580.82.07` / `13.0` |
 | [`l40s.json`](l40s.json) | NVIDIA L40S | `sm_89` | Discrete (GDDR6) | `0.21.0-posthoc` | `partial` | Locked with `nvidia-smi` on native Linux (2100 MHz SM / 9001 MHz Mem). The collector still records `locked: false` | `595.91.07` / `13.5` |
@@ -19,7 +19,7 @@ To add your GPU, see [contributing a profile](../docs/guides/contributing-a-prof
 | [`rtxpro5000-72gb.json`](rtxpro5000-72gb.json) | NVIDIA RTX PRO 5000 72GB Blackwell | `sm_120` | Discrete (GDDR7) | `0.21.0-posthoc` | `partial` | Unlocked (Linux, 2370 to 2640 MHz SM / 13365 to 14001 MHz Mem) | `615.78.08` / `13.5` |
 | [`rtxpro6000.json`](rtxpro6000.json) | NVIDIA RTX PRO 6000 Blackwell Server Edition | `sm_120` | Discrete (GDDR7) | `0.21.0-posthoc` | `partial` | Locked with `nvidia-smi` on native Linux (1702 to 1710 MHz SM / 12481 MHz Mem). The collector still records `locked: false` | `580.82.07` / `13.0` |
 
-Only the RTX 4070 and GB10 profiles have been through a sealed holdout. The others are measured but not validated yet. In particular, [`ascend910b3.json`](ascend910b3.json) has only been checked against an informal 2-shape FP16 GEMM sanity run ([`docs/results/ascend910b3-gemm-sanity.md`](../docs/results/ascend910b3-gemm-sanity.md), not a holdout); every Ascend prediction automatically carries the `unvalidated_feature` flag and `unvalidated_target_ascend` diagnostic.
+Only the RTX 4070, GB10, and Huawei Ascend 910B3 ([`docs/results/ascend910b3-holdout.md`](../docs/results/ascend910b3-holdout.md), passed all 4 GEMM and Attention warm/cold cohorts on `0.3.2-ascend`) profiles have passed a formal sealed holdout. The other profiles are measured but not validated yet; any other unvalidated Ascend architecture continues to carry the `unvalidated_feature` flag and `unvalidated_target_ascend` diagnostic.
 
 ## Where each field comes from
 

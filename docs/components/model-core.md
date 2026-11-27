@@ -148,6 +148,8 @@ Prologue time is the latency plus the transfer time of the first `S - 1` stages.
 
 The MMA throughput share depends on how many warps issue MMA on the SM, using the profile's measured curve. This is how `num_warps` enters the model.
 
+When `specs.capabilities.cube_vector_split` is set (Ascend 910B3), each AI Core has a single in-order `PIPE_MTE2` DMA engine and `L0A/L0B` buffers decoupling Cube `PIPE_M` from L1 `cbuf`, so steady-state latency uses a single-MTE2 queue (`n - d` exposed round trips rather than the multi-warp infinite-server divisor), single-buffered loops (`d = 0`) serialize only `PIPE_MTE1` with `PIPE_MTE2`, and 2D `Nd2Nz` row-issue throughput is bounded by the measured `gmem_load_issue_controlled` curve (see [design.md section 9.4](../design.md#94-ascend-910b3-mapping-and-known-limits)).
+
 ### 3.6 Persistent and warp-specialized kernels
 
 Persistent kernels need no special scheduler: the grid is the number of programs, and each program walks its tile list from the kernel IR. Each tile contributes its phases in sequence. If the kernel IR marks epilogue-to-next-tile overlap, the epilogue of tile i runs as a concurrent phase with the main loop of tile i+1 on the same CTA, sharing its resources.

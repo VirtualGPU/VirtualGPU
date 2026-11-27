@@ -1,6 +1,6 @@
-# Ascend 910B3 FP16 GEMM and Attention Sanity Check (Unvalidated)
+# Ascend 910B3 FP16 GEMM and Attention Sanity Check (Historical Dev Archive)
 
-> **Status: Informal dev sanity check, not a sealed holdout.** For the preregistered multi-shape sealed holdout evaluation and formal verdict (Attention warm/cold Pass, GEMM warm/cold Fail), see [`ascend910b3-holdout.md`](ascend910b3-holdout.md). Every Ascend prediction remains tagged with `unvalidated_feature` and `unvalidated_target_ascend`.
+> **Status: Informal dev sanity check archived from `0.3.1-ascend`, not a sealed holdout.** For the preregistered multi-shape sealed holdout evaluation and formal verdict (**Pass** on all 4 cohorts: GEMM warm/cold and Attention warm/cold, lifting `unvalidated_target_ascend` for `ascend910b3`), see [`ascend910b3-holdout.md`](ascend910b3-holdout.md).
 
 ## Setup
 

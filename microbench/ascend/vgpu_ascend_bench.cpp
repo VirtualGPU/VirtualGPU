@@ -844,6 +844,43 @@ __global__ __aicore__ void cv_sync_pingpong_kernel(GM_ADDR sink, uint32_t iters)
 }
 
 // ---------------------------------------------------------------------------
+// 14. M2: AIC 2D Strided Nd2Nz Row-Issue Rate (GM ND -> L1 Fractal NZ)
+// ---------------------------------------------------------------------------
+template <int ROWS, int COLS>
+__global__ __aicore__ void aic_nd2nz_issue_kernel(GM_ADDR src, uint32_t stride_elems,
+                                                  uint32_t iters) {
+    KERNEL_TASK_TYPE_DEFAULT(KERNEL_TYPE_AIC_ONLY);
+#ifdef __DAV_C220_CUBE__
+    uint32_t cid = GetBlockIdx();
+    TPipe pipe;
+    TBuf<TPosition::A1> l1;
+    pipe.InitBuffer(l1, ROWS * COLS * sizeof(half));
+    LocalTensor<half> dst = l1.Get<half>();
+    GlobalTensor<half> gm;
+    gm.SetGlobalBuffer(reinterpret_cast<__gm__ half*>(src), 128ULL * 1024 * 1024);
+
+    Nd2NzParams p;
+    p.ndNum = 1;
+    p.nValue = ROWS;
+    p.dValue = COLS;
+    p.srcNdMatrixStride = 0;
+    p.srcDValue = stride_elems;
+    p.dstNzC0Stride = ROWS;
+    p.dstNzNStride = 1;
+    p.dstNzMatrixStride = 0;
+
+    uint64_t base = static_cast<uint64_t>(cid) * ROWS * stride_elems;
+    PipeBarrier<PIPE_ALL>();
+    for (uint32_t i = 0; i < iters; ++i) {
+        uint64_t off = (base + (i & 31u) * COLS) & ((64ULL * 1024 * 1024) - 1);
+        DataCopy(dst, gm[off], p);
+        PipeBarrier<PIPE_MTE2>();
+    }
+    PipeBarrier<PIPE_ALL>();
+#endif
+}
+
+// ---------------------------------------------------------------------------
 // Host Harness
 // ---------------------------------------------------------------------------
 #ifndef __CCE_KT_TEST__
@@ -1656,6 +1693,69 @@ int main(int argc, char** argv) {
             print_samples(hop_ns_s);
             std::printf("}%s\n", (i + 1 < active_list.size()) ? "," : "");
         }
+        std::printf("  ],\n");
+    }
+
+    // 17. M2: AIC 2D Strided Nd2Nz Row-Issue Rate (load_width_bytes = row_bytes / 32)
+    {
+        const uint32_t nd2nz_iters = 2048;
+        const uint32_t nd2nz_stride = 4608;
+        auto run_nd2nz = [&](int rows, int cols, auto launch_fn, bool trailing_comma) {
+            for (int w = 0; w < 2; ++w) launch_fn();
+            ACL_CHECK(aclrtSynchronizeStream(stream));
+            std::vector<double> rate_s, bw_s;
+            rate_s.reserve(samples);
+            bw_s.reserve(samples);
+            const double row_bytes = static_cast<double>(cols) * 2.0;
+            const double tile_bytes = static_cast<double>(rows) * row_bytes;
+            for (int s = 0; s < samples; ++s) {
+                double ms = time_ms(launch_fn);
+                double ns_per_iter = ms * 1e6 / static_cast<double>(nd2nz_iters);
+                rate_s.push_back(static_cast<double>(rows) / ns_per_iter);
+                bw_s.push_back(tile_bytes / ns_per_iter);
+            }
+            int width_b = static_cast<int>(row_bytes) / 32;
+            uint64_t bif = static_cast<uint64_t>(ai_cores) * static_cast<uint64_t>(rows) *
+                           static_cast<uint64_t>(cols) * 2ULL;
+            std::printf(
+                "    {\"load_width_bytes\": %d, \"batch_loads_per_thread\": %d, "
+                "\"num_warps\": 1, \"bytes_in_flight\": %llu, "
+                "\"issue_rate_gwarp_inst_per_sm\": ",
+                width_b, rows, (unsigned long long)bif);
+            print_samples(rate_s);
+            std::printf(", \"delivered_bw_per_sm_gbps\": ");
+            print_samples(bw_s);
+            std::printf("}%s\n", trailing_comma ? "," : "");
+        };
+        std::printf("  \"gmem_load_issue_controlled\": [\n");
+        run_nd2nz(
+            128, 32,
+            [&]() {
+                aic_nd2nz_issue_kernel<128, 32><<<ai_cores, nullptr, stream>>>(
+                    (uint8_t*)d_buf, nd2nz_stride, nd2nz_iters);
+            },
+            true);
+        run_nd2nz(
+            128, 64,
+            [&]() {
+                aic_nd2nz_issue_kernel<128, 64><<<ai_cores, nullptr, stream>>>(
+                    (uint8_t*)d_buf, nd2nz_stride, nd2nz_iters);
+            },
+            true);
+        run_nd2nz(
+            128, 128,
+            [&]() {
+                aic_nd2nz_issue_kernel<128, 128><<<ai_cores, nullptr, stream>>>(
+                    (uint8_t*)d_buf, nd2nz_stride, nd2nz_iters);
+            },
+            true);
+        run_nd2nz(
+            64, 256,
+            [&]() {
+                aic_nd2nz_issue_kernel<64, 256><<<ai_cores, nullptr, stream>>>(
+                    (uint8_t*)d_buf, nd2nz_stride, nd2nz_iters);
+            },
+            false);
         std::printf("  ]\n");
     }
 

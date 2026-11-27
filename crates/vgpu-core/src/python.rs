@@ -143,8 +143,9 @@ fn record<'py>(
         _ => false,
     });
     let mut diagnostics = ir.diagnostics.clone();
-    let is_unvalidated_vendor =
-        all[0].profile.identity.vendor == "ascend" || ir.metadata.target_vendor == "ascend";
+    let is_unvalidated_vendor = (all[0].profile.identity.vendor == "ascend"
+        && all[0].profile.identity.arch != "ascend910b3")
+        || (ir.metadata.target_vendor == "ascend" && ir.metadata.target_arch != "ascend910b3");
     if is_unvalidated_vendor && !diagnostics.iter().any(|d| d == "unvalidated_target_ascend") {
         diagnostics.push("unvalidated_target_ascend".into());
     }

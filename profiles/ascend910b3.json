@@ -7,13 +7,13 @@
     "memory_type": "discrete"
   },
   "provenance": {
-    "profile_revision": "0.3.1-ascend",
+    "profile_revision": "0.3.2-ascend",
     "calibration_run_id": "cal-20261126T193546Z-ascend910b3",
     "calibration_manifest_digest": null,
     "source": "partial",
     "driver_version": "26.1.1",
     "toolkit_version": "CANN 9.2.1",
-    "suite_version": "0.3.1-ascend",
+    "suite_version": "0.3.2-ascend",
     "host_os": "linux",
     "is_wsl": false,
     "power_limit_w": null,
@@ -5224,6 +5224,112 @@
             "rel_uncertainty": 0.1,
             "unit": "GB/s",
             "method": "ascendc_l2_merge_mte2",
+            "source": "measured",
+            "perturb_group": "l2_bw"
+          }
+        }
+      ],
+      "gmem_load_issue_controlled": [
+        {
+          "load_width_bytes": 2,
+          "batch_loads_per_thread": 128,
+          "num_warps": 1,
+          "bytes_in_flight": 163840,
+          "issue_rate_gwarp_inst_per_sm": {
+            "value": 0.4146,
+            "ci95_low": 0.4138,
+            "ci95_high": 0.4218,
+            "rel_uncertainty": 0.1,
+            "unit": "Gwarp-inst/s",
+            "method": "ascendc_aic_nd2nz_row_issue_w64b",
+            "source": "measured",
+            "perturb_group": "l2_bw"
+          },
+          "delivered_bw_per_sm_gbps": {
+            "value": 26.5353,
+            "ci95_low": 26.4825,
+            "ci95_high": 26.9921,
+            "rel_uncertainty": 0.1,
+            "unit": "GB/s",
+            "method": "ascendc_aic_nd2nz_row_issue_w64b",
+            "source": "measured",
+            "perturb_group": "l2_bw"
+          }
+        },
+        {
+          "load_width_bytes": 4,
+          "batch_loads_per_thread": 128,
+          "num_warps": 1,
+          "bytes_in_flight": 327680,
+          "issue_rate_gwarp_inst_per_sm": {
+            "value": 0.4152,
+            "ci95_low": 0.4147,
+            "ci95_high": 0.4202,
+            "rel_uncertainty": 0.1,
+            "unit": "Gwarp-inst/s",
+            "method": "ascendc_aic_nd2nz_row_issue_w128b",
+            "source": "measured",
+            "perturb_group": "l2_bw"
+          },
+          "delivered_bw_per_sm_gbps": {
+            "value": 53.1429,
+            "ci95_low": 53.0757,
+            "ci95_high": 53.7904,
+            "rel_uncertainty": 0.1,
+            "unit": "GB/s",
+            "method": "ascendc_aic_nd2nz_row_issue_w128b",
+            "source": "measured",
+            "perturb_group": "l2_bw"
+          }
+        },
+        {
+          "load_width_bytes": 8,
+          "batch_loads_per_thread": 128,
+          "num_warps": 1,
+          "bytes_in_flight": 655360,
+          "issue_rate_gwarp_inst_per_sm": {
+            "value": 0.3923,
+            "ci95_low": 0.3912,
+            "ci95_high": 0.3969,
+            "rel_uncertainty": 0.1,
+            "unit": "Gwarp-inst/s",
+            "method": "ascendc_aic_nd2nz_row_issue_w256b",
+            "source": "measured",
+            "perturb_group": "l2_bw"
+          },
+          "delivered_bw_per_sm_gbps": {
+            "value": 100.4293,
+            "ci95_low": 100.1565,
+            "ci95_high": 101.6031,
+            "rel_uncertainty": 0.1,
+            "unit": "GB/s",
+            "method": "ascendc_aic_nd2nz_row_issue_w256b",
+            "source": "measured",
+            "perturb_group": "l2_bw"
+          }
+        },
+        {
+          "load_width_bytes": 16,
+          "batch_loads_per_thread": 64,
+          "num_warps": 1,
+          "bytes_in_flight": 655360,
+          "issue_rate_gwarp_inst_per_sm": {
+            "value": 0.2185,
+            "ci95_low": 0.2173,
+            "ci95_high": 0.2223,
+            "rel_uncertainty": 0.1,
+            "unit": "Gwarp-inst/s",
+            "method": "ascendc_aic_nd2nz_row_issue_w512b",
+            "source": "measured",
+            "perturb_group": "l2_bw"
+          },
+          "delivered_bw_per_sm_gbps": {
+            "value": 111.8929,
+            "ci95_low": 111.2326,
+            "ci95_high": 113.8094,
+            "rel_uncertainty": 0.1,
+            "unit": "GB/s",
+            "method": "ascendc_aic_nd2nz_row_issue_w512b",
             "source": "measured",
             "perturb_group": "l2_bw"
           }

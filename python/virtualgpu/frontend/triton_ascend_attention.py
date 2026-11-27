@@ -24,7 +24,7 @@ from virtualgpu.frontend.compiler import (
 from virtualgpu.frontend.hivm import HivmSummary, parse_hivm_summary
 from virtualgpu.frontend.ttgir import dtype_bits
 
-ASCEND_ATTN_KERNEL_IR_CACHE_VERSION = "2"
+ASCEND_ATTN_KERNEL_IR_CACHE_VERSION = "3"
 
 
 def _align_up(value: int, alignment: int = 256) -> int:
@@ -316,7 +316,7 @@ def assemble_ascend_attention_kernel_ir(
     tile_bytes_k = block_n * D * elem_bytes
     tile_bytes_v = block_n * D * elem_bytes
     tile_bytes_o = block_m * D * elem_bytes
-    dma_width = 32
+    dma_width = max(1, (D * elem_bytes) // 32)
 
     prologue_ops: list[dict[str, Any]] = [
         {
@@ -488,8 +488,9 @@ def assemble_ascend_attention_kernel_ir(
     )
     l0c_used = summary.l0c_bytes or (block_m * max(block_n, D) * 4)
 
+    target_arch = canonical_ascend_arch(artifacts.target_arch)
     diagnostics = list(summary.diagnostics)
-    if "unvalidated_target_ascend" not in diagnostics:
+    if target_arch != "ascend910b3" and "unvalidated_target_ascend" not in diagnostics:
         diagnostics.append("unvalidated_target_ascend")
 
     return {

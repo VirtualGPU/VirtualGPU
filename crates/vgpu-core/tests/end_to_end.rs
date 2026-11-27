@@ -264,3 +264,82 @@ fn ascend910b3_cube_vector_split_overlaps_and_keeps_workspace_in_l2() {
         r_overlap.makespan_ns
     );
 }
+
+#[test]
+fn ascend910b3_single_mte2_pipeline_and_nd2nz_row_issue() {
+    use vgpu_core::kernel::{Access, CvWorkspace, Kernel, Spill, Tile, TripCounts, Work};
+    use vgpu_core::sim::ConstantHitRatio;
+
+    let p = Profile::from_json(include_str!("../../../profiles/ascend910b3.json")).unwrap();
+    let mma_key = "cube.mmad:f16:f16:f32:16x16x16";
+    let m = Machine::nominal(&p, mma_key).unwrap();
+    assert!(m.cube_vector_split);
+    assert!(
+        m.lsu_rate.is_finite() && m.lsu_rate > 0.1 && m.lsu_rate < 2.0,
+        "expected measured Nd2Nz row-issue rate in profile, got {}",
+        m.lsu_rate
+    );
+
+    let make_gemm =
+        |prefetch_distance: u32, width_a: f64, width_b: f64, bytes_a: f64, bytes_b: f64| Kernel {
+            grid: 20,
+            num_warps: 1,
+            registers_per_thread: 1,
+            smem_per_cta_bytes: 65_536,
+            ub_bytes: 0,
+            l0c_bytes: 65_536,
+            cv_workspace: CvWorkspace::default(),
+            tiles_per_program: TripCounts::Uniform(8),
+            mma_key: mma_key.to_string(),
+            spill: Spill::default(),
+            async_loads: prefetch_distance > 0,
+            tile_iterations: None,
+            tile: Tile {
+                prologue: Work::default(),
+                iterations: 32,
+                per_iteration: Work {
+                    loads: vec![
+                        Access {
+                            op_id: "load_A".into(),
+                            nominal_bytes: bytes_a,
+                            width_bytes: width_a,
+                        },
+                        Access {
+                            op_id: "load_B".into(),
+                            nominal_bytes: bytes_b,
+                            width_bytes: width_b,
+                        },
+                    ],
+                    smem_bytes: bytes_a + bytes_b,
+                    mma_flops: 2.0 * 128.0 * 64.0 * 64.0,
+                    ..Work::default()
+                },
+                prefetch_distance,
+                epilogue: Work::default(),
+            },
+        };
+
+    // Single-buffered vs double-buffered AIC GEMM: L0A/L0B decouples Cube from L1, so
+    // d=0 adds at most MTE1 (smem_load) rather than full Cube MMA time.
+    let mb1 = make_gemm(1, 4.0, 8.0, 8192.0, 16384.0); // m64n128k64: 64 + 64 = 128 rows
+    let mb0 = make_gemm(0, 4.0, 8.0, 8192.0, 16384.0);
+    let r_mb1 = simulate(&mb1, &p, &m, &mut ConstantHitRatio(0.5)).unwrap();
+    let r_mb0 = simulate(&mb0, &p, &m, &mut ConstantHitRatio(0.5)).unwrap();
+    assert!(
+        r_mb0.makespan_ns >= r_mb1.makespan_ns && r_mb0.makespan_ns < r_mb1.makespan_ns * 1.25,
+        "expected modest single-buffer MTE1 overhead, got mb0={} vs mb1={}",
+        r_mb0.makespan_ns,
+        r_mb1.makespan_ns
+    );
+
+    // Measured Nd2Nz row-issue rate distinguishes m128n64k64 (192 rows/iter) from
+    // m64n128k64 (128 rows/iter) at equal bytes and FLOPs.
+    let tall_a = make_gemm(1, 4.0, 4.0, 16384.0, 8192.0); // m128n64k64: 128 + 64 = 192 rows
+    let r_tall = simulate(&tall_a, &p, &m, &mut ConstantHitRatio(0.5)).unwrap();
+    assert!(
+        r_tall.makespan_ns > r_mb1.makespan_ns * 1.25,
+        "expected 192-row tile to run slower than 128-row tile: tall={} vs wide={}",
+        r_tall.makespan_ns,
+        r_mb1.makespan_ns
+    );
+}
