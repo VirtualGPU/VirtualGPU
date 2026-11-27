@@ -31,6 +31,7 @@
 
 - Spill reloads add latency to each CTA's dependent chain, from the measured batched reload curves
 - Spill traffic leaves L1 as a step at the L1 size left by the kernel's shared memory carveout, from the measured L1 miss curves, instead of a linear overflow past one threshold
+- When reload latency is charged, a CTA's dependent chain no longer also pays local bandwidth for the reloads, only for the spill stores
 - A profile without the L1 miss curves gets a hard step at `l1_to_l2_spill_threshold_bytes_per_sm` instead of the linear overflow (`ascend910b3` and profiles older than these curves)
 - Causal attention spill traffic and reloads are split between its two loops (`spill_loop_count` in the Kernel IR) instead of charged in full on every iteration
 - The spill counter capture runs on any NVIDIA GPU and builds for its compute capability, not only the RTX 4070

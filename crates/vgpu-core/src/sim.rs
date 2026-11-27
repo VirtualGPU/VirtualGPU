@@ -523,6 +523,9 @@ struct Demand {
     mem_insts: f64,
     /// Spill bytes served by L1.
     local_bytes: f64,
+    /// The part of `local_bytes` on the CTA's own chain: the stores when the
+    /// reload latency is charged, since its measurement includes issuing the reloads.
+    chain_local_bytes: f64,
     /// All bytes through L2 (loads and stores).
     bytes: f64,
     dram_bytes: f64,
@@ -715,6 +718,12 @@ impl<'a, L: L2> Sim<'a, L> {
             spill_dram * spill_executions,
         );
         self.dram_bytes += spill_dram;
+        let local_bytes = spill_l1 + spill_l2 + spill_dram;
+        let chain_local_bytes = if self.reload_ns > 0.0 && k.spill.bytes_per_thread > 0.0 {
+            local_bytes * (1.0 - k.spill.load_bytes_per_thread / k.spill.bytes_per_thread)
+        } else {
+            local_bytes
+        };
         let steps = f64::from(steps);
         let (ws_l2, ws_dram) = if phase == Phase::Main
             && self.m.cube_vector_split
@@ -765,7 +774,8 @@ impl<'a, L: L2> Sim<'a, L> {
                 .sum::<f64>()
                 * steps,
             // Local accesses go through the SM's L1 and LSU wherever they are served.
-            local_bytes: spill_l1 + spill_l2 + spill_dram,
+            local_bytes,
+            chain_local_bytes,
             bytes: total_bytes,
             dram_bytes: total_dram_bytes,
             fixed_latency_ns: 0.0,
@@ -1117,7 +1127,7 @@ fn rates(ctas: &[Cta], m: &Machine, per_cta: &[PerCta], lat: Latency, s: &mut Sc
             d.flops / per_cta[1].mma,
             d.warp_insts / m.issue_rate,
             d.smem_bytes / m.smem_bw,
-            d.local_bytes / m.local_bw,
+            d.chain_local_bytes / m.local_bw,
             d.sfu_insts / per_cta[1].sfu,
             d.shfl_insts / per_cta[1].shfl,
             // Issuing loads overlaps the wait for the ones in flight, so
@@ -1515,5 +1525,39 @@ mod tests {
                 assert_eq!(run(&ir, &p, initial, seed), base, "{initial:?} seed {seed}");
             }
         }
+    }
+
+    #[test]
+    fn reload_latency_takes_spill_loads_off_the_chain() {
+        let mut v: serde_json::Value =
+            serde_json::from_str(include_str!("../../../schemas/examples/gemm_sm89.json")).unwrap();
+        let r = &mut v["resources"];
+        r["stack_frame_bytes"] = 512.into();
+        r["spill_loads_bytes"] = 384.into();
+        r["spill_stores_bytes"] = 128.into();
+        r["spill_scope"] = "inner_loop_confirmed".into();
+        let ir = KernelIR::from_json_str(&v.to_string()).unwrap();
+        let p = Profile::from_json(include_str!("../../../profiles/rtx4070.json")).unwrap();
+        let k = kernel_from_ir(&ir).unwrap();
+        let m = Machine::nominal(&p, &k.mma_key).unwrap();
+        let mut l2 = IrL2::new(&ir, &p, L2InitState::Cold, L2Options::default());
+        let mut sim = Sim {
+            k: &k,
+            m: &m,
+            l2: &mut l2,
+            t: 0.0,
+            load_bytes: 0.0,
+            l2_hit_bytes: 0.0,
+            merged_bytes: 0.0,
+            dram_bytes: 0.0,
+            spill: (1000.0, 0.0, 0.0),
+            reload_ns: 0.0,
+        };
+        let d = sim.demand(Phase::Main, 0, 0, 0);
+        assert!(d.local_bytes > 0.0);
+        assert_eq!(d.chain_local_bytes, d.local_bytes);
+        sim.reload_ns = 50.0;
+        let d = sim.demand(Phase::Main, 0, 0, 0);
+        assert!((d.chain_local_bytes - d.local_bytes * 0.25).abs() < 1e-9);
     }
 }

@@ -166,7 +166,7 @@ The assembler reports static spill bytes, not dynamic counts. The core uses:
 - With either loop scope, `spill_loop_count` (default 1) divides the per-iteration spill bytes and reloads. Causal attention has two sequential loops that share one assembler figure, and each iteration runs one of them, so each pays half. The frame is not divided.
 - `none`: no spill cost.
 
-Reloads also add latency to the CTA's dependent chain, from the measured reload curves at the spill load bytes over 4 B (design.md 6.4). Both overestimate dynamic traffic when spill code is on a cold path. That is acceptable for ranking: a spilling config should rank below an otherwise similar non-spilling one, and the sign matters more than the magnitude. Every spilling variant carries the spill flag, and the validation must check spilling configs separately.
+Reloads also add latency to the CTA's dependent chain, from the measured reload curves at the spill load bytes over 4 B (design.md 6.4). That latency includes issuing the reloads, so the chain then keeps only the stores' share of the local bytes as `local` time; the shared `local` pipe keeps all of them. Both overestimate dynamic traffic when spill code is on a cold path. That is acceptable for ranking: a spilling config should rank below an otherwise similar non-spilling one, and the sign matters more than the magnitude. Every spilling variant carries the spill flag, and the validation must check spilling configs separately.
 
 ### 3.8 Launch overhead
 
