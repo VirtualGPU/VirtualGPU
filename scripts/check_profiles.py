@@ -82,14 +82,52 @@ def launch_errors(profile: dict[str, Any]) -> list[str]:
     protocol's minimum."""
     minimum = profile["provenance"]["capture_protocol"]["minimum_launch_ns"]
     errors = []
-    for path, name, leaf in measured_leaves(profile["measured"]):
-        if leaf.get("source") != "measured" or name in UNTIMED_LEAVES:
+    for path, _, leaf in measured_leaves(profile["measured"]):
+        # A derived field may hold several values (serial_stage_overhead_ns: intercept and
+        # slope per point), so the field is looked for anywhere in the path.
+        untimed = UNTIMED_LEAVES.intersection(path.replace("[", ".").split("."))
+        if leaf.get("source") != "measured" or untimed or "provisional" in leaf:
             continue
         launch = leaf.get("launch")
         if launch is None:
             errors.append(f"{path}: no launch record")
         elif launch["min_ns"] < minimum:
             errors.append(f"{path}: launch of {launch['min_ns']:.0f} ns under {minimum:.0f} ns")
+    return errors
+
+
+def carried_errors(profile: dict[str, Any]) -> list[str]:
+    """Provisional values (long-launch-capture.md, section 6): each is in a field that
+    `capture_protocol.carried_over` names, with its mode and source, that mode failed rule 3
+    and every other mode passed, and every value of a carried field is provisional."""
+    protocol = profile["provenance"].get("capture_protocol", {})
+    records = protocol.get("carried_over", [])
+    marked = [(p, v) for p, _, v in measured_leaves(profile["measured"]) if "provisional" in v]
+    if not marked and not records:
+        return []
+    errors = []
+    rule_three = protocol.get("rule_three", {})
+    failed = sorted(m for m, r in rule_three.items() if r.get("status") != "passed")
+    if len(records) != 1 or failed != [records[0]["mode"]]:
+        errors.append(f"carried over {[r['mode'] for r in records]}, rule 3 failed in {failed}")
+    for record in records:
+        mark = {"reason": "rule_three_failed", **{k: v for k, v in record.items() if k != "fields"}}
+        for field in record["fields"]:
+            section, name = field.split(".")
+            values = measured_leaves(profile["measured"].get(section, {}).get(name), field, name)
+            if not values:
+                errors.append(f"{field}: carried over but not in the profile")
+            errors += [
+                f"{p}: carried value not marked as {mark}"
+                for p, _, v in values
+                if v.get("provisional") != mark
+            ]
+    named = {f"measured.{f}" for r in records for f in r["fields"]}
+    errors += [
+        f"{p}: provisional outside carried_over"
+        for p, _ in marked
+        if not any(p == f or p.startswith((f + "[", f + ".")) for f in named)
+    ]
     return errors
 
 
@@ -250,6 +288,7 @@ def check(path: Path | str, *, skip_sanity: bool = False) -> tuple[list[str], st
     elif source == "partial" and not (measured and estimated):
         errors.append(f"source is 'partial' but found {measured} measured, {estimated} estimated")
 
+    errors.extend(carried_errors(profile))
     if "capture_protocol" in prov:
         launch = launch_errors(profile)
         errors.extend(

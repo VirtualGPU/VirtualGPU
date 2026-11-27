@@ -511,7 +511,7 @@ def check(mech, profile, profile_text):
             )
     errors = [r["error"] for r in rows]
     worst = max(rows, key=lambda r: abs(r["error"]))
-    return {
+    result = {
         "points": len(rows),
         "median_abs_error": st.median(abs(e) for e in errors),
         "mape": st.mean(abs(e) for e in errors),
@@ -519,6 +519,17 @@ def check(mech, profile, profile_text):
         "worst": {"point": worst["point"], "error": worst["error"]},
         "rows": rows,
     }
+    # Values carried over from an earlier profile (long-launch-capture.md, section 6) give that
+    # profile's result again: the mechanism is not rechecked on this one.
+    marks = [
+        v["provisional"]
+        for q in chosen
+        for v in q.values()
+        if isinstance(v, dict) and "provisional" in v
+    ]
+    if marks:
+        result["carried_over"] = marks[0]
+    return result
 
 
 def markdown(result):
@@ -529,10 +540,15 @@ def markdown(result):
         cells = []
         for name in names:
             r = result["profiles"][name]["mechanisms"].get(mech["name"])
+            carried = (
+                f"carried over from {r['carried_over']['from_profile_revision']}, not rechecked: "
+                if r and "carried_over" in r
+                else ""
+            )
             cells.append(
                 "not in profile"
                 if r is None
-                else f"{r['points']} pts: median {r['median_abs_error'] * 100:.1f}%, "
+                else f"{carried}{r['points']} pts: median {r['median_abs_error'] * 100:.1f}%, "
                 f"MAPE {r['mape'] * 100:.1f}%, signed {r['signed_median'] * 100:+.1f}%, "
                 f"worst {r['worst']['error'] * 100:+.1f}% ({r['worst']['point']})"
             )
@@ -640,7 +656,8 @@ def compare(baseline, result, tolerance):
                 continue
             delta = {k: r[k] - b[k] for k in ("median_abs_error", "mape", "signed_median")}
             lines.append(
-                f"{name:10} {mech:24} median {b['median_abs_error'] * 100:5.1f}% -> "
+                ("NOT RECHECKED (carried over) " if "carried_over" in r else "")
+                + f"{name:10} {mech:24} median {b['median_abs_error'] * 100:5.1f}% -> "
                 f"{r['median_abs_error'] * 100:5.1f}%, MAPE {b['mape'] * 100:5.1f}% -> "
                 f"{r['mape'] * 100:5.1f}%, signed {b['signed_median'] * 100:+5.1f}% -> "
                 f"{r['signed_median'] * 100:+5.1f}%"

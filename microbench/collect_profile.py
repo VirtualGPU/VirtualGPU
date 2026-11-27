@@ -1741,8 +1741,76 @@ def build_profile(
     return profile
 
 
-def long_launch_profile(binary: Path, device: int, run_dir: Path) -> dict[str, Any]:
-    """A 0.23.0 profile from a passed five-round long-launch capture (long_capture.py)."""
+# Modes whose profile fields may be carried over from an earlier profile when the mode alone
+# fails rule 3 (long-launch-capture.md, section 6): every value build_profile makes from the
+# mode's raw is in these fields, and no other mode or derived value writes them.
+CARRY_FIELDS = {"spill-latency": (("memory", "spill_reload_latency_by_count"),)}
+
+
+def measured_values(node: Any) -> list[dict[str, Any]]:
+    """Every MeasuredValue under `node`."""
+    if isinstance(node, dict):
+        if {"value", "unit", "method"} <= node.keys():
+            return [node]
+        return [v for child in node.values() for v in measured_values(child)]
+    if isinstance(node, list):
+        return [v for child in node for v in measured_values(child)]
+    return []
+
+
+def carried_mode(state: dict[str, Any]) -> str | None:
+    """None for a passed capture; the mode whose fields are carried over for a capture whose
+    only failure is rule 3 in that one mode; otherwise no profile."""
+    status = state.get("status")
+    if status == "passed":
+        return None
+    if status != "rule_three_failed":
+        raise SystemExit(f"the capture did not pass ({status})")
+    short = [
+        m
+        for m in state["modes"]
+        if sum(r["results"].get(m, {}).get("status") == "valid" for r in state["rounds"]) < 5
+    ]
+    failed = [m for m, r in state["rule_three"].items() if r.get("status") != "passed"]
+    if short or len(failed) != 1:
+        raise SystemExit(f"rule 3 failed in {failed}, modes short of 5 rounds {short}: no profile")
+    if failed[0] not in CARRY_FIELDS:
+        raise SystemExit(f"{failed[0]} failed rule 3 and its fields cannot be carried over")
+    return failed[0]
+
+
+def carry_over(profile: dict[str, Any], mode: str, source_path: Path) -> dict[str, Any]:
+    """Copy `mode`'s fields unchanged from the profile at `source_path`, marking every value
+    provisional with the source's revision and SHA-256; returns the carried_over record."""
+    import copy
+    import hashlib
+
+    data = source_path.read_bytes()
+    source = json.loads(data)
+    if source["identity"]["sku"] != profile["identity"]["sku"]:
+        raise SystemExit(f"{source_path} is a profile of {source['identity']['sku']}")
+    origin = {
+        "from_profile_revision": source["provenance"]["profile_revision"],
+        "from_profile_sha256": hashlib.sha256(data).hexdigest(),
+    }
+    fields = []
+    for section, field in CARRY_FIELDS[mode]:
+        value = copy.deepcopy(source["measured"][section][field])
+        leaves = measured_values(value)
+        if not leaves or any("provisional" in v for v in leaves):
+            raise SystemExit(f"{source_path}: {section}.{field} has no measured values to carry")
+        for v in leaves:
+            v["provisional"] = {"reason": "rule_three_failed", "mode": mode, **origin}
+        profile["measured"][section][field] = value
+        fields.append(f"{section}.{field}")
+    return {"mode": mode, "fields": fields, **origin}
+
+
+def long_launch_profile(
+    binary: Path, device: int, run_dir: Path, carry_from: Path | None = None
+) -> dict[str, Any]:
+    """A 0.23.0 profile from a five-round long-launch capture (long_capture.py) that passed, or
+    whose only failure is rule 3 in one mode carried over from `carry_from`."""
     import hashlib
 
     if __package__:
@@ -1752,8 +1820,13 @@ def long_launch_profile(binary: Path, device: int, run_dir: Path) -> dict[str, A
         import profile_launch
 
     state = json.loads((run_dir / "capture-state.json").read_text())
-    if state.get("status") != "passed":
-        raise SystemExit(f"{run_dir}: the capture did not pass ({state.get('status')})")
+    carried = carried_mode(state)
+    if (carried is None) != (carry_from is None):
+        raise SystemExit(
+            f"{run_dir}: --carry-from is for a capture whose only failure is rule 3 in one mode"
+            if carried is None
+            else f"{run_dir}: {carried} failed rule 3; give --carry-from PROFILE"
+        )
     missing = [mode for mode in BUILD_MODES if mode not in state["modes"]]
     if missing:
         raise SystemExit(
@@ -1786,7 +1859,8 @@ def long_launch_profile(binary: Path, device: int, run_dir: Path) -> dict[str, A
     profile = build_profile(
         query, merged["dram-bw"], dispatch, *[merged[m] for m in BUILD_MODES[1:]], smi_samples
     )
-    profile_launch.attach_all(profile, merged)
+    record = carry_over(profile, carried, carry_from) if carried else None
+    profile_launch.attach_all(profile, {m: raw for m, raw in merged.items() if m != carried})
     knee_fallback_rounds = near_capacity_knee(
         profile["measured"]["memory"]["l2_effective_capacity_bytes"],
         merged["l2"].get("capacity_sweep", []),
@@ -1808,6 +1882,7 @@ def long_launch_profile(binary: Path, device: int, run_dir: Path) -> dict[str, A
         ],
         "rule_three": state["rule_three"],
         "l2_knee_fallback_rounds": knee_fallback_rounds,
+        **({"carried_over": [record]} if record else {}),
     }
     dram_reference.attach(profile, run_dir, manifest_data, manifest_digest, state)
     validate_profile(profile)
@@ -1831,9 +1906,16 @@ def main() -> int:
         metavar="RUN_DIR",
         help="Build a 0.23.0 profile from a passed long_capture.py run directory.",
     )
+    parser.add_argument(
+        "--carry-from",
+        type=Path,
+        metavar="PROFILE",
+        help="With --long-launch: the earlier profile whose fields a mode that failed only "
+        "rule 3 carries over, marked provisional (long-launch-capture.md, section 6).",
+    )
     args = parser.parse_args()
     if args.long_launch:
-        profile = long_launch_profile(args.binary, args.device, args.long_launch)
+        profile = long_launch_profile(args.binary, args.device, args.long_launch, args.carry_from)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(profile, indent=2) + "\n")
         print(
