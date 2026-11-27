@@ -1,0 +1,130 @@
+{
+ "status": "judged",
+ "candidate_1_l1_reuse": "shown",
+ "rules_1_2_per_process": [
+  {
+   "iqr": {
+    "failing": 0,
+    "allowed": 1,
+    "share": 0.0,
+    "limit": 0.05,
+    "ratio": 0.1
+   },
+   "spike": {
+    "failing": 0,
+    "allowed": 1,
+    "share": 0.0,
+    "limit": 0.15,
+    "ratio": 1.5
+   }
+  },
+  {
+   "iqr": {
+    "failing": 0,
+    "allowed": 1,
+    "share": 0.0,
+    "limit": 0.05,
+    "ratio": 0.1
+   },
+   "spike": {
+    "failing": 0,
+    "allowed": 1,
+    "share": 0.0,
+    "limit": 0.15,
+    "ratio": 1.5
+   }
+  },
+  {
+   "iqr": {
+    "failing": 0,
+    "allowed": 1,
+    "share": 0.0,
+    "limit": 0.05,
+    "ratio": 0.1
+   },
+   "spike": {
+    "failing": 0,
+    "allowed": 1,
+    "share": 0.0,
+    "limit": 0.15,
+    "ratio": 1.5
+   }
+  }
+ ],
+ "rule_3": {
+  "status": "passed",
+  "runs": 3,
+  "points": 12,
+  "failing": 0,
+  "allowed": 1,
+  "share": 0.0,
+  "limit": 0.05,
+  "range": 0.1
+ },
+ "levels": {
+  "l2": {
+   "failing_points": {},
+   "two_ctas_per_sm": {
+    "default_disjoint_over_shared": [
+     0.5354086175444379,
+     0.5399653148662809,
+     0.5261594745853995
+    ],
+    "cg_disjoint_over_shared": [
+     -0.0037377268304887856,
+     -0.0041788375386906385,
+     -0.0037034429653678425
+    ]
+   },
+   "one_cta_per_sm": {
+    "default_over_cg": [
+     -0.0008470231182272636,
+     -0.0010190948723960425,
+     -0.001967276868802048
+    ]
+   },
+   "l1_reuse": "shown",
+   "default_path": "does not differ",
+   "per_step_ns": {
+    "l2/1/disjoint/default": 540.967,
+    "l2/1/disjoint/cg": 541.4256,
+    "l2/2/disjoint/default": 866.2675,
+    "l2/2/disjoint/cg": 863.0309,
+    "l2/2/shared/default": 563.8727,
+    "l2/2/shared/cg": 866.6525
+   }
+  },
+  "dram": {
+   "failing_points": {},
+   "two_ctas_per_sm": {
+    "default_disjoint_over_shared": [
+     1.030933189114017,
+     1.0309617123077697,
+     1.0321488180442664
+    ],
+    "cg_disjoint_over_shared": [
+     1.027209984629506,
+     1.030295796789431,
+     1.0268862591689691
+    ]
+   },
+   "one_cta_per_sm": {
+    "default_over_cg": [
+     0.012404264266896226,
+     0.007993736899097659,
+     0.003102933804068675
+    ]
+   },
+   "l1_reuse": "not resolved",
+   "default_path": "does not differ",
+   "per_step_ns": {
+    "dram/1/disjoint/default": 3258.8751,
+    "dram/1/disjoint/cg": 3233.0311,
+    "dram/2/disjoint/default": 6571.719,
+    "dram/2/disjoint/cg": 6572.8123,
+    "dram/2/shared/default": 3235.8125,
+    "dram/2/shared/cg": 3239.8438
+   }
+  }
+ }
+}
