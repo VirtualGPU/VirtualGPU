@@ -1,0 +1,226 @@
+{
+ "binary_sha256": "1c25c2fd5ceb8e914c4f63a90d2a1a4e3a1e93abc2ab65ac2bbe8d87985e80c3",
+ "arch": "sm_121a",
+ "nvcc": "/usr/local/cuda-13.0/bin/nvcc",
+ "source": "cb28677",
+ "check": "microbench/barrier_step.py sass",
+ "status": "passed",
+ "instances": {
+  "B0_W0": {
+   "status": "passed",
+   "bar_sync": 0,
+   "ffma": 0,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 4
+  },
+  "B0_W64": {
+   "status": "passed",
+   "bar_sync": 0,
+   "ffma": 64,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 68
+  },
+  "B0_W512": {
+   "status": "passed",
+   "bar_sync": 0,
+   "ffma": 512,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 516
+  },
+  "B1_W0": {
+   "status": "passed",
+   "bar_sync": 1,
+   "ffma": 0,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 5
+  },
+  "B1_W64": {
+   "status": "passed",
+   "bar_sync": 1,
+   "ffma": 64,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 69
+  },
+  "B1_W512": {
+   "status": "passed",
+   "bar_sync": 1,
+   "ffma": 512,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 517
+  },
+  "B2_W0": {
+   "status": "passed",
+   "bar_sync": 2,
+   "ffma": 0,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 6
+  },
+  "B2_W64": {
+   "status": "passed",
+   "bar_sync": 2,
+   "ffma": 64,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 70
+  },
+  "B2_W512": {
+   "status": "passed",
+   "bar_sync": 2,
+   "ffma": 512,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 518
+  },
+  "B4_W0": {
+   "status": "passed",
+   "bar_sync": 4,
+   "ffma": 0,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 8
+  },
+  "B4_W64": {
+   "status": "passed",
+   "bar_sync": 4,
+   "ffma": 64,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 72
+  },
+  "B4_W512": {
+   "status": "passed",
+   "bar_sync": 4,
+   "ffma": 512,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 520
+  },
+  "B8_W0": {
+   "status": "passed",
+   "bar_sync": 8,
+   "ffma": 0,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 12
+  },
+  "B8_W64": {
+   "status": "passed",
+   "bar_sync": 8,
+   "ffma": 64,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 76
+  },
+  "B8_W512": {
+   "status": "passed",
+   "bar_sync": 8,
+   "ffma": 512,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 524
+  },
+  "B14_W0": {
+   "status": "passed",
+   "bar_sync": 14,
+   "ffma": 0,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 18
+  },
+  "B14_W64": {
+   "status": "passed",
+   "bar_sync": 14,
+   "ffma": 64,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 82
+  },
+  "B14_W512": {
+   "status": "passed",
+   "bar_sync": 14,
+   "ffma": 512,
+   "other": [
+    "BRA",
+    "IADD3",
+    "ISETP.NE.AND",
+    "UIADD3"
+   ],
+   "loop_instructions": 530
+  }
+ }
+}

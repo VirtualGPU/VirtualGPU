@@ -39,6 +39,17 @@ GMEM_NARROW = (
 )
 MLP = ("issue_mode", "bytes_in_flight", "active_ctas", "bytes_per_cta")
 DESIGN_FIELDS = {
+    # Diagnostic (v0.3-gb10-decode-compression.md), not a profile mode.
+    "decode-closed-loop": {
+        "decode_closed_loop": (
+            "access",
+            "segment_bytes",
+            "stride_bytes",
+            "active_ctas",
+            "stage_bytes",
+            "tokens",
+        )
+    },
     "mlp": {"dram_bw_by_bytes_in_flight": MLP, "l2_bw_by_bytes_in_flight": MLP},
     "strided-mlp": {
         "dram_bw_by_bytes_in_flight_strided": (
@@ -130,6 +141,8 @@ DESIGN_FIELDS = {
     },
     "l1-carveout": {"l1_carveout_sweep": ("smem_carveout_bytes", "ws_bytes")},
     "l2-rescan": {"points": ("working_set_bytes",)},
+    # Diagnostic (docs/results/analysis/v0.3-barrier-sync-plan.md); not in a profile.
+    "barrier-step": {"points": ("barriers_per_step", "work_per_step", "num_warps", "grid")},
     "mma-chain": {
         "mma_chain_latency": (
             "variant",
@@ -276,6 +289,8 @@ def pilot_target(mode, point):
     three times."""
     if mode == "spill-latency" and point.get("reload_count", 0) > 0:
         return 2 * CAPTURE_MIN_NS
+    if mode == "decode-closed-loop":  # v0.3-gb10-decode-compression.md: twice the pilot floor
+        return 2 * PILOT_MIN_NS
     # H5's DRAM points are sized to 3.0 ms (v0.3-gb10-h5-redo-registration.md).
     if mode == "h5-dram" and point.get("level", "dram") == "dram":
         return 3 * CAPTURE_MIN_NS

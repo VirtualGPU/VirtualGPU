@@ -184,8 +184,10 @@ def next_action(state):
     return ("new_round", short)
 
 
-def judge_output(mode, receipt, raw, host_check, device, l2_bytes=0):
-    """Status of one mode-round after its process: valid, or void with the reason."""
+def judge_output(mode, receipt, raw, host_check, device, l2_bytes=0, host_gated=True):
+    """Status of one mode-round after its process: valid, or void with the reason. The host
+    check judges only GPUs that share memory with the CPU (`integrated`, long-launch-capture.md
+    section 6); elsewhere it is recorded and does not void the round."""
     try:
         long_launch.verify(receipt, raw)
     except ValueError as error:
@@ -193,7 +195,7 @@ def judge_output(mode, receipt, raw, host_check, device, l2_bytes=0):
     rules = rules_one_two(mode, raw, device, l2_bytes)
     if rules["status"] != "passed":
         return {"status": "void", "reason": "rules 1 and 2", "rules_one_two": rules}
-    if host_check["status"] != "passed":
+    if host_gated and host_check["status"] != "passed":
         return {"status": "void", "reason": "host check", "rules_one_two": rules}
     return {"status": "valid", "rules_one_two": rules}
 
@@ -248,7 +250,15 @@ def capture(run_dir, manifest, state, run, gates, telemetry=dict):
             "host_check": out["host_check"],
             "gpu": telemetry(),
             **reference,
-            **judge_output(mode, receipt, raw, out["host_check"], device, l2_bytes),
+            **judge_output(
+                mode,
+                receipt,
+                raw,
+                out["host_check"],
+                device,
+                l2_bytes,
+                host_gated=manifest["device"]["integrated"],
+            ),
         }
         save(run_dir, state)
     if action[0] == "failed":
