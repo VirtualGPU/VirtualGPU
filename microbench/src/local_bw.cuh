@@ -67,12 +67,14 @@ struct Point {
   std::vector<double> mhz_before, mhz_after;
 };
 
-// The registered points: per op and width the L1 curve, the L1 frame check and the L2 tier.
+// The registered points (as amended): the L1 curves, the L1 frame check and the L2 tier.
 static std::vector<Point> points() {
   std::vector<Point> out;
   const int curve[][2] = {{1, 128}, {2, 128}, {4, 128}, {8, 128}, {16, 64}, {32, 32}};
-  for (auto [store, width] : {std::pair<bool, int>{false, 4}, {true, 4}, {false, 16}})
-    for (auto& c : curve) out.push_back({store, width, c[0], c[1], "l1", 0, {}, {}, {}});
+  for (bool store : {false, true})
+    for (auto& c : curve) out.push_back({store, 4, c[0], c[1], "l1", 0, {}, {}, {}});
+  // 16 B loads: 128 B frames only, which hold 8 distinct addresses (amended registration).
+  for (int warps : {1, 2, 4, 8}) out.push_back({false, 16, warps, 128, "l1", 0, {}, {}, {}});
   for (int frame : {32, 64}) out.push_back({false, 4, 8, frame, "l1", 0, {}, {}, {}});
   for (auto [warps, frame] : {std::pair<int, int>{16, 1024}, {8, 2048}, {4, 4096}})
     out.push_back({false, 4, warps, frame, "l2", 0, {}, {}, {}});
@@ -88,7 +90,7 @@ static void prepare_kernels() {
   set_max_l1<32, 4, false>(); set_max_l1<64, 4, false>(); set_max_l1<128, 4, false>();
   set_max_l1<1024, 4, false>(); set_max_l1<2048, 4, false>(); set_max_l1<4096, 4, false>();
   set_max_l1<32, 4, true>(); set_max_l1<64, 4, true>(); set_max_l1<128, 4, true>();
-  set_max_l1<32, 16, false>(); set_max_l1<64, 16, false>(); set_max_l1<128, 16, false>();
+  set_max_l1<128, 16, false>();
 }
 
 static void launch(const Point& p, int grid, uint32_t* sink, int steps) {
@@ -98,9 +100,7 @@ static void launch(const Point& p, int grid, uint32_t* sink, int steps) {
     else if (p.frame == 64) kernel<64, 4, true><<<grid, threads>>>(sink, steps);
     else kernel<128, 4, true><<<grid, threads>>>(sink, steps);
   } else if (p.width == 16) {
-    if (p.frame == 32) kernel<32, 16, false><<<grid, threads>>>(sink, steps);
-    else if (p.frame == 64) kernel<64, 16, false><<<grid, threads>>>(sink, steps);
-    else kernel<128, 16, false><<<grid, threads>>>(sink, steps);
+    kernel<128, 16, false><<<grid, threads>>>(sink, steps);
   } else {
     switch (p.frame) {
       case 32: kernel<32, 4, false><<<grid, threads>>>(sink, steps); break;

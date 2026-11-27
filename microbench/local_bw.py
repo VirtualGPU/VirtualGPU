@@ -30,7 +30,7 @@ import long_launch  # noqa: E402
 MODE = "local-bw"
 PROCESSES = 3
 INSTANCES = [(f, 4, False) for f in (32, 64, 128, 1024, 2048, 4096)]
-INSTANCES += [(f, 4, True) for f in (32, 64, 128)] + [(f, 16, False) for f in (32, 64, 128)]
+INSTANCES += [(f, 4, True) for f in (32, 64, 128)] + [(128, 16, False)]
 SATURATED = 0.03
 FRAME_SPREAD = 0.05
 TIER_RATIO = 0.8
