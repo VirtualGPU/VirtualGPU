@@ -85,7 +85,8 @@
             "freeze_manifest_sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
             "dram_reference_protocol": { "const": "gb10-mlp-plateau-p3a-v1" },
             "rounds": { "type": "array" },
-            "rule_three": { "type": "object" }
+            "rule_three": { "type": "object" },
+            "l2_knee_fallback_rounds": { "type": "integer", "minimum": 0 }
           }
         },
         "clock_policy": {

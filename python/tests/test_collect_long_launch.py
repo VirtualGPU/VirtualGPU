@@ -63,7 +63,7 @@ def test_near_capacity_knee_covers_each_rounds_knee_and_flags_a_covered_bracket(
         )[0]
         for r in range(3)
     ]
-    cp.near_capacity_knee(value, sweep, l2)
+    assert cp.near_capacity_knee(value, sweep, l2) == 0
     spread = max(abs(k - round(knee)) / round(knee) for k in rounds)
     assert value["rel_uncertainty"] == round(min(0.5, max(unc, spread)), 4)
     assert value["l2_near_capacity_unstable"] is True
@@ -73,3 +73,37 @@ def test_near_capacity_knee_covers_each_rounds_knee_and_flags_a_covered_bracket(
         plain, [{k: v for k, v in p.items() if k != "exceptions"} for p in sweep], l2
     )
     assert plain == {"value": round(knee), "rel_uncertainty": unc}
+
+
+def test_near_capacity_knee_leaves_fallback_rounds_out_of_the_spread():
+    from microbench import collect_profile as cp
+
+    mib = 1 << 20
+    l2 = 24 * mib
+    flat = [1000.0, 1000.0, 2000.0]  # round 3 has a cliff, rounds 1 and 2 none
+
+    def point(size, rounds, exempt=False):
+        p = {"working_set_bytes": size * mib, "gbps_samples": rounds, "median_gbps": rounds[1]}
+        if exempt:
+            p["exceptions"] = ["l2_near_capacity_unstable"]
+        return p
+
+    sweep = [
+        point(2, [1000.0, 1000.0, 2000.0]),
+        point(6, flat),
+        point(20, [990.0, 990.0, 1500.0], exempt=True),
+        point(48, [980.0, 980.0, 300.0], exempt=True),
+        point(60, [980.0, 980.0, 290.0]),
+    ]
+    value = {"value": round(0.85 * l2), "rel_uncertainty": 0.2}
+    assert cp.near_capacity_knee(value, sweep, l2) == 2
+    knee3 = cp.estimate_l2_knee(
+        [
+            {"working_set_bytes": p["working_set_bytes"], "median_gbps": p["gbps_samples"][2]}
+            for p in sweep
+        ],
+        l2,
+    )[0]
+    expected = round(min(0.5, max(0.2, abs(knee3 - value["value"]) / value["value"])), 4)
+    assert value["rel_uncertainty"] == expected
+    assert "l2_near_capacity_unstable" not in value  # the merged sweep has no crossing
