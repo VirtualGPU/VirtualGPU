@@ -314,8 +314,11 @@ impl Machine {
         let port = interpolate(&self.l2_bw, 1.0);
         let own = d.load_bytes / d.round_trips / port;
         let shared = own * f64::from(resident);
+        // Fetched share of the bytes that wait DRAM latency: merged bytes ride on fills.
+        let waiting = 1.0 - d.resident_fraction;
+        let fetched = if waiting > 0.0 { d.dram_fraction / waiting } else { 1.0 };
         Latency {
-            dram: lat.dram.max(self.dram_latency_ns + own).max(shared),
+            dram: lat.dram.max(self.dram_latency_ns + own * fetched).max(shared),
             l2: lat.l2.max(self.l2_latency_ns + own).max(shared),
         }
     }
