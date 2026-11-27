@@ -122,3 +122,14 @@ def test_fewer_than_three_valid_processes_is_not_decided():
     rec = capture(tiered)
     rec["runs"][0]["valid"] = False
     assert lb.judge(rec, PROFILE)["status"] == "not decided"
+
+
+def test_saturation_compares_the_two_largest_warp_counts():
+    def dropping(k):
+        if k[1] == 4 and k[0] == "load" and k[2] == "l1" and k[3] == 32:
+            return 250.0  # the largest warp count falls off the 16-warp peak
+        return tiered(k)
+
+    out = lb.judge(capture(dropping), PROFILE)
+    assert out["curves"]["load4"]["saturated"] is False
+    assert out["curves"]["load4"]["value_gbps_per_sm"] == pytest.approx(305.0)

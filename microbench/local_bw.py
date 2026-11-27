@@ -209,10 +209,11 @@ def judge(record, profile):
         if not all(ok(k) for k in ks):
             curves[f"{op}{width}"] = {"reading": "not resolved: a point fails a rule"}
             continue
-        vals = sorted((value(k) for k in ks), reverse=True)
+        # Saturated when the two largest warp counts (ks is sorted by warps) are within 3%.
+        top, second = value(ks[-1]), value(ks[-2])
         curves[f"{op}{width}"] = {
-            "value_gbps_per_sm": vals[0],
-            "saturated": (vals[0] - vals[1]) / vals[0] <= SATURATED,
+            "value_gbps_per_sm": max(value(k) for k in ks),
+            "saturated": abs(top - second) / max(top, second) <= SATURATED,
             "by_warps": {k[3]: value(k) for k in ks},
         }
     frames = [("load", 4, "l1", 8, f) for f in (32, 64, 128)]
