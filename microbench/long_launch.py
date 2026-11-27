@@ -121,6 +121,8 @@ DESIGN_FIELDS = {
     },
     "l1-carveout": {"l1_carveout_sweep": ("smem_carveout_bytes", "ws_bytes")},
     "l2-rescan": {"points": ("working_set_bytes",)},
+    # Diagnostic (docs/results/analysis/v0.3-barrier-sync-plan.md); not in a profile.
+    "barrier-step": {"points": ("barriers_per_step", "work_per_step", "num_warps", "grid")},
     "mma-chain": {
         "mma_chain_latency": (
             "variant",
