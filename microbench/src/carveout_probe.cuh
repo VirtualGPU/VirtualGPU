@@ -96,6 +96,10 @@ static int run_carveout_probe(int device, int samples, int warmup, LaunchSchedul
     std::printf("]");
   };
 
+  // Every timed window is sized to twice the pilot floor (second registration,
+  // v0.3-gb10-carveout-probe-reregistration.md), with no exception.
+  const double target = schedule->observed_target_ns;
+  schedule->observed_target_ns = 2.0 * LaunchSchedule::pilot_min_ns;
   std::printf("{\n  \"samples\": %d,\n  \"cycles_per_ns\": %.4f,\n  \"l1_cliff\": [", samples, cycles_per_ns);
   bool first = true;
   for (int kb : ws_kb) {
@@ -148,8 +152,15 @@ static int run_carveout_probe(int device, int samples, int warmup, LaunchSchedul
                     "\"reload_count\": 128, \"footprint_bytes_per_sm\": %d",
                     first ? "" : ",", context, warps, frame, frame * warps * 32);
         first = false;
-        auto timed = schedule->time_point(256, 1, 1 << 24, std::max(warmup, 1), samples, e0, e1, [] {},
-                                          [&](int length) { carveout_probe_spill(frame, sm_count, warps * 32, sink, length); });
+        // The timed window of a spill point is its launch, reported to the same overload.
+        auto timed = schedule->time_point(
+            256, 1, 1 << 24, std::max(warmup, 1), samples, e0, e1, [] {},
+            [&](int length) { carveout_probe_spill(frame, sm_count, warps * 32, sink, length); },
+            [&]() {
+              float ms = 0.0f;
+              CUDA_CHECK(cudaEventElapsedTime(&ms, e0, e1));
+              return static_cast<double>(ms) * 1e6;
+            });
         list("step_ns_samples", timed.launch_ns, 1.0 / timed.length);
         std::printf("}");
       }
@@ -159,6 +170,7 @@ static int run_carveout_probe(int device, int samples, int warmup, LaunchSchedul
     CUDA_CHECK(cudaFree(sink));
   }
   schedule->clock_probe = nullptr;  // its events are gone with the last context
+  schedule->observed_target_ns = target;
   std::printf("\n  ]\n}\n");
   return 0;
 }
