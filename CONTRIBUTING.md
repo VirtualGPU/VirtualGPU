@@ -76,79 +76,25 @@ cargo fmt                                    # format Rust
 
 ## Changes to model mechanisms
 
-Open a pull request for any change to prediction logic in `crates/vgpu-core/`,
-frontend IR extraction, or profile field derivation. This applies to maintainers
-too. Profile data, docs, and tooling changes follow the usual process when
-they leave prediction logic unchanged.
+Any change to prediction logic in `crates/vgpu-core/`, to frontend IR extraction or to how profile fields are derived goes through a pull request, maintainers included. Profile data, docs and tooling that leave predictions unchanged follow the usual process.
 
-Include three things in the PR:
+Such a pull request includes three things:
 
-- **Prediction diff.** Replay archived KernelIR on the base and candidate.
-  Record both revisions, IR and profile digests, cache state, draws, and seed.
-  Report which cohorts or cases remain bit-identical, how many predictions
-  change, the size of the changes, and any status transitions. For an IR or
-  profile derivation change, regenerate the affected input from the same source
-  and keep the other input fixed.
-- **Microbenchmark evidence.** Link the evidence and raw capture receipts.
-  Report whether each of the three capture rules and applicable thermal,
-  host or desktop gates passed. Use
-  `python -m microbench.capture_posthoc check RUN.json [RUN.json ...]`
-  to check the dispersion rules and include the recorded gate results.
-- **Validation.** For changes that need a mechanism test, register the criterion
-  and freeze the predictions before taking the validation measurements.
-  Report effects on opened workloads as post-hoc. They do not change a
-  frozen conclusion or supply formal validation for the PR.
+- The prediction diff. Replay the archived Kernel IRs on the base and the candidate, and record both revisions, the IR and profile digests, cache state, draws and seed. Report what stays bit-identical, how many predictions change, by how much, and any status changes. For a change to IR extraction or profile derivation, regenerate that input from the same source and keep the other one fixed.
+- The microbenchmark evidence. Link it with the raw captures, and say whether each [capture rule](docs/components/long-launch-capture.md#2-rules) and [gate](docs/components/long-launch-capture.md#6-capture-gates-in-collect_profilepy) passed. `python -m microbench.capture_posthoc check RUN.json [RUN.json ...]` checks the dispersion rules.
+- Validation. For a mechanism that is meant to be validated, register the decision rule and freeze the predictions before the validation capture. Effects on already opened data are post-hoc only and do not validate the change.
 
-For a minimal CPU comparison, run the command below in both checkouts with
-their own built environments. Set `IR_DIR` to an absolute archived case
-directory and `PROFILE` to the same absolute profile path. Use an actual
-case ID for `CASE`, and set `OUT` to separate paths such as
-`/tmp/vgpu-base.json` and `/tmp/vgpu-candidate.json`. Repeat for both cache
-states and the affected cases.
+To get the prediction diff on a CPU, run this in both checkouts with their own built environments, with the same absolute `IR_DIR` and `PROFILE` and a different `OUT`. Repeat for both cache states and every affected case:
 
 ```sh
 CUDA_VISIBLE_DEVICES="" python -m virtualgpu.cli predict --ir-dir "$IR_DIR" \
   --case "$CASE" --profile "$PROFILE" --cache cold --draws 32 --seed 17 --out "$OUT"
 ```
 
-Generate a per-config diff table from two such files:
+Then compare the two files:
 
 ```sh
-python - /tmp/vgpu-base.json /tmp/vgpu-candidate.json <<'PYDIFF'
-import json
-import sys
-from pathlib import Path
-from statistics import median
-
-def read(path):
-    rows = json.loads(Path(path).read_text())
-    return {(row["case_id"], row["config_id"]): row for row in rows}
-
-def prediction(row):
-    timings = row.get("draws", {}) | {"nominal": row.get("nominal_latency_ns")}
-    return row["status"], {k: float(v).hex() for k, v in timings.items() if v is not None}
-
-base, candidate = map(read, sys.argv[1:])
-assert base and base.keys() == candidate.keys(), "Use the same nonempty case/config set"
-deltas = []
-unchanged = 0
-print("| Case | Config | Base status | Candidate status | Nominal delta (%) |")
-print("| --- | --- | --- | --- | ---: |")
-for (case, config), old in sorted(base.items()):
-    new = candidate[case, config]
-    if prediction(old) == prediction(new):
-        unchanged += 1
-        continue
-    delta = "n/a"
-    if old["status"] == new["status"] == "ok":
-        change = 100 * (new["nominal_latency_ns"] / old["nominal_latency_ns"] - 1)
-        deltas.append(change)
-        delta = f"{change:+.3f}"
-    print(f"| {case} | {config} | {old['status']} | {new['status']} | {delta} |")
-print(f"\nBit-identical predictions: {unchanged}/{len(base)}")
-if deltas:
-    print(f"Changed OK rows: median {median(deltas):+.3f}%, max absolute {max(map(abs, deltas)):.3f}%")
-PYDIFF
+python scripts/prediction_diff.py /tmp/vgpu-base.json /tmp/vgpu-candidate.json
 ```
 
 ## Contributing a GPU profile
