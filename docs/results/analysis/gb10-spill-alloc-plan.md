@@ -26,3 +26,22 @@ For a process, the ratio of a point's median in one block and visit to that poin
 - Otherwise **neither supported**, with the spans reported. A failed host check voids the run. Readings are checked in the order not reproduced, placement, drift, context, session.
 
 The spill kernel fills its frame with a short regular pattern, so a compression effect cannot be separated here. The L2 buffer experiment did not support compression, so the fill is not varied here.
+
+## Result
+
+Captured 2026-11-27 05:36:18 to 05:38:36 UTC on Spark 1 under the GPU lock, after the other sessions released it; binary `13f7b1d1...` built from `060cfc7`, freeze record `59984726...` (the `42e039d` freeze); `spill-alloc-1.json` `1ef1e909...`. All three processes passed the host check (busiest second 5.6% to 5.9%); each took about 11 s.
+
+Verdict by the frozen reading: **placement: the level moves with the local memory allocation.**
+
+| Process | Allocation levels, 4 KiB with reloads (allocations 0 to 5) | Span | Control span (4 KiB, no reloads) | Largest same-allocation drift |
+|---|---|---|---|---|
+| 1 | 1.12, 0.91, 0.98, 0.98, 1.01, 1.26 | 0.35 | 0.004 | 0.007 |
+| 2 | 0.90, 0.91, 1.02, 0.98, 1.14, 1.05 | 0.23 | 0.004 | 0.007 |
+| 3 | 1.16, 0.97, 0.98, 1.20, 0.97, 1.02 | 0.23 | 0.006 | 0.004 |
+
+- All 18 allocations are stable (their two visits within 0.03) and all 18 same-allocation rereads, one block (about 0.9 s) later, stay within 0.008 of the first reading: an allocation keeps its level, and a new allocation, by a stack-limit raise or a new context, draws a new one. The eight points with reloads move together; the points without reloads do not move (spans at most 0.006).
+- The levels do not follow the context: within a context they span 0.12 to 0.28, and the two contexts' means differ by 0.02 to 0.11.
+- Between processes the eight points spread 6.7% to 9.1%, less than the 24% to 31% of the capture's seven processes; three processes sample the distribution less widely.
+- The stack limit read before the first block was the default 1 KiB; the runtime raised it to 4 KiB for the first 4 KiB frame launch, so allocation 0 is the one the first launch made. The raises then went to 5 and 6 KiB (allocations 1, 2) and, after the reset, again from the default (3 to 5).
+
+This differs from the capacity sweep of the L2 buffer experiment, where a buffer did not keep its level. For the spill frames the level is fixed for the life of the local memory allocation, which a process normally keeps for all its launches: that is why the capture's rounds each had one level. A measurement design that reads the spill points in several allocations per process and takes their median would average over this; any such change is registered before a recapture.
