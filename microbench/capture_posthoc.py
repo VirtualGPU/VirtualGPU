@@ -68,6 +68,7 @@ MODES = (
     "sync-loop-delta-flag",
     "l2-paths",
     "mma-ilp",
+    "l2-buffer-diag",
 )
 POWERSHELL = Path("/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe")
 QUIET_PERCENT = 5
@@ -260,6 +261,8 @@ def capture(args):
     run_args += ["--samples", str(args.samples), "--warmup", str(WARMUP)]
     if args.l2_gbps:
         run_args += ["--l2-gbps", str(args.l2_gbps)]
+    if args.clock_probe:
+        run_args += ["--clock-probe"]
     with tempfile.TemporaryFile(mode="w+t") as out, tempfile.TemporaryFile(mode="w+t") as err:
         started = utc()
         process = subprocess.Popen(run_args, stdout=out, stderr=err, text=True)
@@ -348,6 +351,7 @@ def main():
     ap.add_argument("--samples", type=int, default=15)
     ap.add_argument("--warmup-seconds", type=float, default=60)
     ap.add_argument("--l2-gbps", type=float, help="profile l2_bw_read_gbps, for wave-rescan-long")
+    ap.add_argument("--clock-probe", action="store_true", help="pass --clock-probe to the mode")
     ap.add_argument(
         "--host-quiet",
         action="store_true",

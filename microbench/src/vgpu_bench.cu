@@ -499,6 +499,7 @@ static int run_cta_dispatch(int device, int repeats) {
 #include "narrow_kernels.cuh"
 #include "narrow_validate.cuh"
 #include "posthoc_gb10_probe.cuh"
+#include "l2_diag.cuh"
 
 static int run_read_soak(int device) {
   cudaDeviceProp prop{};
@@ -580,6 +581,10 @@ int main(int argc, char** argv) {
     return 2;
   }
 
+  if (mode == "l2-buffer-diag") {  // a diagnostic with its own fixed lengths, not a profile mode
+    CUDA_CHECK(cudaSetDevice(device));
+    return run_l2_buffer_diag(device, samples, clock_probe);
+  }
   if (clock_probe && !schedule) {
     std::fprintf(stderr, "--clock-probe needs a launch schedule\n");
     return 2;
