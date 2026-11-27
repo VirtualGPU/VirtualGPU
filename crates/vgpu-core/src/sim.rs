@@ -315,7 +315,7 @@ impl Machine {
         let own = d.load_bytes / d.round_trips / port;
         let shared = own * f64::from(resident);
         Latency {
-            dram: lat.dram.max(self.dram_latency_ns + own).max(shared),
+            dram: lat.dram.max(shared),
             l2: lat.l2.max(self.l2_latency_ns + own).max(shared),
         }
     }
