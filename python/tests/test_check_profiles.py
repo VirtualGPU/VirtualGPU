@@ -134,3 +134,27 @@ def test_long_launch_profile_requires_launch_of_every_timed_value() -> None:
         for e in launch_errors(profile)
     )
     assert "extra_ns_vs_zero" in spill
+
+
+def test_sanity_rejects_mma_drop_with_more_warps() -> None:
+    profile = copy.deepcopy(load_profile(EXAMPLE_PROFILE))
+    curve = next(iter(profile["measured"]["compute"]["mma_tflops_per_sm_by_warps"].values()))
+    curve[-1]["tflops_per_sm"]["value"] = curve[-2]["tflops_per_sm"]["value"] * 0.85
+
+    errs = sanity_errors(profile)
+    assert any("mma_tflops_per_sm_by_warps" in e and "drops below 0.90x" in e for e in errs)
+
+
+def test_sanity_rejects_rescan_hit_rate_rising_past_l2() -> None:
+    profile = copy.deepcopy(load_profile(EXAMPLE_PROFILE))
+
+    def point(ratio: float, hit: float) -> dict:
+        return {"working_set_ratio_to_l2": ratio, "estimated_hit_rate": {"value": hit}}
+
+    rescan = [point(0.25, 0.5), point(0.5, 1.0), point(1.0, 1.0), point(2.0, 0.0)]
+    profile["measured"]["memory"]["l2_rescan_hit_rate_by_working_set"] = rescan
+    assert sanity_errors(profile) == []
+
+    rescan.append(point(3.0, 0.15))
+    errs = sanity_errors(profile)
+    assert any("l2_rescan_hit_rate_by_working_set[4]" in e for e in errs)

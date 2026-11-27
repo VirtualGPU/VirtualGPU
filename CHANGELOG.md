@@ -23,7 +23,7 @@
 - Draft the v0.3 workload holdout protocol and audit the two reference profiles for MLP repeat coverage
 - Post-hoc Nsight Compute capture for dynamic local loads and stores in the spill microbenchmark and causal attention
 - Post-hoc check of the causal attention spill split against that capture (`scripts/posthoc_spill_split.py`)
-- Optional `l2_bw_by_active_sms_cp_async` curve in the GPU profile schema and microbenchmarks, and physical sanity checks in `scripts/check_profiles.py`
+- Optional `l2_bw_by_active_sms_cp_async` curve in the GPU profile schema and microbenchmarks, and physical sanity checks in `scripts/check_profiles.py`, including MMA warp curves and the L2 rescan hit rate past L2
 - NVIDIA A100-SXM4-80GB (`sm_80`) profile
 - `sfu-shfl` measures an FFMA and LOP3 issue rate, and `collect_profile.py` stores the higher of it and the pure FFMA rate as `non_mma_issue_rate_per_sm_gips` instead of the 4 per clock estimate
 - NVIDIA RTX PRO 6000 Blackwell Server Edition (`sm_120`) profile
