@@ -1,0 +1,10 @@
+{
+  "status": "retry_approved",
+  "timestamp_utc": "2026-11-27T10:03:14.278008+00:00",
+  "device": "gb10",
+  "case_id": "v03-gb10-mask-mnk-wide",
+  "session": 3,
+  "attempt": 2,
+  "capture_approval_sha256": "f92fb3ccfb50b63df91ef592bdf28c65f840c456680e883e3a85a34b9e3d8689",
+  "failed_receipt_sha256": "c9ac975b8b27a7954e1e2592123f9c023a4842264360d4d39eca16ce9a0f812e"
+}
