@@ -499,6 +499,7 @@ static int run_cta_dispatch(int device, int repeats) {
 #include "narrow_kernels.cuh"
 #include "narrow_validate.cuh"
 #include "posthoc_gb10_probe.cuh"
+#include "carveout_probe.cuh"
 
 static int run_read_soak(int device) {
   cudaDeviceProp prop{};
@@ -574,9 +575,10 @@ int main(int argc, char** argv) {
       mode != "latency" &&
       mode != "latency-curve" &&
       mode != "l1-carveout" &&
-      mode != "l2-rescan") {
+      mode != "l2-rescan" &&
+      mode != "carveout-probe") {
     std::fprintf(stderr, "Launch schedules apply only to mlp, strided-mlp, dram-bw, l2, closed-loop, l2-merge, mma, "
-                         "gmem-issue, gmem-issue-controlled, sync-loop, closed-loop-mma, spill-latency, mma-chain, sync-loop-multicta, sync-loop-ablation, sync-loop-reconcile, mma-softmax-chain, serial-fill, stage-overhead, sfu-shfl, cp-async, launch, latency, latency-curve, l1-carveout and l2-rescan\n");
+                         "gmem-issue, gmem-issue-controlled, sync-loop, closed-loop-mma, spill-latency, mma-chain, sync-loop-multicta, sync-loop-ablation, sync-loop-reconcile, mma-softmax-chain, serial-fill, stage-overhead, sfu-shfl, cp-async, launch, latency, latency-curve, l1-carveout, l2-rescan and carveout-probe\n");
     return 2;
   }
 
@@ -618,6 +620,7 @@ int main(int argc, char** argv) {
     else if (mode == "latency-curve") result = run_latency_curve(device, samples, warmup, schedule.get());
     else if (mode == "l1-carveout") result = run_l1_carveout(device, samples, warmup, schedule.get());
     else if (mode == "l2-rescan") result = run_l2_rescan(device, samples, warmup, schedule.get());
+    else if (mode == "carveout-probe") result = run_carveout_probe(device, samples, warmup, schedule.get());
     else result = run_l2(device, samples, warmup, schedule.get());
     schedule->finish();
     return result;
