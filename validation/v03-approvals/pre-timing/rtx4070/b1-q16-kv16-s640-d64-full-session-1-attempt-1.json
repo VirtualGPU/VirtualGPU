@@ -1,0 +1,21 @@
+{
+  "status": "pre_timing_restart_approved",
+  "device": "rtx4070",
+  "case_id": "b1-q16-kv16-s640-d64-full",
+  "session": 1,
+  "attempt": 1,
+  "seed": 101,
+  "capture_approval_sha256": "65c5ecfbc4a6c49842e035537cb51352fc4daf41e28ff44f41de900d87f3bd10",
+  "amendment": {
+    "path": "validation/v03-rtx4070-attention-pre-timing-amendment.md",
+    "commit": "9f453d373e96665cef09a8cbf8570af2840a844a",
+    "sha256": "00e2b7b8f9d4ae30dd0999f3a6582ddd6e89466bf6d02ee5fb712d9ad348f3b6"
+  },
+  "evidence_sha256": {
+    "campaign_log": "f90f88994fe7d39740bfbac724e02fcd32d32038756cfbdcdbea148528848a45",
+    "process_stop_snapshot": "f2daea7ef4b8ce26d7cc809da4600c3497e597614c4017f4417e10ed3c559d05",
+    "local_attention_start_marker": "5e56deee2709d0ae10a2f88deb471577ed9dc64d6a7eea31c0495b505849a5d5"
+  },
+  "timestamp_utc": "2026-11-28T00:26:26.483962+00:00",
+  "scope": "Separate written approval for the pre-timing interruption amendment in PR #44. The released capture entry uses the existing device approval and does not read this record."
+}
