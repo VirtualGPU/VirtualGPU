@@ -1,0 +1,4144 @@
+{
+ "summary": {
+  "gb10-attention n=2 w=4": {
+   "configs": 72,
+   "median": 0.00599920766418649,
+   "min": -0.030315472589578785,
+   "max": 0.04801742948298737
+  },
+  "gb10-attention n=2 w=8": {
+   "configs": 72,
+   "median": 0.008274706467089055,
+   "min": 0.001107287983017402,
+   "max": 0.016772053225573957
+  },
+  "gb10-attention n=10 w=4": {
+   "configs": 22,
+   "median": 0.06398935542512074,
+   "min": 0.019498534280571578,
+   "max": 0.0793525473348633
+  },
+  "gb10-attention n=10 w=8": {
+   "configs": 12,
+   "median": 0.07169324509393382,
+   "min": 0.058654657107377606,
+   "max": 0.08139672694483147
+  },
+  "gb10-attention n=14 w=8": {
+   "configs": 10,
+   "median": 0.06426565652795113,
+   "min": 0.0390589805234427,
+   "max": 0.0756117262085596
+  },
+  "gb10-gemm n=2 w=4": {
+   "configs": 162,
+   "median": 6.277928330522542e-07,
+   "min": -0.014158759564180445,
+   "max": 0.02000307302530091
+  },
+  "gb10-gemm n=2 w=8": {
+   "configs": 162,
+   "median": 2.9668983041797325e-05,
+   "min": -0.05731264107986733,
+   "max": 0.04650769737630944
+  }
+ },
+ "rows": [
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m128n128k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m128n128k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m128n128k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 295886.0993911808,
+   "form_ns": 296369.9411981778
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m128n128k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m128n128k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 328833.8946648404,
+   "form_ns": 329576.4546648404
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m128n128k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 292342.23062248575,
+   "form_ns": 293013.0295811162
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m128n64k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m128n64k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m128n64k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 263825.14573733445,
+   "form_ns": 264286.099149518
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m128n64k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 318825.710621608,
+   "form_ns": 320154.4936799075
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m128n64k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 309610.27088962443,
+   "form_ns": 310914.8066872483
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m128n64k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 262232.6478687493,
+   "form_ns": 262870.8504013227
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m16n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m16n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m16n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.2838324714,
+   "form_ns": 241224.2838324714
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m16n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m16n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m16n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 241224.2838324714,
+   "form_ns": 241224.2838324714
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m32n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m32n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m32n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.2838324714,
+   "form_ns": 241224.2838324714
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m32n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m32n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m32n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 241224.2838324714,
+   "form_ns": 241224.2838324714
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m64n128k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m64n128k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m64n128k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.2838324714,
+   "form_ns": 241224.2838324714
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m64n128k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m64n128k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m64n128k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 241224.2838324714,
+   "form_ns": 241224.2838324714
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m64n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m64n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m64n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 241224.2838324714,
+   "form_ns": 241224.2838324714
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m64n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m64n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 241224.28383247144,
+   "form_ns": 241224.28383247144
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-4/m64n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 241224.2838324714,
+   "form_ns": 241224.2838324714
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m128n128k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1089609.9097997104,
+   "form_ns": 1091348.015530174
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m128n128k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1066993.5999504863,
+   "form_ns": 1068714.980871025
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m128n128k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 928264.4925636523,
+   "form_ns": 929095.0920145896
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m128n128k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1076845.2108807755,
+   "form_ns": 1079266.2424394572
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m128n128k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 989925.4324539448,
+   "form_ns": 991235.832453945
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m128n128k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 922187.7231667232,
+   "form_ns": 923337.0037540112
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m128n64k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1095956.9749168917,
+   "form_ns": 1099545.485000935
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m128n64k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 860614.5813247521,
+   "form_ns": 860675.5953642965
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m128n64k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 877418.5495140967,
+   "form_ns": 878192.6787330317
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m128n64k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 970421.4510240727,
+   "form_ns": 972733.5396847661
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m128n64k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 954398.8157547016,
+   "form_ns": 956665.6237257367
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m128n64k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 874748.1160841177,
+   "form_ns": 875817.5488606862
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m16n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1061636.9722712631,
+   "form_ns": 1062072.3036370422
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m16n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1060305.284188297,
+   "form_ns": 1060620.5144137943
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m16n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1971682.2626627372,
+   "form_ns": 1971682.2034692394
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m16n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1716839.006893153,
+   "form_ns": 1717247.2795888826
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m16n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1715910.4789547857,
+   "form_ns": 1716362.9348687662
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m16n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1971682.601476479,
+   "form_ns": 1971683.4069737378
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m32n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 858924.4065622166,
+   "form_ns": 858924.4065622166
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m32n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 858924.4065622166,
+   "form_ns": 858924.4065622166
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m32n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1446641.6466492806,
+   "form_ns": 1446641.6466492806
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m32n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1446682.4553372378,
+   "form_ns": 1446682.4618833477
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m32n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1446682.4367026445,
+   "form_ns": 1446682.441533362
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m32n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1446641.6466492806,
+   "form_ns": 1446641.6466492806
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m64n128k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 858924.4065622165,
+   "form_ns": 858924.4065622165
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m64n128k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 858924.4065622165,
+   "form_ns": 858924.4065622165
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m64n128k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 930371.8917760175,
+   "form_ns": 933613.0298705448
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m64n128k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 858924.4065622165,
+   "form_ns": 858924.4065622165
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m64n128k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 858924.4065622165,
+   "form_ns": 858924.4065622165
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m64n128k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 925458.5045984217,
+   "form_ns": 929925.8714364162
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m64n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 858924.4065622165,
+   "form_ns": 858924.4065622165
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m64n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 858924.4065622165,
+   "form_ns": 858924.4065622165
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m64n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 937568.5681069727,
+   "form_ns": 944210.675576686
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m64n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1003366.2052110956,
+   "form_ns": 1011525.7182668982
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m64n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 985099.193844764,
+   "form_ns": 992777.3441209513
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-decode-40/m64n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 933889.5293580232,
+   "form_ns": 943086.5239209514
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m128n128k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 13031745.923413575,
+   "form_ns": 13031797.730682826
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m128n128k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 13031745.923413575,
+   "form_ns": 13031797.730682826
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m128n128k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 13031745.923413575,
+   "form_ns": 13031797.730682826
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m128n128k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 5655552.5423567705,
+   "form_ns": 5655785.415578955
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m128n128k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 5655552.5423567705,
+   "form_ns": 5655785.415578955
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m128n128k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 5655552.5423567705,
+   "form_ns": 5655785.415578955
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m128n64k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 10889711.05877144,
+   "form_ns": 10890728.955828972
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m128n64k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 10889711.05877144,
+   "form_ns": 10890728.955828972
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m128n64k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 10889711.05877144,
+   "form_ns": 10890728.955828972
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m128n64k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 5766500.018467653,
+   "form_ns": 5767771.264244484
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m128n64k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 5766500.018467653,
+   "form_ns": 5767771.264244484
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m128n64k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 5766500.018467653,
+   "form_ns": 5767771.264244484
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m16n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 13414319.959308902,
+   "form_ns": 13420472.274359614
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m16n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 13414319.959308902,
+   "form_ns": 13420472.274359614
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m16n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 13414319.959308902,
+   "form_ns": 13420472.274359614
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m16n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 19873007.07837396,
+   "form_ns": 19876963.94245461
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m16n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 19873007.07837396,
+   "form_ns": 19876963.94245461
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m16n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 19873007.07837396,
+   "form_ns": 19876963.94245461
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m32n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 8611170.609694598,
+   "form_ns": 8615617.190421423
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m32n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 8611170.609694598,
+   "form_ns": 8615617.190421423
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m32n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 8611170.609694598,
+   "form_ns": 8615617.190421423
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m32n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 10523786.756355772,
+   "form_ns": 10525889.310618617
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m32n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 10523786.756355772,
+   "form_ns": 10525889.310618617
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m32n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 10523786.756355772,
+   "form_ns": 10525889.310618617
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m64n128k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 5339700.032324228,
+   "form_ns": 5354724.68245119
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m64n128k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 5339700.032324228,
+   "form_ns": 5354724.68245119
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m64n128k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 5339700.032324228,
+   "form_ns": 5354724.68245119
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m64n128k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 7160482.302651942,
+   "form_ns": 7161269.434037929
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m64n128k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 7160482.302651942,
+   "form_ns": 7161269.434037929
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m64n128k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 7160482.302651942,
+   "form_ns": 7161269.434037929
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m64n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 7156613.625023108,
+   "form_ns": 7132936.948608271
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m64n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 7156613.625023108,
+   "form_ns": 7132936.948608271
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m64n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 7156613.625023108,
+   "form_ns": 7132936.948608271
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m64n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 8909623.065484205,
+   "form_ns": 8911100.781394888
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m64n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 8909623.065484205,
+   "form_ns": 8911100.781394888
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-1153/m64n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 8909623.065484205,
+   "form_ns": 8911100.781394888
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m128n128k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2410740.1323550106,
+   "form_ns": 2411331.444397272
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m128n128k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2410740.1323550106,
+   "form_ns": 2411331.444397272
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m128n128k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2410740.1323550106,
+   "form_ns": 2411331.444397272
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m128n128k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 669784.5273095637,
+   "form_ns": 672826.2079819663
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m128n128k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 669784.5273095637,
+   "form_ns": 672826.2079819663
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m128n128k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 669784.5273095637,
+   "form_ns": 672826.2079819663
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m128n64k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2138505.923106613,
+   "form_ns": 2139052.2729728306
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m128n64k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2138505.923106613,
+   "form_ns": 2139052.2729728306
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m128n64k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2138505.923106613,
+   "form_ns": 2139052.2729728306
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m128n64k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 806376.8016590495,
+   "form_ns": 811833.1466189966
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m128n64k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 806376.8016590495,
+   "form_ns": 811833.1466189966
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m128n64k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 806376.8016590495,
+   "form_ns": 811833.1466189966
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m16n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1086541.0566194193,
+   "form_ns": 1091482.2686676243
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m16n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1086541.0566194193,
+   "form_ns": 1091482.2686676243
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m16n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1086541.0566194193,
+   "form_ns": 1091482.2686676243
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m16n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1696936.9881999386,
+   "form_ns": 1599681.0476600844
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m16n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1696936.9881999386,
+   "form_ns": 1599681.0476600844
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m16n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1696936.9881999386,
+   "form_ns": 1599681.0476600844
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m32n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 797900.3903040526,
+   "form_ns": 807189.8686474098
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m32n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 797900.3903040526,
+   "form_ns": 807189.8686474098
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m32n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 797900.3903040526,
+   "form_ns": 807189.8686474098
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m32n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1129980.45557884,
+   "form_ns": 1131614.5712165537
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m32n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1129980.45557884,
+   "form_ns": 1131614.5712165537
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m32n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1129980.45557884,
+   "form_ns": 1131614.5712165537
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m64n128k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 625598.0686651146,
+   "form_ns": 627310.526757578
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m64n128k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 625598.0686651146,
+   "form_ns": 627310.526757578
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m64n128k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 625598.0686651146,
+   "form_ns": 627310.526757578
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m64n128k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 739279.6290979063,
+   "form_ns": 729805.6343241683
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m64n128k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 739279.6290979063,
+   "form_ns": 729805.6343241683
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m64n128k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 739279.6290979063,
+   "form_ns": 729805.6343241683
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m64n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 690661.052268319,
+   "form_ns": 695245.693016132
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m64n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 690661.052268319,
+   "form_ns": 695245.693016132
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m64n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 690661.052268319,
+   "form_ns": 695245.693016132
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m64n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 890416.2485458198,
+   "form_ns": 914960.154461875
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m64n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 890416.2485458198,
+   "form_ns": 914960.154461875
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-mask-mnk-641/m64n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 890416.2485458198,
+   "form_ns": 914960.154461875
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m128n128k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 3160825.1543012597,
+   "form_ns": 3161774.685979073
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m128n128k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 3155641.985220167,
+   "form_ns": 3156326.4035729975
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m128n128k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 5556881.442988538,
+   "form_ns": 5557092.753908039
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m128n128k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 3152554.0453474955,
+   "form_ns": 3164326.698987123
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m128n128k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 5571822.879365501,
+   "form_ns": 5572364.107936963
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m128n128k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 5555259.36946707,
+   "form_ns": 5555536.223912059
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m128n64k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 3992712.9618967837,
+   "form_ns": 3992778.2042197403
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m128n64k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 3992061.284374079,
+   "form_ns": 3992101.9307828066
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m128n64k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 5651564.034148532,
+   "form_ns": 5651564.034148532
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m128n64k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 5567194.088585127,
+   "form_ns": 5567252.376389289
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m128n64k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 5564513.013443857,
+   "form_ns": 5565200.73487737
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m128n64k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 5651564.034148532,
+   "form_ns": 5651564.034148532
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m16n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 10748650.156362906,
+   "form_ns": 10748650.156362906
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m16n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 10748650.156362906,
+   "form_ns": 10748650.156362906
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m16n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 15649016.500442931,
+   "form_ns": 15649035.856635299
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m16n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 16484947.864101384,
+   "form_ns": 15578638.71475641
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m16n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 15787158.147601044,
+   "form_ns": 15552905.410091713
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m16n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 15649026.840884758,
+   "form_ns": 15649047.941549454
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m32n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 5475785.796858385,
+   "form_ns": 5475785.796858385
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m32n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 5823241.439359376,
+   "form_ns": 5815901.822594634
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m32n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 10748650.156362893,
+   "form_ns": 10748650.156362893
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m32n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 10748650.156362906,
+   "form_ns": 10748650.156362906
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m32n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 10748650.156362906,
+   "form_ns": 10748650.156362906
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m32n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 10748650.156362893,
+   "form_ns": 10748650.156362893
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m64n128k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 3466668.157359882,
+   "form_ns": 3417584.436431023
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m64n128k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 3432272.097927209,
+   "form_ns": 3433378.986579381
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m64n128k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 5933279.567868713,
+   "form_ns": 5933675.030495725
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m64n128k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 4307955.891365546,
+   "form_ns": 4388821.878823842
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m64n128k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 4253242.127016423,
+   "form_ns": 4307234.57165321
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m64n128k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 5932695.1162962355,
+   "form_ns": 5933226.366927245
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m64n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 4272793.456034278,
+   "form_ns": 4358262.455557359
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m64n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 5475785.796858385,
+   "form_ns": 5475785.796858385
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m64n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 5930173.019904692,
+   "form_ns": 5930349.080454742
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m64n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 5758799.552911468,
+   "form_ns": 5762005.335181359
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m64n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 5751442.821657024,
+   "form_ns": 5754306.75142369
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-1792/m64n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 5930067.699793889,
+   "form_ns": 5930318.981429801
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m128n128k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 744295.8485421359,
+   "form_ns": 744377.0337502985
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m128n128k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 744134.3724956542,
+   "form_ns": 744103.565088996
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m128n128k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1251529.6744446272,
+   "form_ns": 1251529.6744446272
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m128n128k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 744344.7767893256,
+   "form_ns": 744309.4050615428
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m128n128k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1251529.674444627,
+   "form_ns": 1251529.674444627
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m128n128k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1251529.6744446272,
+   "form_ns": 1251529.6744446272
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m128n64k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 743752.3043078633,
+   "form_ns": 744005.7474777284
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m128n64k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 741192.6506979301,
+   "form_ns": 741450.7989189976
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m128n64k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1251535.1603446275,
+   "form_ns": 1251535.1603446275
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m128n64k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1251529.674444627,
+   "form_ns": 1251529.674444627
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m128n64k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1251529.674444627,
+   "form_ns": 1251529.674444627
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m128n64k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1251535.1603446275,
+   "form_ns": 1251535.1603446275
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m16n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2102015.08680175,
+   "form_ns": 2102015.08680175
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m16n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2102015.08680175,
+   "form_ns": 2102015.08680175
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m16n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 3274499.0472905734,
+   "form_ns": 3274499.0472905734
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m16n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 3819689.3142392715,
+   "form_ns": 3820729.3721126933
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m16n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 3274499.047290573,
+   "form_ns": 3274499.047290573
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m16n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 3274499.0472905734,
+   "form_ns": 3274499.0472905734
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m32n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1082163.1972420935,
+   "form_ns": 1082440.577435441
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m32n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1137020.976430241,
+   "form_ns": 1137436.43261071
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m32n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1949791.2174614908,
+   "form_ns": 1949857.7438515446
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m32n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1957592.942676386,
+   "form_ns": 1923839.509994048
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m32n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1875545.3726094626,
+   "form_ns": 1962772.669214321
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m32n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1949806.136576482,
+   "form_ns": 1949852.5585707934
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m64n128k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 749718.9837733558,
+   "form_ns": 753298.5260788413
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m64n128k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 745171.9505473309,
+   "form_ns": 745116.0004650375
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m64n128k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1251529.674444627,
+   "form_ns": 1251529.674444627
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m64n128k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 913768.0622342011,
+   "form_ns": 913883.2260151443
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m64n128k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 913551.8482307694,
+   "form_ns": 913535.638135326
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m64n128k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1251529.674444627,
+   "form_ns": 1251529.674444627
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m64n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 913598.3067266586,
+   "form_ns": 913805.2702900488
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m64n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1007765.8394557678,
+   "form_ns": 1016003.9087263073
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m64n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1251529.674444627,
+   "form_ns": 1251529.674444627
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m64n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1251529.674444627,
+   "form_ns": 1251529.674444627
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m64n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1251529.674444627,
+   "form_ns": 1251529.674444627
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-prefill-896/m64n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1251529.674444627,
+   "form_ns": 1251529.674444627
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m128n128k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 355468.9921725522,
+   "form_ns": 355796.5921725522
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m128n128k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 351184.6600740558,
+   "form_ns": 351512.26007405575
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m128n128k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 329017.91292526294,
+   "form_ns": 329309.10115979513
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m128n128k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 353056.05078348453,
+   "form_ns": 353514.69078348455
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m128n128k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 348702.2054569445,
+   "form_ns": 349160.8454569445
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m128n128k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 326887.40890870563,
+   "form_ns": 327290.3631380928
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m128n64k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 343897.6970588323,
+   "form_ns": 344480.61946793256
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m128n64k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 288715.0528156049,
+   "form_ns": 289199.5980857399
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m128n64k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 307663.8221365015,
+   "form_ns": 307938.4295429034
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m128n64k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 341884.8197450536,
+   "form_ns": 342703.4396871451
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m128n64k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 336208.31164805137,
+   "form_ns": 337011.7858139076
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m128n64k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 306716.18699542806,
+   "form_ns": 307095.7539176393
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m16n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 337570.462807467,
+   "form_ns": 337986.362299134
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m16n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 336503.7598963282,
+   "form_ns": 336846.66068519966
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m16n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 631826.916510781,
+   "form_ns": 631851.2579009368
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m16n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 597687.2071880433,
+   "form_ns": 598133.9246473472
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m16n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 580505.1494061844,
+   "form_ns": 581228.0567741449
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m16n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 631831.430000628,
+   "form_ns": 631853.8786226787
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m32n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 283907.09249283985,
+   "form_ns": 283907.09249283985
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m32n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 283907.09249283985,
+   "form_ns": 283907.09249283985
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m32n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 427815.37556218746,
+   "form_ns": 427815.3835582843
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m32n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 421338.011216008,
+   "form_ns": 422141.2260131257
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m32n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 419815.8813909176,
+   "form_ns": 420518.118752039
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m32n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 427815.3749095631,
+   "form_ns": 427815.3861069708
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m64n128k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 283907.09249283985,
+   "form_ns": 283907.09249283985
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m64n128k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 283907.09249283985,
+   "form_ns": 283907.09249283985
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m64n128k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 316334.3650120503,
+   "form_ns": 316786.8626574522
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m64n128k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 283907.09249283985,
+   "form_ns": 283907.09249283985
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m64n128k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 283907.09249283985,
+   "form_ns": 283907.09249283985
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m64n128k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 315647.2605023643,
+   "form_ns": 316272.0587486913
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m64n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 283907.09249283985,
+   "form_ns": 283907.09249283985
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m64n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 283907.09249283985,
+   "form_ns": 283907.09249283985
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m64n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 310650.0004417068,
+   "form_ns": 311592.2922874848
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m64n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 338706.1235348639,
+   "form_ns": 340083.5398535018
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m64n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 335553.4608499681,
+   "form_ns": 336891.99833947414
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-above/m64n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 310129.3974130252,
+   "form_ns": 311432.49945910106
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m128n128k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 278019.72055996425,
+   "form_ns": 278019.72055996425
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m128n128k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 278019.72055996425,
+   "form_ns": 278019.72055996425
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m128n128k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 279040.56882710586,
+   "form_ns": 279040.56882710586
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m128n128k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 278019.72055996425,
+   "form_ns": 278019.72055996425
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m128n128k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 279040.5688271059,
+   "form_ns": 279040.5688271059
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m128n128k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 279040.56882710586,
+   "form_ns": 279040.56882710586
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m128n64k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 278019.72055996425,
+   "form_ns": 278019.72055996425
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m128n64k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 285948.9516730627,
+   "form_ns": 286662.722040594
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m128n64k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 277971.2782947039,
+   "form_ns": 277971.2782947039
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m128n64k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 279040.56882710586,
+   "form_ns": 279040.56882710586
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m128n64k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 279040.56882710586,
+   "form_ns": 279040.56882710586
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m128n64k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 277971.2782947039,
+   "form_ns": 277971.2782947039
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m16n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 328940.2331784951,
+   "form_ns": 329885.2403033881
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m16n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 326933.1028066655,
+   "form_ns": 327691.93892622425
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m16n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 595896.20935503,
+   "form_ns": 595896.20935503
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m16n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 560677.6544399551,
+   "form_ns": 560726.0527989035
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m16n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 543172.0746175746,
+   "form_ns": 543172.536009299
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m16n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 595896.20935503,
+   "form_ns": 595896.20935503
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m32n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 278019.7205599642,
+   "form_ns": 278019.7205599642
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m32n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 278019.7205599642,
+   "form_ns": 278019.7205599642
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m32n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 405484.3567539948,
+   "form_ns": 405484.35811464355
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m32n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 401811.11620414973,
+   "form_ns": 403142.90244684025
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m32n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 399007.2225346071,
+   "form_ns": 400159.08831187413
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m32n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 405484.35664346337,
+   "form_ns": 405484.35855071753
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m64n128k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 278019.72055996425,
+   "form_ns": 278019.72055996425
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m64n128k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 278019.72055996425,
+   "form_ns": 278019.72055996425
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m64n128k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 278019.72055996425,
+   "form_ns": 278019.72055996425
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m64n128k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 278019.72055996425,
+   "form_ns": 278019.72055996425
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m64n128k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 278019.72055996425,
+   "form_ns": 278019.72055996425
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m64n128k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 278019.72055996425,
+   "form_ns": 278019.72055996425
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m64n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 278019.72055996425,
+   "form_ns": 278019.72055996425
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m64n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 278019.72055996425,
+   "form_ns": 278019.72055996425
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m64n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 278019.7205599642,
+   "form_ns": 278019.7205599642
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m64n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 278019.72055996425,
+   "form_ns": 278019.72055996425
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m64n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 278019.72055996425,
+   "form_ns": 278019.72055996425
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-below/m64n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 278019.7205599642,
+   "form_ns": 278019.7205599642
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m128n128k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 280963.069584981,
+   "form_ns": 280963.069584981
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m128n128k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 280963.069584981,
+   "form_ns": 280963.069584981
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m128n128k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 282036.36841945973,
+   "form_ns": 282036.36841945973
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m128n128k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 280963.069584981,
+   "form_ns": 280963.069584981
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m128n128k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 282036.36841945973,
+   "form_ns": 282036.36841945973
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m128n128k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 282036.36841945973,
+   "form_ns": 282036.36841945973
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m128n64k64-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 280963.06958498096,
+   "form_ns": 280963.06958498096
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m128n64k64-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 287331.5026370579,
+   "form_ns": 287756.2156414725
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m128n64k64-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 280965.42068498104,
+   "form_ns": 280965.42068498104
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m128n64k64-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 282036.36841945973,
+   "form_ns": 282036.36841945973
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m128n64k64-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 282036.36841945973,
+   "form_ns": 282036.36841945973
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m128n64k64-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 280965.42068498104,
+   "form_ns": 280965.42068498104
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m16n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 332600.8637347324,
+   "form_ns": 333076.1849484863
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m16n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 331460.54450980754,
+   "form_ns": 331824.142012525
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m16n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 623065.6053966259,
+   "form_ns": 623065.6053966259
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m16n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 573191.9829079098,
+   "form_ns": 573274.2292521455
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m16n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 555884.4490563613,
+   "form_ns": 555884.4490563613
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m16n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 623065.6053966259,
+   "form_ns": 623065.6053966259
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m32n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 280963.069584981,
+   "form_ns": 280963.069584981
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m32n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 280963.069584981,
+   "form_ns": 280963.069584981
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m32n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 416657.72788202233,
+   "form_ns": 416657.7294872039
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m32n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 407563.54402760934,
+   "form_ns": 408763.69241023815
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m32n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 405961.6067357649,
+   "form_ns": 406321.77759045834
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m32n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 416657.72775101074,
+   "form_ns": 416657.7299988407
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m64n128k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 280963.069584981,
+   "form_ns": 280963.069584981
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m64n128k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 280963.069584981,
+   "form_ns": 280963.069584981
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m64n128k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 280963.06958498096,
+   "form_ns": 280963.06958498096
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m64n128k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 280963.069584981,
+   "form_ns": 280963.069584981
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m64n128k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 280963.069584981,
+   "form_ns": 280963.069584981
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m64n128k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 280963.06958498096,
+   "form_ns": 280963.06958498096
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m64n64k32-w4-s1-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 280963.06958498096,
+   "form_ns": 280963.06958498096
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m64n64k32-w4-s2-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 280963.06958498096,
+   "form_ns": 280963.06958498096
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m64n64k32-w4-s4-g1.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 280963.0695849809,
+   "form_ns": 280963.0695849809
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m64n64k32-w8-s1-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 280963.06958498096,
+   "form_ns": 280963.06958498096
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m64n64k32-w8-s2-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 280963.06958498096,
+   "form_ns": 280963.06958498096
+  },
+  {
+   "group": "gb10-gemm",
+   "file": "gb10-gemm/v02-gb10-resident-wave-exact/m64n64k32-w8-s4-g1.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 280963.0695849809,
+   "form_ns": 280963.0695849809
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m128n32-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 84269.07279081692,
+   "form_ns": 85136.07109705702
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m128n32-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 79540.00419299108,
+   "form_ns": 80432.13953301893
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m128n32-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 79405.39082858928,
+   "form_ns": 80306.11483365174
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m128n32-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 102223.32143478033,
+   "form_ns": 103489.93226132331
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m128n32-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 80912.90688924944,
+   "form_ns": 82088.50203255184
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m128n32-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 76279.19055510011,
+   "form_ns": 77478.49298261313
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m128n64-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 85704.27740788228,
+   "form_ns": 86146.94506824666
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m128n64-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 81087.6543061048,
+   "form_ns": 81544.80740257062
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m128n64-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 87680.47934348749,
+   "form_ns": 88147.924453341
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m128n64-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 92703.47151662153,
+   "form_ns": 93358.60077185082
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m128n64-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 77784.0750221684,
+   "form_ns": 78400.33128049836
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m128n64-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 75145.60146975785,
+   "form_ns": 75771.25845703967
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m64n32-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 91474.98394659284,
+   "form_ns": 93306.59812387213
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m64n32-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 84037.60857718908,
+   "form_ns": 85878.96868290417
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m64n32-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 83097.15173581245,
+   "form_ns": 84976.27405198665
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m64n32-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 173598.02499496294,
+   "form_ns": 175814.76041109103
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m64n32-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 136283.57592481596,
+   "form_ns": 138341.10244786568
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m64n32-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 128114.44854314045,
+   "form_ns": 130213.01430133969
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m64n64-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 84934.31204978487,
+   "form_ns": 85776.51582028247
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m64n64-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 76567.34822512805,
+   "form_ns": 77399.9580604473
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m64n64-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 79963.99960085974,
+   "form_ns": 80677.52066266004
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m64n64-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 156936.4580198297,
+   "form_ns": 158083.04073862988
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m64n64-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 130748.17536863018,
+   "form_ns": 131826.51363463068
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q20-kv20-s897-d64-full/m64n64-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 126197.34050229142,
+   "form_ns": 127292.22361362679
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m128n128-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 12037228.95855767,
+   "form_ns": 12040426.922590632
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m128n128-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 2321835.802731899,
+   "form_ns": 2326138.96465234
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m128n32-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2855024.665241032,
+   "form_ns": 2828976.825486094
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m128n32-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2263037.985634288,
+   "form_ns": 2275584.2139960965
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m128n32-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2230422.1575307944,
+   "form_ns": 2243186.737500397
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m128n32-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 2726812.3741891906,
+   "form_ns": 2744913.5134039074
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m128n32-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 2012963.3815016835,
+   "form_ns": 2029376.6680177448
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m128n32-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1830577.1792762033,
+   "form_ns": 1846934.8793087506
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m128n64-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 6638770.431285584,
+   "form_ns": 6645166.143966757
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m128n64-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 4821185.043038836,
+   "form_ns": 4827577.84499928
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m128n64-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 2307264.2119951476,
+   "form_ns": 2316162.9218419758
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m128n64-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1833995.8270773531,
+   "form_ns": 1842259.657343577
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m64n32-w4-s2.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 2643148.2684069965,
+   "form_ns": 2852888.816488825
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m64n32-w4-s3.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 2823291.244406256,
+   "form_ns": 3011523.429624948
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m64n32-w4-s4.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 2457498.2501816526,
+   "form_ns": 2645166.851714771
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m64n32-w8-s2.json",
+   "barriers": 10,
+   "warps": 8,
+   "base_ns": 5237871.123950819,
+   "form_ns": 5547232.495518927
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m64n32-w8-s3.json",
+   "barriers": 10,
+   "warps": 8,
+   "base_ns": 3868173.537187556,
+   "form_ns": 4144704.066703106
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m64n32-w8-s4.json",
+   "barriers": 10,
+   "warps": 8,
+   "base_ns": 3518306.8296851725,
+   "form_ns": 3804685.4900091924
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m64n64-w4-s2.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 3101505.064953995,
+   "form_ns": 3211817.448497081
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m64n64-w4-s3.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 2327515.490399157,
+   "form_ns": 2422552.4964935724
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m64n64-w8-s2.json",
+   "barriers": 14,
+   "warps": 8,
+   "base_ns": 3450529.241612746,
+   "form_ns": 3673111.7560373545
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q28-kv28-s4608-d128-causal/m64n64-w8-s3.json",
+   "barriers": 14,
+   "warps": 8,
+   "base_ns": 2630885.7766530276,
+   "form_ns": 2829811.59168331
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m128n128-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 5891483.447802897,
+   "form_ns": 5894400.36164093
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m128n128-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 2020581.9656864747,
+   "form_ns": 2024662.1163666837
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m128n32-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2108952.371660628,
+   "form_ns": 2120291.455254148
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m128n32-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2070919.5039290313,
+   "form_ns": 2081279.0406527168
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m128n32-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1945077.6970564267,
+   "form_ns": 1956740.5318872759
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m128n32-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 2557034.56465623,
+   "form_ns": 2573343.9212633977
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m128n32-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1924599.3844909363,
+   "form_ns": 1939291.8049611705
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m128n32-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1762297.2660214484,
+   "form_ns": 1777286.7191849812
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m128n64-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 3853933.456419828,
+   "form_ns": 3859765.744479212
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m128n64-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2047319.0500441177,
+   "form_ns": 2053150.7151525526
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m128n64-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 2177287.769447919,
+   "form_ns": 2185446.224164557
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m128n64-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1767601.157980001,
+   "form_ns": 1775142.253204262
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m64n128-w4-s2.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 2534678.6544601014,
+   "form_ns": 2585570.2539241365
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m64n128-w8-s2.json",
+   "barriers": 14,
+   "warps": 8,
+   "base_ns": 2560022.482857146,
+   "form_ns": 2662942.8510015267
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m64n32-w4-s2.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 2610487.574380534,
+   "form_ns": 2798700.5143740955
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m64n32-w4-s3.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 2714377.297254436,
+   "form_ns": 2888529.34813226
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m64n32-w4-s4.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 2384770.067973684,
+   "form_ns": 2560143.4925134946
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m64n32-w8-s2.json",
+   "barriers": 10,
+   "warps": 8,
+   "base_ns": 4848001.792755828,
+   "form_ns": 5132940.046339146
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m64n32-w8-s3.json",
+   "barriers": 10,
+   "warps": 8,
+   "base_ns": 3683156.151108445,
+   "form_ns": 3942281.8764912477
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m64n32-w8-s4.json",
+   "barriers": 10,
+   "warps": 8,
+   "base_ns": 3374451.700984347,
+   "form_ns": 3641128.7641792144
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m64n64-w4-s2.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 2896504.652896712,
+   "form_ns": 2998193.994856579
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m64n64-w4-s3.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 2221919.86390693,
+   "form_ns": 2311486.2402536874
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m64n64-w8-s2.json",
+   "barriers": 14,
+   "warps": 8,
+   "base_ns": 3219280.073598615,
+   "form_ns": 3425020.7914147107
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q36-kv6-s2816-d128-full/m64n64-w8-s3.json",
+   "barriers": 14,
+   "warps": 8,
+   "base_ns": 2506693.4331347207,
+   "form_ns": 2692758.8488868023
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m128n32-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 351272.56398487405,
+   "form_ns": 353346.710741155
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m128n32-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 332449.1747452601,
+   "form_ns": 340909.4539133943
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m128n32-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 340045.64827591163,
+   "form_ns": 329737.0037463977
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m128n32-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 444608.94783948874,
+   "form_ns": 450249.5572805114
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m128n32-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 349082.83049875783,
+   "form_ns": 354318.11550953746
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m128n32-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 328455.2927864372,
+   "form_ns": 333618.97664505703
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m128n64-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 408048.921155948,
+   "form_ns": 413096.3426803762
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m128n64-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 318526.82125687157,
+   "form_ns": 321331.7952669711
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m128n64-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 371319.3812545442,
+   "form_ns": 373298.8855696296
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m128n64-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 389501.75761426415,
+   "form_ns": 392319.1176142642
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m128n64-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 324441.04746657674,
+   "form_ns": 327085.8876254054
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m128n64-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 311840.4832254795,
+   "form_ns": 314547.7453552493
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m64n32-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 354230.17929527484,
+   "form_ns": 361863.0774598478
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m64n32-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 324928.1784471663,
+   "form_ns": 332460.984476267
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m64n32-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 318332.207086757,
+   "form_ns": 323936.46651052777
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m64n32-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 826998.6910800146,
+   "form_ns": 837502.3648152639
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m64n32-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 647954.8365063394,
+   "form_ns": 657728.5863368898
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m64n32-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 608822.725430678,
+   "form_ns": 618876.9005675331
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m64n64-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 347333.45382881485,
+   "form_ns": 351570.0094105822
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m64n64-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 311502.1106528517,
+   "form_ns": 322230.7207137587
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m64n64-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 342769.2953905254,
+   "form_ns": 346035.12502199755
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m64n64-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 722793.7366283613,
+   "form_ns": 728068.0881751991
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m64n64-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 601365.4888634502,
+   "form_ns": 606352.0688065107
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b1-q48-kv8-s1857-d64-causal/m64n64-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 577470.9240253548,
+   "form_ns": 582465.4547618697
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m128n128-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2624477.3831270845,
+   "form_ns": 2625740.562232039
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m128n128-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 913366.1504658764,
+   "form_ns": 915129.1188363726
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m128n32-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 980051.3347401783,
+   "form_ns": 985188.1648377741
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m128n32-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 931314.7042145318,
+   "form_ns": 935785.5465465864
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m128n32-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 870714.6624555101,
+   "form_ns": 875750.8755547849
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m128n32-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1147122.4652184015,
+   "form_ns": 1154181.5038269036
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m128n32-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 868648.8031837866,
+   "form_ns": 874982.8554560008
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m128n32-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 796587.332670954,
+   "form_ns": 803032.7512186205
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m128n64-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1595726.5114218192,
+   "form_ns": 1598251.3906849646
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m128n64-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 871207.5121593814,
+   "form_ns": 873500.3495531724
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m128n64-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 984184.9958236612,
+   "form_ns": 987711.7292959493
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m128n64-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 798642.4871286319,
+   "form_ns": 801887.3703699019
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m64n128-w4-s2.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 1161185.7918914715,
+   "form_ns": 1183827.21286078
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m64n128-w8-s2.json",
+   "barriers": 14,
+   "warps": 8,
+   "base_ns": 1172460.729429748,
+   "form_ns": 1218255.8502250458
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m64n32-w4-s2.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 1160819.227927015,
+   "form_ns": 1241854.2842733865
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m64n32-w4-s3.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 1215018.1503811122,
+   "form_ns": 1292560.1151332648
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m64n32-w4-s4.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 1084637.2247906167,
+   "form_ns": 1161463.6734710056
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m64n32-w8-s2.json",
+   "barriers": 10,
+   "warps": 8,
+   "base_ns": 1621475.5777355363,
+   "form_ns": 1740180.7474181892
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m64n32-w8-s3.json",
+   "barriers": 10,
+   "warps": 8,
+   "base_ns": 1645844.52068271,
+   "form_ns": 1761418.2304456495
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m64n32-w8-s4.json",
+   "barriers": 10,
+   "warps": 8,
+   "base_ns": 1519477.4671757387,
+   "form_ns": 1637156.9847109802
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m64n64-w4-s2.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 1333256.3301132985,
+   "form_ns": 1378510.0599178723
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m64n64-w4-s3.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 1030758.0777382458,
+   "form_ns": 1069883.6645752518
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m64n64-w8-s2.json",
+   "barriers": 14,
+   "warps": 8,
+   "base_ns": 1476926.6289884294,
+   "form_ns": 1568542.1439171457
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q12-kv12-s2304-d128-full/m64n64-w8-s3.json",
+   "barriers": 14,
+   "warps": 8,
+   "base_ns": 1155244.4258029773,
+   "form_ns": 1236774.0279915398
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m128n32-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 168841.99408368333,
+   "form_ns": 170660.95999625005
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m128n32-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 159554.0315190841,
+   "form_ns": 163366.14448098786
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m128n32-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 165427.4667442296,
+   "form_ns": 161381.31169110318
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m128n32-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 219106.18813380803,
+   "form_ns": 221792.15554422827
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m128n32-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 170310.35412550144,
+   "form_ns": 172802.6778601666
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m128n32-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 159523.6310073363,
+   "form_ns": 162181.4167296605
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m128n64-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 200775.27361126512,
+   "form_ns": 201615.8707430886
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m128n64-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 153665.55410981728,
+   "form_ns": 154612.8919507783
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m128n64-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 180376.48921235415,
+   "form_ns": 181360.4241181544
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m128n64-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 191329.5516749817,
+   "form_ns": 192683.32492535937
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m128n64-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 158351.2588724267,
+   "form_ns": 159658.81551489956
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m128n64-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 152294.06096600663,
+   "form_ns": 153523.10801006373
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m64n32-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 171911.74540928242,
+   "form_ns": 172708.70090323477
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m64n32-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 154741.77489875248,
+   "form_ns": 157287.7569864496
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m64n32-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 147208.05178671316,
+   "form_ns": 154276.6040327096
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m64n32-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 394307.26750104805,
+   "form_ns": 399148.80677156325
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m64n32-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 305569.16010062775,
+   "form_ns": 310095.8019579979
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m64n32-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 286182.1581706457,
+   "form_ns": 290807.11181359633
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m64n64-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 169766.47043850285,
+   "form_ns": 167056.14052173094
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m64n64-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 145970.59649598697,
+   "form_ns": 152642.51819541803
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m64n64-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 163999.27323734135,
+   "form_ns": 165561.29544696
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m64n64-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 343047.9672667389,
+   "form_ns": 345494.13262120035
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m64n64-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 283805.4428145904,
+   "form_ns": 286105.239242122
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q20-kv20-s1345-d64-causal/m64n64-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 272779.4958843428,
+   "form_ns": 275090.5370732646
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m128n32-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 432855.32778975705,
+   "form_ns": 437562.695950049
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m128n32-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 405595.4716995424,
+   "form_ns": 410438.5566736596
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m128n32-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 403932.27567042946,
+   "form_ns": 408824.39636206056
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m128n32-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 544205.2685843825,
+   "form_ns": 551084.8685843821
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m128n32-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 427664.1881209067,
+   "form_ns": 434049.3988428145
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m128n32-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 401217.512710541,
+   "form_ns": 407732.652927076
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m128n64-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 435162.59396617155,
+   "form_ns": 437539.7554716633
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m128n64-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 408345.3158029404,
+   "form_ns": 410796.34271359904
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m128n64-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 454024.92482518207,
+   "form_ns": 456535.2351465721
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m128n64-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 487010.8376706854,
+   "form_ns": 490527.07767068525
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m128n64-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 404926.33065796003,
+   "form_ns": 408234.42547783424
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m128n64-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 387916.684055079,
+   "form_ns": 391277.62411213334
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m64n32-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 437907.9353206547,
+   "form_ns": 446518.45465499593
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m64n32-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 407324.14019915264,
+   "form_ns": 416340.41919475014
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m64n32-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 403547.494420734,
+   "form_ns": 412762.03564294515
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m64n32-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1025145.5801968509,
+   "form_ns": 1038413.380196849
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m64n32-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 800321.6712133733,
+   "form_ns": 812636.4235557665
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m64n32-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 749197.8897708866,
+   "form_ns": 761763.4766546116
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m64n64-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 458336.32177561754,
+   "form_ns": 462915.9465740355
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m64n64-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 416075.90423059464,
+   "form_ns": 420724.3743890646
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m64n64-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 454053.42731202353,
+   "form_ns": 458039.4778959635
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m64n64-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 914842.034863294,
+   "form_ns": 921623.3548632935
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m64n64-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 756350.1036256866,
+   "form_ns": 762730.3471232862
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q28-kv7-s1409-d64-full/m64n64-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 723521.5062071477,
+   "form_ns": 730002.9614215121
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m128n128-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 10312082.367001908,
+   "form_ns": 10314359.940731524
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m128n128-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 2878960.831331435,
+   "form_ns": 2882148.6700635464
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m128n32-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 2861030.8499299884,
+   "form_ns": 2868528.4830598715
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m128n32-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1575350.315366289,
+   "form_ns": 1583377.186095542
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m128n32-w4-s4.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 1470514.023369508,
+   "form_ns": 1479542.4813216033
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m128n32-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 2058369.6683379638,
+   "form_ns": 2071007.5511778202
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m128n32-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1455477.383060508,
+   "form_ns": 1466709.9447015026
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m128n32-w8-s4.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1328267.0879158822,
+   "form_ns": 1339884.3366026804
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m128n64-w4-s2.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 6947602.267969024,
+   "form_ns": 6952149.597956919
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m128n64-w4-s3.json",
+   "barriers": 2,
+   "warps": 4,
+   "base_ns": 6466585.297228474,
+   "form_ns": 6471124.761479086
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m128n64-w8-s2.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 2541472.861829309,
+   "form_ns": 2547835.8939095493
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m128n64-w8-s3.json",
+   "barriers": 2,
+   "warps": 8,
+   "base_ns": 1396121.3742986633,
+   "form_ns": 1401950.2541810286
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m64n32-w4-s2.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 1779226.080516811,
+   "form_ns": 1911837.4814680056
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m64n32-w4-s3.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 1928768.972184016,
+   "form_ns": 2055866.5228740314
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m64n32-w4-s4.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 1687243.6396873132,
+   "form_ns": 1813793.6974618535
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m64n32-w8-s2.json",
+   "barriers": 10,
+   "warps": 8,
+   "base_ns": 3565784.375225926,
+   "form_ns": 3774934.2350736475
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m64n32-w8-s3.json",
+   "barriers": 10,
+   "warps": 8,
+   "base_ns": 2635083.343593047,
+   "form_ns": 2824540.1274255374
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m64n32-w8-s4.json",
+   "barriers": 10,
+   "warps": 8,
+   "base_ns": 2402771.7470119577,
+   "form_ns": 2596312.6575404904
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m64n64-w4-s2.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 2331054.870621101,
+   "form_ns": 2405877.6453454336
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m64n64-w4-s3.json",
+   "barriers": 10,
+   "warps": 4,
+   "base_ns": 1695164.1940831773,
+   "form_ns": 1757970.7629838146
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m64n64-w8-s2.json",
+   "barriers": 14,
+   "warps": 8,
+   "base_ns": 2354834.8785927612,
+   "form_ns": 2505602.0932067386
+  },
+  {
+   "group": "gb10-attention",
+   "file": "gb10-attention/b2-q32-kv8-s2433-d128-causal/m64n64-w8-s3.json",
+   "barriers": 14,
+   "warps": 8,
+   "base_ns": 1805869.5421559683,
+   "form_ns": 1939891.9439495325
+  }
+ ]
+}
