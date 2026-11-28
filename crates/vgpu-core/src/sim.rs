@@ -305,6 +305,8 @@ impl Machine {
     /// A round trip takes at least the idle latency plus streaming its own
     /// bytes through the SM's port, and at least the time the port needs for
     /// the bytes of all the SM's CTAs, whose round trips run out of phase.
+    /// Behind the DRAM latency only the fetched bytes stream: merged bytes
+    /// ride on fills already under way.
     /// The MLP curves are indexed by bytes in flight over the whole GPU and
     /// do not see one SM receiving them all.
     fn port_floor(&self, lat: Latency, d: &Demand, resident: u32) -> Latency {
@@ -314,8 +316,18 @@ impl Machine {
         let port = interpolate(&self.l2_bw, 1.0);
         let own = d.load_bytes / d.round_trips / port;
         let shared = own * f64::from(resident);
+        // Fetched share of the bytes that wait DRAM latency: merged bytes ride on fills.
+        let waiting = 1.0 - d.resident_fraction;
+        let fetched = if waiting > 0.0 {
+            d.dram_fraction / waiting
+        } else {
+            1.0
+        };
         Latency {
-            dram: lat.dram.max(self.dram_latency_ns + own).max(shared),
+            dram: lat
+                .dram
+                .max(self.dram_latency_ns + own * fetched)
+                .max(shared),
             l2: lat.l2.max(self.l2_latency_ns + own).max(shared),
         }
     }
@@ -1554,6 +1566,29 @@ mod tests {
         let r = simulate(&k, p, &m, &mut l2).unwrap();
         SHUFFLE_SEED.with(|s| s.set(0));
         r
+    }
+
+    #[test]
+    fn merged_bytes_do_not_stream_behind_the_dram_latency() {
+        let ir = KernelIR::from_json_str(include_str!("../../../schemas/examples/gemm_sm89.json"))
+            .unwrap();
+        let p = Profile::from_json(include_str!("../../../profiles/rtx4070.json")).unwrap();
+        let k = kernel_from_ir(&ir).unwrap();
+        let m = Machine::nominal(&p, &k.mma_key).unwrap();
+        let idle = Latency { dram: 0.0, l2: 0.0 };
+        let demand = |dram_fraction| Demand {
+            load_bytes: 16384.0,
+            round_trips: 1.0,
+            resident_fraction: 0.0,
+            dram_fraction,
+            ..Demand::default()
+        };
+        let own = 16384.0 / interpolate(&m.l2_bw, 1.0);
+        let fetched = m.port_floor(idle, &demand(1.0), 1);
+        assert_eq!(fetched.dram, m.dram_latency_ns + own);
+        let merged = m.port_floor(idle, &demand(0.25), 1);
+        assert_eq!(merged.dram, m.dram_latency_ns + own * 0.25);
+        assert_eq!(merged.l2, fetched.l2);
     }
 
     #[test]
