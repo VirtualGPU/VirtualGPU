@@ -1,0 +1,258 @@
+[
+ {
+  "set": "gb10-attn-p022",
+  "cache": "cold",
+  "configs": 228,
+  "bit_identical": 40,
+  "changed": 188,
+  "status_changes": 0,
+  "median_change": -0.05776834367812911,
+  "min_change": -0.17986634259075374,
+  "max_change": 0.014666383278440165,
+  "largest": {
+   "case": "b1-q28-kv28-s4608-d128-causal",
+   "config": "m64n64-w4-s2",
+   "change": -0.17986634259075374
+  }
+ },
+ {
+  "set": "gb10-attn-p022",
+  "cache": "warm",
+  "configs": 228,
+  "bit_identical": 40,
+  "changed": 188,
+  "status_changes": 0,
+  "median_change": 0.0,
+  "min_change": -0.17986634259075374,
+  "max_change": 0.0,
+  "largest": {
+   "case": "b1-q28-kv28-s4608-d128-causal",
+   "config": "m64n64-w4-s2",
+   "change": -0.17986634259075374
+  }
+ },
+ {
+  "set": "gb10-attn-p023",
+  "cache": "cold",
+  "configs": 228,
+  "bit_identical": 40,
+  "changed": 188,
+  "status_changes": 0,
+  "median_change": -0.059641812101024816,
+  "min_change": -0.18779259414207494,
+  "max_change": 0.04232947122163688,
+  "largest": {
+   "case": "b1-q28-kv28-s4608-d128-causal",
+   "config": "m64n64-w4-s2",
+   "change": -0.18779259414207494
+  }
+ },
+ {
+  "set": "gb10-attn-p023",
+  "cache": "warm",
+  "configs": 228,
+  "bit_identical": 40,
+  "changed": 188,
+  "status_changes": 0,
+  "median_change": -0.006221936863561817,
+  "min_change": -0.18783058309628575,
+  "max_change": 0.04225553619579947,
+  "largest": {
+   "case": "b1-q28-kv28-s4608-d128-causal",
+   "config": "m64n64-w4-s2",
+   "change": -0.18783058309628575
+  }
+ },
+ {
+  "set": "gb10-gemm-p022",
+  "cache": "cold",
+  "configs": 324,
+  "bit_identical": 148,
+  "changed": 176,
+  "status_changes": 0,
+  "median_change": -1.0576993725308625e-09,
+  "min_change": -0.007167742816620137,
+  "max_change": 0.0007427474903924924,
+  "largest": {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m128n64k64-w8-s1-g1",
+   "change": -0.007167742816620137
+  }
+ },
+ {
+  "set": "gb10-gemm-p022",
+  "cache": "warm",
+  "configs": 324,
+  "bit_identical": 149,
+  "changed": 175,
+  "status_changes": 0,
+  "median_change": -1.4840300099905335e-09,
+  "min_change": -0.006743463047996112,
+  "max_change": 1.815887370848479e-05,
+  "largest": {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m128n64k64-w8-s1-g1",
+   "change": -0.006743463047996112
+  }
+ },
+ {
+  "set": "gb10-gemm-p023",
+  "cache": "cold",
+  "configs": 324,
+  "bit_identical": 159,
+  "changed": 165,
+  "status_changes": 0,
+  "median_change": -4.767084675028066e-05,
+  "min_change": -0.029104987008358174,
+  "max_change": 3.253438625172578e-05,
+  "largest": {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m128n128k64-w8-s1-g1",
+   "change": -0.029104987008358174
+  }
+ },
+ {
+  "set": "gb10-gemm-p023",
+  "cache": "warm",
+  "configs": 324,
+  "bit_identical": 159,
+  "changed": 165,
+  "status_changes": 0,
+  "median_change": -3.3802181416908716e-05,
+  "min_change": -0.03021793314719179,
+  "max_change": 0.00024831962750093695,
+  "largest": {
+   "case": "v02-gb10-mask-mnk-641",
+   "config": "m128n128k64-w8-s1-g1",
+   "change": -0.03021793314719179
+  }
+ },
+ {
+  "set": "gb10-phase2-primary-p023",
+  "cache": "cold",
+  "configs": 255,
+  "bit_identical": 181,
+  "changed": 74,
+  "status_changes": 0,
+  "median_change": 0.0,
+  "min_change": -0.021524260280062824,
+  "max_change": 0.0,
+  "largest": {
+   "case": "mask-m",
+   "config": "m128n128k64-w8-s2-g1",
+   "change": -0.021524260280062824
+  }
+ },
+ {
+  "set": "gb10-phase2-primary-p023",
+  "cache": "warm",
+  "configs": 255,
+  "bit_identical": 84,
+  "changed": 171,
+  "status_changes": 0,
+  "median_change": -0.006084920664307991,
+  "min_change": -0.037509111377793,
+  "max_change": 9.954790902710897e-08,
+  "largest": {
+   "case": "sm-round-above",
+   "config": "m64n64k32-w8-s4-g1",
+   "change": -0.037509111377793
+  }
+ },
+ {
+  "set": "gb10-phase2-secondary-p023",
+  "cache": "cold",
+  "configs": 324,
+  "bit_identical": 100,
+  "changed": 224,
+  "status_changes": 0,
+  "median_change": -3.7448693424035895e-08,
+  "min_change": -0.0369676981487137,
+  "max_change": 6.528952251239062e-05,
+  "largest": {
+   "case": "prefill-256",
+   "config": "m128n64k64-w8-s2-g1",
+   "change": -0.0369676981487137
+  }
+ },
+ {
+  "set": "gb10-phase2-secondary-p023",
+  "cache": "warm",
+  "configs": 324,
+  "bit_identical": 86,
+  "changed": 238,
+  "status_changes": 0,
+  "median_change": -4.1343000523053064e-08,
+  "min_change": -0.06420301510742121,
+  "max_change": 5.9909483569819955e-05,
+  "largest": {
+   "case": "l2-working-set-below",
+   "config": "m128n128k64-w8-s1-g1",
+   "change": -0.06420301510742121
+  }
+ },
+ {
+  "set": "rtx4070-attn",
+  "cache": "cold",
+  "configs": 228,
+  "bit_identical": 40,
+  "changed": 188,
+  "status_changes": 0,
+  "median_change": -0.016917039638628895,
+  "min_change": -0.09944506919136986,
+  "max_change": 0.02413875119044051,
+  "largest": {
+   "case": "b3-q16-kv16-s2560-d128-full",
+   "config": "m64n64-w4-s2",
+   "change": -0.09944506919136986
+  }
+ },
+ {
+  "set": "rtx4070-attn",
+  "cache": "warm",
+  "configs": 228,
+  "bit_identical": 40,
+  "changed": 188,
+  "status_changes": 0,
+  "median_change": 0.0,
+  "min_change": -0.09904861624640904,
+  "max_change": 0.003502380594276877,
+  "largest": {
+   "case": "b3-q16-kv16-s2560-d128-full",
+   "config": "m64n64-w4-s2",
+   "change": -0.09904861624640904
+  }
+ },
+ {
+  "set": "rtx4070-gemm",
+  "cache": "cold",
+  "configs": 324,
+  "bit_identical": 118,
+  "changed": 206,
+  "status_changes": 0,
+  "median_change": 0.0,
+  "min_change": -0.09933585203285189,
+  "max_change": 7.662920320505862e-08,
+  "largest": {
+   "case": "v02-rtx4070-prefill-1536",
+   "config": "m128n128k64-w8-s2-g1",
+   "change": -0.09933585203285189
+  }
+ },
+ {
+  "set": "rtx4070-gemm",
+  "cache": "warm",
+  "configs": 324,
+  "bit_identical": 99,
+  "changed": 225,
+  "status_changes": 0,
+  "median_change": 0.0,
+  "min_change": -0.09819469246501822,
+  "max_change": 1.0016281470903721e-07,
+  "largest": {
+   "case": "v02-rtx4070-prefill-1536",
+   "config": "m128n128k64-w8-s2-g1",
+   "change": -0.09819469246501822
+  }
+ }
+]
