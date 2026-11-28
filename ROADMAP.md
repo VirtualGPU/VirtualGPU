@@ -76,7 +76,8 @@ Fix what made v0.2 miss on the RTX 4070 and GB10, and fix the profiles we alread
 
 - [x] Spill reloads cost latency on the critical path, using `spill_reload_latency_by_count`
 - [x] Spill traffic moves from L1 to L2 as a step at the L1 capacity for the chosen carveout (`l1_to_l2_spill_threshold_by_carveout`)
-- [ ] Dynamic count of local loads per iteration, so the two causal attention loops are not summed into one spill figure. Static per-loop counts from SASS are done ([S1](docs/results/analysis/v0.3-local-load-s1.md)); checking them against executed counts needs the RTX 4070 counters
+- [x] Static per-loop counts of local loads from offline SASS for the two causal attention loops ([S1](docs/results/analysis/v0.3-local-load-s1.md))
+- [ ] Dynamic count of local loads per iteration, so the two causal attention loops are not summed into one spill figure: check the S1 counts against executed counts with the RTX 4070 counters, then put the adopted count in the core once the spill decision is scored
 - [x] Split the static spill figure of causal attention between its two loops (`spill_loop_count`)
 - [ ] Capture `microbench.spill_counters` on the RTX 4070 and check the loop split with `scripts/posthoc_spill_split.py`
 - [x] Do not charge local memory bandwidth on a phase's chain on top of the measured reload latency (#15)
@@ -94,13 +95,15 @@ Fix what made v0.2 miss on the RTX 4070 and GB10, and fix the profiles we alread
 - [x] Capture `microbench.spill_counters` on the RTX 3070 as a first post-hoc look at static against dynamic local loads
 - [x] Narrow register-staged loads on unaligned shapes (H5): decided, neither form goes into the core in v0.3.0. Form (a) failed the aligned 2 B group bound on GB10 and form (b) its MAPE limit; the RTX 4070 half is dropped and H5 is a known limit ([design.md 9.5](docs/design.md#95-narrow-register-staged-loads-h5))
 - [x] Synchronous load GEMM (`num_stages = 1`, +9.1% warm): find the missing mechanism with a microbenchmark (L1 reuse between co-resident CTAs, [GB10 result](docs/results/analysis/v0.3-sync-load-reuse-gb10-result.md))
-- [ ] Model L1 reuse of synchronous loads between co-resident CTAs: register a core form, score it on `sync-load-reuse` on GB10 and the RTX 4070, before the v0.3 freeze
+- [x] Implement the registered R1 form (L1 reuse of synchronous loads between co-resident CTAs) in the core behind the off-by-default `sync_l1_reuse` switch ([registration](docs/results/analysis/v0.3-l1-reuse-model-registration.md))
+- [ ] Score R1 on the `sync-load-share` points on GB10 and the RTX 4070, and switch it on only if it is adopted on both before the v0.3 freeze
 - [x] GB10 decode shapes are predicted too compressed: recorded as a known limit. Located at the DRAM MLP curve's saturated plateau (port floor and low in-flight states excluded). The missing mechanism is not found: the strided closed-loop test of access granularity did not reproduce its control and is not repeated ([result](docs/results/analysis/v0.3-gb10-decode-compression.md), [design.md 9.6](docs/design.md#96-gb10-decode-predictions-are-compressed))
 - [x] Microbenchmark for `non_mma_issue_rate_per_sm_gips` (the higher of pure FFMA and an FFMA and LOP3 mix)
 - [ ] Measure `non_mma_issue_rate_per_sm_gips` and the local memory rates that are still estimated, on the RTX 4070 and GB10. GB10: L1 load rate measured at 143.8 GB/s per SM; its L2-tier and store rates failed a capture rule and stay estimated, not retried ([result](docs/results/analysis/v0.3-local-bw-gb10-result.md)). Left: the RTX 4070 run and a profile change that takes in the measured values
 - [ ] Run the registered same-device check of the measured non-MMA issue rate on the qualified GB10 and RTX 4070 profiles ([v0.3-non-mma-same-device-check-registration.md](docs/results/analysis/v0.3-non-mma-same-device-check-registration.md))
 - [x] The core charges a stage synchronization (`sync_ns`) on every pipeline step, also on a loop with no barrier: decide whether a barrier-free loop should pay it (no v0.2 kernel has such a loop). Decided: unchanged for v0.3, since `barrier-step` left it unresolved in 8 of 12 configurations ([registration](docs/results/analysis/v0.3-barrier-sync-form-registration.md))
-- [ ] The core charges one `sync_ns` per step whatever the number of barriers in the loop: find out whether the barrier count should enter it. A per-barrier form is registered with a 96-point GB10 test ([registration](docs/results/analysis/v0.3-barrier-sync-form-registration.md))
+- [x] Implement the registered per-barrier sync charge, read from the optional `pipeline.barrier_step_ns` profile field ([registration](docs/results/analysis/v0.3-barrier-sync-form-registration.md))
+- [ ] The core charges one `sync_ns` per step whatever the number of barriers in the loop: run the registered 96-point GB10 `barrier-pipeline` test, and if the form passes, add the measured `barrier_step_ns` to the GB10 profile
 - [ ] Sealed v0.3 holdout sets the standing of the cross-wave L2 reuse change; the near-L2 cases are reported descriptively and design.md 9.3 stays open whatever the verdict (#29)
 
 - [ ] Exit test: pass on fresh GEMM and attention holdouts on both the RTX 4070 and GB10.

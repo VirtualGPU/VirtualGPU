@@ -57,6 +57,8 @@ pub struct SpillSplit {
 
 /// The core's view of the L2 model.
 pub trait L2 {
+    /// The shared memory carveout every SM runs at, known after occupancy.
+    fn set_carveout(&mut self, _carveout_bytes: u64) {}
     fn begin_tile(&mut self, _sm: u32, _program: u32, _tile: u32, _t_ns: f64) {}
     fn end_tile(&mut self, _sm: u32, _program: u32, _tile: u32, _t_ns: f64) {}
     /// Traffic of one access over steps `[k_begin, k_end)` of a phase.
@@ -165,6 +167,9 @@ pub struct Machine {
     pub spill_reload_l2: Vec<(f64, Vec<(f64, f64)>)>,
     /// (warps, stage buffers, ns): per-stage synchronization cost.
     pub fixed_sync: Vec<(u32, u32, f64)>,
+    /// (warps, ns): cost of each barrier per step beyond the first; empty
+    /// without a measurement, which charges one `fixed_sync` per step.
+    pub barrier_step: Vec<(u32, f64)>,
     /// (active AI Cores, ns): cross-core AIC <-> AIV handoff latency (empty on non-Ascend).
     pub cv_sync_hop_ns: Vec<(f64, f64)>,
     /// True on architectures with physically separate Cube and Vector units (Ascend).
@@ -341,6 +346,18 @@ impl Machine {
             .map_or(0.0, |&(_, _, ns)| ns)
     }
 
+    /// Synchronization per pipeline step with `barriers` barriers in the loop:
+    /// `fixed_sync` holds one barrier, each further one costs the measured
+    /// extra barrier at the nearest warp count.
+    fn step_sync_ns(&self, warps: u32, buffers: u32, barriers: f64) -> f64 {
+        let extra = self
+            .barrier_step
+            .iter()
+            .min_by_key(|&&(w, _)| w.abs_diff(warps))
+            .map_or(0.0, |&(_, ns)| ns);
+        self.sync_ns(warps, buffers) + (barriers - 1.0).max(0.0) * extra
+    }
+
     /// Latency that `count` batched spill reloads per thread add to a CTA's
     /// dependent chain, for frames of `footprint` bytes per SM of which the
     /// fraction `miss` is served by L2. Zero without measured reloads.
@@ -449,6 +466,12 @@ impl Machine {
                 .fixed_sync_ns
                 .iter()
                 .map(|q| (q.num_warps, q.tokens, q.overhead_ns.value))
+                .collect(),
+            barrier_step: m
+                .pipeline
+                .barrier_step_ns
+                .iter()
+                .map(|q| (q.num_warps, q.overhead_ns.value))
                 .collect(),
             cv_sync_hop_ns: curve(
                 &m.pipeline.cv_sync_hop_ns_by_active_sms,
@@ -815,7 +838,9 @@ impl<'a, L: L2> Sim<'a, L> {
             reload_ns: spill.reload_ns * spill_executions,
             sync_ns: {
                 let base_sync = match phase {
-                    Phase::Main => self.m.sync_ns(k.num_warps, d + 1) * steps,
+                    Phase::Main => {
+                        self.m.step_sync_ns(k.num_warps, d + 1, compute.barriers) * steps
+                    }
                     _ => 0.0,
                 };
                 if phase == Phase::Main
@@ -1309,6 +1334,7 @@ pub fn simulate<L: L2>(
     l2: &mut L,
 ) -> Result<Prediction, ModelError> {
     let occ = occupancy(k, &p.specs).map_err(ModelError::Occupancy)?;
+    l2.set_carveout(occ.carveout_bytes);
     let n_sm = m.sm_count;
     let slots = occ.ctas_per_sm * n_sm;
     let mut sim = Sim {
@@ -1566,6 +1592,22 @@ mod tests {
         let r = simulate(&k, p, &m, &mut l2).unwrap();
         SHUFFLE_SEED.with(|s| s.set(0));
         r
+    }
+
+    #[test]
+    fn each_barrier_beyond_the_first_adds_the_measured_step_cost() {
+        let ir = KernelIR::from_json_str(include_str!("../../../schemas/examples/gemm_sm89.json"))
+            .unwrap();
+        let p = Profile::from_json(include_str!("../../../profiles/rtx4070.json")).unwrap();
+        let k = kernel_from_ir(&ir).unwrap();
+        let mut m = Machine::nominal(&p, &k.mma_key).unwrap();
+        let base = m.sync_ns(4, 2);
+        assert_eq!(m.step_sync_ns(4, 2, 3.0), base);
+        m.barrier_step = vec![(4, 7.8), (8, 10.9)];
+        assert_eq!(m.step_sync_ns(4, 2, 0.0), base);
+        assert_eq!(m.step_sync_ns(4, 2, 1.0), base);
+        assert_eq!(m.step_sync_ns(4, 2, 3.0), base + 2.0 * 7.8);
+        assert_eq!(m.step_sync_ns(8, 2, 2.0), m.sync_ns(8, 2) + 10.9);
     }
 
     #[test]

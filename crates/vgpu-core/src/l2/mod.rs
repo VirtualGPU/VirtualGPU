@@ -1,6 +1,6 @@
 //! Online, phase-segment-level L2 cache reuse model (v2: empirical rescan curve + O(1) reuse distance).
 
-use crate::ir::{AccessEntry, CachePolicy, KernelIR, Op, Strided2dEntry};
+use crate::ir::{AccessEntry, AsyncCopyKind, CachePolicy, KernelIR, Op, Strided2dEntry};
 use crate::profile::{interpolate, Profile};
 use std::collections::HashMap;
 
@@ -20,6 +20,10 @@ pub enum EvictionMode {
 pub struct L2Options {
     pub eviction_mode: EvictionMode,
     pub cross_wave_reuse: bool,
+    /// R1 (`v0.3-l1-reuse-model-registration.md`): CTAs on one SM that read
+    /// the same bytes of a synchronous, L1-allocating load in the same step
+    /// fetch them once. Off until the registered test adopts it.
+    pub sync_l1_reuse: bool,
 }
 
 impl Default for L2Options {
@@ -27,6 +31,7 @@ impl Default for L2Options {
         Self {
             eviction_mode: EvictionMode::SoftLru,
             cross_wave_reuse: true,
+            sync_l1_reuse: false,
         }
     }
 }
@@ -222,6 +227,8 @@ struct ResidentTile {
 struct ActiveChunk {
     /// Effective inner-step trip counts of each currently resident CTA sharing this chunk.
     trips: Vec<u64>,
+    /// SM of each entry of `trips`.
+    sms: Vec<u32>,
     max_streamed_steps: u64,
     max_streamed_bytes: u64,
 }
@@ -262,6 +269,8 @@ pub struct L2Model<'a> {
     /// True while consecutive `end_tile` calls belong to the last entry of `end_events`.
     end_event_open: bool,
     spill_l2_pressure_bytes: u64,
+    /// Shared memory carveout of the SMs, set by the core after occupancy.
+    carveout_bytes: Option<u64>,
 }
 
 impl<'a> L2Model<'a> {
@@ -329,12 +338,17 @@ impl<'a> L2Model<'a> {
             end_events: Vec::new(),
             end_event_open: false,
             spill_l2_pressure_bytes: 0,
+            carveout_bytes: None,
         };
         model.total_read_footprint_bytes = model.compute_total_read_footprint();
         model
     }
 
-    pub fn begin_tile(&mut self, _sm_id: u32, cta_id: u32, outer_idx: u32, _t_ns: f64) {
+    pub fn set_carveout(&mut self, carveout_bytes: u64) {
+        self.carveout_bytes = Some(carveout_bytes);
+    }
+
+    pub fn begin_tile(&mut self, sm_id: u32, cta_id: u32, outer_idx: u32, _t_ns: f64) {
         self.end_event_open = false;
         let tile_key = (cta_id, outer_idx);
         if self.resident_tiles.contains_key(&tile_key) {
@@ -356,6 +370,7 @@ impl<'a> L2Model<'a> {
                     .entry(ckey)
                     .or_insert_with(|| ActiveChunk {
                         trips: Vec::new(),
+                        sms: Vec::new(),
                         max_streamed_steps: 0,
                         max_streamed_bytes: 0,
                     });
@@ -364,6 +379,7 @@ impl<'a> L2Model<'a> {
                         self.active_working_set_bytes.saturating_add(step_aligned);
                 }
                 slot.trips.push(effective_steps);
+                slot.sms.push(sm_id);
                 slot.max_streamed_steps = slot.max_streamed_steps.max(effective_steps);
                 slot.max_streamed_bytes = slot.max_streamed_bytes.max(full_stream);
                 chunks.push(ResidentChunk {
@@ -378,7 +394,7 @@ impl<'a> L2Model<'a> {
             .insert(tile_key, ResidentTile { chunks });
     }
 
-    pub fn end_tile(&mut self, _sm_id: u32, cta_id: u32, outer_idx: u32, t_ns: f64) {
+    pub fn end_tile(&mut self, sm_id: u32, cta_id: u32, outer_idx: u32, t_ns: f64) {
         let Some(tile) = self.resident_tiles.remove(&(cta_id, outer_idx)) else {
             return;
         };
@@ -395,8 +411,15 @@ impl<'a> L2Model<'a> {
         let event = self.end_events.len() - 1;
         for rc in tile.chunks {
             if let Some(slot) = self.active_chunks.get_mut(&rc.key) {
-                if let Some(pos) = slot.trips.iter().position(|&t| t == rc.effective_steps) {
+                let pos = slot
+                    .trips
+                    .iter()
+                    .zip(&slot.sms)
+                    .position(|(&t, &s)| t == rc.effective_steps && s == sm_id)
+                    .or_else(|| slot.trips.iter().position(|&t| t == rc.effective_steps));
+                if let Some(pos) = pos {
                     slot.trips.swap_remove(pos);
+                    slot.sms.swap_remove(pos);
                 }
                 slot.max_streamed_steps = slot.max_streamed_steps.max(rc.effective_steps);
                 slot.max_streamed_bytes = slot.max_streamed_bytes.max(rc.full_stream_bytes);
@@ -428,7 +451,7 @@ impl<'a> L2Model<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn split(
         &mut self,
-        _sm_id: u32,
+        sm_id: u32,
         cta_id: u32,
         outer_idx: u32,
         op_id: &str,
@@ -470,21 +493,40 @@ impl<'a> L2Model<'a> {
         // Effective concurrent sharing over [k_begin, k_end): each resident CTA j with trip count
         // T_j overlaps on min(k_end, T_j) - k_begin steps. Reduces to exact integer R when all
         // resident CTAs have T_j >= k_end (e.g., uniform GEMM or non-causal attention).
+        let overlap = |t_j: u64| k_end.min(t_j).saturating_sub(k_begin) as f64 / steps as f64;
         let sharing_count = self
             .active_chunks
             .get(&ckey)
-            .map(|slot| {
-                let overlap_sum: f64 = slot
-                    .trips
-                    .iter()
-                    .map(|&t_j| {
-                        let ov = k_end.min(t_j).saturating_sub(k_begin);
-                        ov as f64 / steps as f64
-                    })
-                    .sum();
-                overlap_sum.max(1.0)
-            })
+            .map(|slot| slot.trips.iter().map(|&t| overlap(t)).sum::<f64>().max(1.0))
             .unwrap_or(1.0);
+
+        // R1: the CTAs of this SM that read the chunk in the same step fetch
+        // it once, when its stage fits the L1 left by the carveout.
+        let same_sm = match self.carveout_bytes {
+            Some(carveout)
+                if self.options.sync_l1_reuse
+                    && self.ir.body.pipeline_loop.async_copy == AsyncCopyKind::None
+                    && matches!(cache_policy, CachePolicy::Default | CachePolicy::EvictFirst)
+                    && self.spill_miss_rate(step_aligned, carveout) < 0.5 =>
+            {
+                self.active_chunks
+                    .get(&ckey)
+                    .map(|slot| {
+                        slot.trips
+                            .iter()
+                            .zip(&slot.sms)
+                            .filter(|&(_, &s)| s == sm_id)
+                            .map(|(&t, _)| overlap(t))
+                            .sum::<f64>()
+                            .max(1.0)
+                    })
+                    .unwrap_or(1.0)
+            }
+            _ => 1.0,
+        };
+        let l1_ratio = (same_sm - 1.0) / same_sm;
+        // The SM's readers count as one reader for merging in L2.
+        let sharing_count = (sharing_count - (same_sm - 1.0)).max(1.0);
 
         // 1. Resident L2 hits (data already in L2 at request time -> L2 latency):
         //    from cross-wave reuse over the covered prefix, or warm L2.
@@ -544,10 +586,11 @@ impl<'a> L2Model<'a> {
         let resident_ratio = (resident_raw * cap_factor).clamp(0.0, 1.0);
         let merged_ratio = (merged_raw * cap_factor).clamp(0.0, 1.0 - resident_ratio);
         let hit_ratio = (resident_ratio + merged_ratio).clamp(0.0, 1.0);
-        let resident_hit_bytes = total_f * resident_ratio;
-        let merged_bytes = total_f * merged_ratio;
+        let fetched_f = total_f * (1.0 - l1_ratio);
+        let resident_hit_bytes = fetched_f * resident_ratio;
+        let merged_bytes = fetched_f * merged_ratio;
         let l2_bytes = resident_hit_bytes + merged_bytes;
-        let dram_bytes = (total_f - l2_bytes).max(0.0);
+        let dram_bytes = (fetched_f - l2_bytes).max(0.0);
 
         L2SplitResult {
             resident_hit_bytes,
@@ -839,6 +882,45 @@ mod tests {
         assert!(
             (res_a_next.hit_ratio - 1.0).abs() < 1e-6,
             "10 MiB reuse distance fits in 36 MiB L2"
+        );
+    }
+
+    #[test]
+    fn r1_fetches_a_stage_once_for_the_readers_on_one_sm() {
+        let json = include_str!("../../../../schemas/examples/gemm_sm89.json");
+        let mut ir = KernelIR::from_json_str(json).unwrap();
+        ir.body.pipeline_loop.async_copy = AsyncCopyKind::None;
+        let split = |ir: &KernelIR, on: bool, op: &str| {
+            let options = L2Options {
+                sync_l1_reuse: on,
+                ..L2Options::default()
+            };
+            let mut l2 = L2Model::new(ir, synthetic_l2_profile(), L2InitState::Cold, options);
+            l2.set_carveout(0);
+            // CTAs 0 and 8 read the same A rows and sit on SM 0; the rest are alone.
+            for cta in 0..16u32 {
+                l2.begin_tile(if cta == 8 { 0 } else { cta }, cta, 0, 0.0);
+            }
+            l2.split(0, 0, 0, op, 0, 128, false, CachePolicy::Default, 0.0)
+        };
+        let off = split(&ir, false, "load_A");
+        let on = split(&ir, true, "load_A");
+        let total = off.sector_aligned_bytes as f64;
+        assert!((off.dram_bytes - 0.5 * total).abs() < 1e-3);
+        assert!(
+            on.l2_bytes.abs() < 1e-6,
+            "the SM's two readers count as one"
+        );
+        assert!((on.dram_bytes - 0.5 * total).abs() < 1e-3);
+        assert_eq!(on.sector_aligned_bytes, off.sector_aligned_bytes);
+        // B is shared across SMs only, so R1 leaves it alone.
+        let (b_off, b_on) = (split(&ir, false, "load_B"), split(&ir, true, "load_B"));
+        assert_eq!(b_off.dram_bytes, b_on.dram_bytes);
+        // Asynchronous copies bypass L1.
+        let async_ir = KernelIR::from_json_str(json).unwrap();
+        assert_eq!(
+            split(&async_ir, true, "load_A").dram_bytes,
+            split(&async_ir, false, "load_A").dram_bytes
         );
     }
 

@@ -41,6 +41,20 @@ fn initial_state(l2_state: &str) -> PyResult<L2InitState> {
     }
 }
 
+/// The profile draws, with R1 switched on in all of them if asked.
+fn sampled(
+    profile_json: &str,
+    draws: usize,
+    seed: u64,
+    sync_l1_reuse: bool,
+) -> PyResult<Vec<Draw>> {
+    let mut all = draw_profiles(profile_json, draws, seed).map_err(err)?;
+    for d in &mut all {
+        d.l2.sync_l1_reuse = sync_l1_reuse;
+    }
+    Ok(all)
+}
+
 fn parse_ir(json: &str) -> PyResult<KernelIR> {
     let ir = KernelIR::from_json_str(json).map_err(err)?;
     ir.validate().map_err(err)?;
@@ -169,9 +183,11 @@ fn record<'py>(
 /// plus `draws`, the time per draw ID including "0"; or "unsupported" with a
 /// `reason` (for example a CTA that does not fit on an SM). Draws depend only
 /// on the profile, `draws` and `seed`, so variants predicted with the same
-/// arguments share them. Malformed input raises `ValueError`.
+/// arguments share them. `sync_l1_reuse` switches on the registered R1 form
+/// (L1 reuse of synchronous loads between co-resident CTAs), off by default
+/// until it is adopted. Malformed input raises `ValueError`.
 #[pyfunction]
-#[pyo3(signature = (kernel_ir_json, profile_json, l2_state = "cold", draws = 32, seed = 17))]
+#[pyo3(signature = (kernel_ir_json, profile_json, l2_state = "cold", draws = 32, seed = 17, sync_l1_reuse = false))]
 fn predict<'py>(
     py: Python<'py>,
     kernel_ir_json: &str,
@@ -179,10 +195,11 @@ fn predict<'py>(
     l2_state: &str,
     draws: usize,
     seed: u64,
+    sync_l1_reuse: bool,
 ) -> PyResult<Bound<'py, PyDict>> {
     let initial = initial_state(l2_state)?;
     let ir = parse_ir(kernel_ir_json)?;
-    let all = draw_profiles(profile_json, draws, seed).map_err(err)?;
+    let all = sampled(profile_json, draws, seed, sync_l1_reuse)?;
     let result = py.detach(|| evaluate(&ir, &all, initial, true));
     record(py, &ir, &all, l2_state, result)
 }
@@ -193,7 +210,7 @@ fn predict<'py>(
 /// identical to what `predict` returns for it. A malformed variant raises
 /// `ValueError` naming its index.
 #[pyfunction]
-#[pyo3(signature = (kernel_ir_jsons, profile_json, l2_state = "cold", draws = 32, seed = 17))]
+#[pyo3(signature = (kernel_ir_jsons, profile_json, l2_state = "cold", draws = 32, seed = 17, sync_l1_reuse = false))]
 fn predict_batch<'py>(
     py: Python<'py>,
     kernel_ir_jsons: Vec<String>,
@@ -201,6 +218,7 @@ fn predict_batch<'py>(
     l2_state: &str,
     draws: usize,
     seed: u64,
+    sync_l1_reuse: bool,
 ) -> PyResult<Vec<Bound<'py, PyDict>>> {
     let initial = initial_state(l2_state)?;
     let irs = kernel_ir_jsons
@@ -208,7 +226,7 @@ fn predict_batch<'py>(
         .enumerate()
         .map(|(i, j)| parse_ir(j).map_err(|e| PyValueError::new_err(format!("variant {i}: {e}"))))
         .collect::<PyResult<Vec<_>>>()?;
-    let all = draw_profiles(profile_json, draws, seed).map_err(err)?;
+    let all = sampled(profile_json, draws, seed, sync_l1_reuse)?;
     let results = py.detach(|| parallel_map(&irs, |ir| evaluate(ir, &all, initial, false)));
     irs.iter()
         .zip(results)

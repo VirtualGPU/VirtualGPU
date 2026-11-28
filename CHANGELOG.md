@@ -4,6 +4,8 @@
 
 ### Added
 
+- Optional `pipeline.barrier_step_ns` profile field: each barrier per pipeline step beyond the first costs this much, by warp count
+- `sync_l1_reuse` option for `predict` and `predict_batch`, off by default: CTAs on one SM that read the same synchronous load stage fetch it once
 - Huawei Ascend 910B3 single-MTE2 `L0A/L0B`-decoupled Cube pipeline (`sim.rs`, gated on `cube_vector_split`), isolated AscendC 2D `Nd2Nz` row-issue M2 microbenchmark (`aic_nd2nz_issue_kernel` -> `gmem_load_issue_controlled`, profile `0.3.2-ascend`), and fresh disjoint v3 sealed holdout (`docs/results/ascend910b3-holdout.md`): all 4 cohorts passed (`gemm-warm`: `0.870` tau-b, `0.00%` regret, `99.1%` ordered agreement, `14.0%` median error; `gemm-cold`: `0.929`, `0.00%`, `98.4%`; `attention-warm/cold`: `0.800`, `0.00%`, `88.2%`), lifting `unvalidated_target_ascend` / `unvalidated_feature` for `ascend910b3` while keeping other unvalidated Ascend architectures gated
 - Optional P3a block references for the 14 registered GB10 DRAM MLP plateau points
 

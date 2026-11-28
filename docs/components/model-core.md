@@ -34,7 +34,7 @@ The core consumes `KernelIR` v0.1 as defined in [kernel-ir.md](kernel-ir.md). Ho
 - `launch.grid`, `launch.num_warps`, `resources.*`: occupancy (3.3).
 - `body.outer_loop.trip_counts`: tiles per program. One for ordinary kernels, more for persistent kernels (3.6). No separate code path.
 - `launch.warp_groups`: one `unified` group, or `producer` and `consumer` groups (3.6).
-- `body.prologue`, `body.pipeline_loop`, `body.epilogue`: the phase list per tile. From `pipeline_loop` the core uses the post-pipelining `num_stages`, `async_copy`, and per-op `stage_offset`. It never reads the decorator's `num_stages`.
+- `body.prologue`, `body.pipeline_loop`, `body.epilogue`: the phase list per tile. From `pipeline_loop` the core uses the post-pipelining `num_stages`, `async_copy`, per-op `stage_offset`, and the barrier ops' `count` (barriers per step, charged only when the profile has `pipeline.barrier_step_ns`). It never reads the decorator's `num_stages`.
 - `mma` ops: `op_class`, `inst_mnk`, dtypes, and `count` select the throughput entry in the profile.
 - `gmem_load` / `gmem_store` ops: bytes per iteration, split into L2 and DRAM bytes by the L2 model.
 - `alu` / `sfu` ops: issue work.
@@ -82,6 +82,7 @@ Other points:
 - One `L2Model` instance per simulation run, built from the perturbed profile of that draw. No shared state, so draws can run in parallel.
 - `initial_state` comes from the validation case (cold or warm), and is echoed in the output.
 - The L2 model's discrete options, `eviction_mode` (`soft_lru` or `strict_lru`) and `cross_wave_reuse` (`true` or `false`), are sampled as extra dimensions in section 4.
+- `sync_l1_reuse` (off by default, `predict(..., sync_l1_reuse=True)`) turns on the registered R1 form ([registration](../results/analysis/v0.3-l1-reuse-model-registration.md)). For loads with no async copy and a default or `evict_first` policy, the CTAs on one SM that hold the same chunk count as one reader: (s - 1) / s of the bytes leave L2, DRAM and the port, and the SM's readers count once for miss merging. It applies only where the step's bytes fit L1 at the carveout, read as an L1 miss rate under 0.5 on the carveout curve the spill model uses. The core passes the carveout with `set_carveout` after occupancy.
 - `near_cliff = true` on any call sets the `near_l2_cliff` diagnostic on the variant. The draws already move `l2_effective_capacity_bytes`, so a ranking that depends on the cliff should flip on its own. The flag is for diagnosis, not a second verdict rule.
 
 ### 2.4 Output (consumed by validation)

@@ -141,6 +141,7 @@ pub fn draws(profile_json: &str, n: usize, seed: u64) -> Result<Vec<Draw>, serde
                     EvictionMode::StrictLru
                 },
                 cross_wave_reuse: x[discrete + 1] < 0.5,
+                ..L2Options::default()
             },
             assumed_spill_scale: x[discrete + 2],
         });

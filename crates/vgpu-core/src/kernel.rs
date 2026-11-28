@@ -26,6 +26,8 @@ pub struct Work {
     pub shfl_insts_per_warp: f64,
     /// Shared memory bytes moved by the CTA.
     pub smem_bytes: f64,
+    /// Barriers (`bar.sync`) per execution, from the IR's barrier ops.
+    pub barriers: f64,
     pub loads: Vec<Access>,
     pub stores: Vec<Access>,
 }

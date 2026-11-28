@@ -103,6 +103,15 @@ pub struct Pipeline {
     /// Per-handoff cross-core Cube/Vector sync latency by active AI Cores.
     #[serde(default)]
     pub cv_sync_hop_ns_by_active_sms: Vec<ActiveSmLatencyPoint>,
+    /// Cost of one more barrier per step on an empty step, by warp count.
+    #[serde(default)]
+    pub barrier_step_ns: Vec<BarrierStepPoint>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BarrierStepPoint {
+    pub num_warps: u32,
+    pub overhead_ns: MeasuredValue,
 }
 
 #[derive(Debug, Clone, Deserialize)]

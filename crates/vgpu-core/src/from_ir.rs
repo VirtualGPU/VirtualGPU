@@ -44,7 +44,7 @@ fn work(ops: &[Op], mma_key: &mut Option<String>) -> Result<Work, ModelError> {
             Op::Alu(a) => w.alu_insts_per_warp += a.count as f64,
             Op::Sfu(a) => w.sfu_insts_per_warp += a.count as f64,
             Op::Shfl(a) => w.shfl_insts_per_warp += a.count as f64,
-            Op::Barrier(_) => {}
+            Op::Barrier(b) => w.barriers += b.count as f64,
         }
     }
     Ok(w)
@@ -200,6 +200,10 @@ impl<'a> IrL2<'a> {
 }
 
 impl L2 for IrL2<'_> {
+    fn set_carveout(&mut self, carveout_bytes: u64) {
+        self.model.set_carveout(carveout_bytes);
+    }
+
     fn begin_tile(&mut self, sm: u32, program: u32, tile: u32, t_ns: f64) {
         self.model.begin_tile(sm, program, tile, t_ns);
     }

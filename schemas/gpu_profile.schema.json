@@ -510,6 +510,11 @@
               "minItems": 1,
               "items": { "$ref": "#/$defs/FixedSyncOverheadPoint" }
             },
+            "barrier_step_ns": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/BarrierStepPoint" }
+            },
             "cv_sync_hop_ns_by_active_sms": {
               "type": "array",
               "minItems": 1,
@@ -852,6 +857,15 @@
         },
         "num_warps": { "type": "integer", "minimum": 1 },
         "tokens": { "type": "integer", "minimum": 0 },
+        "overhead_ns": { "$ref": "#/$defs/MeasuredValue" }
+      }
+    },
+    "BarrierStepPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["num_warps", "overhead_ns"],
+      "properties": {
+        "num_warps": { "type": "integer", "minimum": 1 },
         "overhead_ns": { "$ref": "#/$defs/MeasuredValue" }
       }
     },
