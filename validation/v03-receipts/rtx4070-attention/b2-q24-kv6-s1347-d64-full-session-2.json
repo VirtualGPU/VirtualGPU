@@ -1,0 +1,25 @@
+{
+  "timestamp_utc": "2026-11-28T00:52:03.410533+00:00",
+  "release_sha256": "60ba5804b59f6b8825423d43fbde6414756078aa396a8f070c250ac062a85c32",
+  "capture_approval_sha256": "65c5ecfbc4a6c49842e035537cb51352fc4daf41e28ff44f41de900d87f3bd10",
+  "retry_approval_sha256": null,
+  "repeat_of_receipt_sha256": null,
+  "device": "rtx4070",
+  "family": "attention",
+  "case_id": "b2-q24-kv6-s1347-d64-full",
+  "session": 2,
+  "attempt": 1,
+  "source_commit": "4ecde308dc086a073f8242c6f35fbb91d96a1161",
+  "manifest_sha256": "aea8e303eb9a01943b7e762fc853d174c87721f70d104c33d530d247b942bb5d",
+  "aot_sha256": "115e6b0808fed0853ea971df778bd2cca71ea0efab18b119b285475aea11ead2",
+  "profile_sha256": "3bb13b7307eabb803465a05cbcd939b78a6252bb2c54f3dc761c069ac2a8ed91",
+  "host_sha256": "e45192af9b342dde3fbbd310af8d745eca0709d82c20ea563168b447d8a4de54",
+  "status": "complete",
+  "failure_reasons": [],
+  "sha256": "8e9c3644274b08d1a8fac37648e3627a24cd4575d141f969073209d86bd0941c",
+  "complete_blocks": 10,
+  "kernel_key": "5392dc945577188c854fbb4ed930db2f3c6f2525ee61fbc44333369fafc5cf84",
+  "config_status_counts": {
+    "ok": 24
+  }
+}
