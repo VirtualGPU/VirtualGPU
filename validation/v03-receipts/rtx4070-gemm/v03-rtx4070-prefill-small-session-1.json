@@ -1,0 +1,25 @@
+{
+  "timestamp_utc": "2026-11-27T23:57:40.044163+00:00",
+  "release_sha256": "60ba5804b59f6b8825423d43fbde6414756078aa396a8f070c250ac062a85c32",
+  "capture_approval_sha256": "65c5ecfbc4a6c49842e035537cb51352fc4daf41e28ff44f41de900d87f3bd10",
+  "retry_approval_sha256": null,
+  "repeat_of_receipt_sha256": null,
+  "device": "rtx4070",
+  "family": "gemm",
+  "case_id": "v03-rtx4070-prefill-small",
+  "session": 1,
+  "attempt": 1,
+  "source_commit": "4ecde308dc086a073f8242c6f35fbb91d96a1161",
+  "manifest_sha256": "fa03257073857afb940eb477171db6bb8b91a93af4385c77445d41e21982608b",
+  "aot_sha256": "8291224a58925de646937d855a2460e2a86d46a0f9e757c4f64aa0baf6eb614b",
+  "profile_sha256": "3bb13b7307eabb803465a05cbcd939b78a6252bb2c54f3dc761c069ac2a8ed91",
+  "host_sha256": "7aaa51eddf43bf798330889e74f21e21b20cda77584a5649380ee6f3565a2c0b",
+  "status": "complete",
+  "failure_reasons": [],
+  "sha256": "0d804d2b5154cb6dcc2195485d2f2dd6e9566add6403102bafc9af9acc581c4b",
+  "complete_blocks": 10,
+  "kernel_key": "23dbb49dab9a60ed185a37b20f38f553723a63f98bf1c7b3eb895bee48e174bb",
+  "config_status_counts": {
+    "ok": 36
+  }
+}
